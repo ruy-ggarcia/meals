@@ -120,3 +120,11 @@ test('unknown /api routes return 404 JSON', async () => {
   assert.match(res.headers['content-type'], /application\/json/);
   assert.equal(typeof res.body.error, 'string');
 });
+
+test('GET / serves the frontend page', async () => {
+  const res = await request(app).get('/');
+
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /text\/html/);
+  assert.match(res.text, /<title>Weekly meal plan<\/title>/);
+});

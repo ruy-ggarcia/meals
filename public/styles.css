@@ -1,0 +1,219 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* `hidden` must win over any display rule below. */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #222;
+  background: #f6f6f6;
+}
+
+.page-header {
+  padding: 0.75rem 1rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 1rem 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #f5c2c0;
+  border-radius: 0.4rem;
+  background: #fdecea;
+  color: #8a1c14;
+}
+
+.load-error button {
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.cell textarea {
+  display: block;
+  width: 100%;
+  min-height: 5rem;
+  padding: 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 0.3rem;
+  font: inherit;
+  resize: vertical;
+}
+
+/* Per-cell save status. It is a <button> so the error state is clickable;
+   it is disabled in every other state. */
+.status {
+  align-self: flex-start;
+  min-height: 1.2rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.status[data-state="saved"] {
+  color: #2e7d32;
+}
+
+.status[data-state="error"] {
+  color: #b00020;
+  cursor: pointer;
+}
+
+/* Status icons: sized relative to the 0.8rem status font, one line tall. */
+.status svg {
+  display: block;
+  width: 1.2em;
+  height: 1.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- Desktop (>= 768px): 7 days x 5 meals ---------- */
+@media (min-width: 768px) {
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .day-bar,
+  .cell-label {
+    display: none;
+  }
+
+  /* The grid is its own scroll container so sticky headers work on both axes. */
+  .grid {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    grid-template-columns: 8rem repeat(7, minmax(9rem, 1fr));
+    align-content: start;
+    border-top: 1px solid #ddd;
+    background: #fff;
+  }
+
+  .corner,
+  .day-header,
+  .meal-header {
+    padding: 0.5rem;
+    border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+    background: #eee;
+    font-weight: 600;
+  }
+
+  .corner,
+  .day-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .meal-header {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+  }
+
+  .corner {
+    left: 0;
+    z-index: 2;
+  }
+
+  .cell {
+    padding: 0.25rem;
+    border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+  }
+}
+
+/* ---------- Mobile (< 768px): one day at a time ---------- */
+@media (max-width: 767.98px) {
+  .day-bar {
+    display: flex;
+    gap: 0.25rem;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.5rem 1rem;
+    background: #f6f6f6;
+  }
+
+  .day-bar button {
+    flex: 1;
+    padding: 0.6rem 0;
+    border: 1px solid #ccc;
+    border-radius: 0.4rem;
+    background: #fff;
+    font: inherit;
+    font-weight: 600;
+  }
+
+  .day-bar button[aria-pressed="true"] {
+    border-color: #2e7d32;
+    background: #2e7d32;
+    color: #fff;
+  }
+
+  .grid {
+    padding: 0 1rem 1rem;
+  }
+
+  .corner,
+  .day-header,
+  .meal-header {
+    display: none;
+  }
+
+  .cell {
+    display: none;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Show only the cells of the selected day (attribute set by app.js). */
+  .grid[data-selected-day="mon"] .cell[data-day="mon"],
+  .grid[data-selected-day="tue"] .cell[data-day="tue"],
+  .grid[data-selected-day="wed"] .cell[data-day="wed"],
+  .grid[data-selected-day="thu"] .cell[data-day="thu"],
+  .grid[data-selected-day="fri"] .cell[data-day="fri"],
+  .grid[data-selected-day="sat"] .cell[data-day="sat"],
+  .grid[data-selected-day="sun"] .cell[data-day="sun"] {
+    display: flex;
+  }
+
+  .cell-label {
+    font-weight: 600;
+  }
+
+  /* >= 16px prevents iOS Safari from zooming in on focus. */
+  .cell textarea {
+    font-size: 16px;
+  }
+}
