@@ -1,12 +1,14 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 // Stable identifiers shared by the API and the storage format. Order matters.
-export const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-export const MEALS = ['breakfast', 'snack_am', 'lunch', 'snack_pm', 'dinner'];
+export const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+export const MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 
 function emptyWeek() {
-  return Object.fromEntries(DAYS.map((day) => [day, Object.fromEntries(MEALS.map((meal) => [meal, '']))]));
+  return Object.fromEntries(
+    DAYS.map((day) => [day, Object.fromEntries(MEALS.map((meal) => [meal, ""]))]),
+  );
 }
 
 // Builds a complete 7 x 5 week from whatever was parsed: missing or non-string
@@ -16,14 +18,14 @@ function normalize(raw) {
   for (const day of DAYS) {
     for (const meal of MEALS) {
       const value = raw?.[day]?.[meal];
-      if (typeof value === 'string') week[day][meal] = value;
+      if (typeof value === "string") week[day][meal] = value;
     }
   }
   return week;
 }
 
 export function createStore({ dataDir }) {
-  const file = path.join(dataDir, 'week.json');
+  const file = path.join(dataDir, "week.json");
   const tmpFile = `${file}.tmp`;
   // Every save runs after the previous one finishes, so two read-modify-write
   // cycles never interleave and lose each other's changes.
@@ -32,9 +34,9 @@ export function createStore({ dataDir }) {
   async function readWeek() {
     let text;
     try {
-      text = await readFile(file, 'utf8');
+      text = await readFile(file, "utf8");
     } catch (error) {
-      if (error.code === 'ENOENT') return emptyWeek();
+      if (error.code === "ENOENT") return emptyWeek();
       throw error;
     }
     // Invalid JSON throws on purpose: treating it as empty would overwrite the

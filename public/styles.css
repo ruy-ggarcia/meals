@@ -6,6 +6,7 @@
 
 /* `hidden` must win over any display rule below. */
 [hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: the hidden attribute must beat layout display rules. */
   display: none !important;
 }
 
@@ -99,6 +100,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh is the fallback for browsers without dvh. */
     height: 100dvh;
   }
 
