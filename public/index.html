@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Weekly meal plan</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <header class="page-header">
+      <h1>Weekly meal plan</h1>
+    </header>
+
+    <div id="load-error" class="load-error" role="alert" hidden>
+      <span>Couldn't load the meal plan.</span>
+      <button type="button" id="retry-load">Retry</button>
+    </div>
+
+    <!-- Only visible on mobile (< 768px). Filled by app.js. -->
+    <nav id="day-bar" class="day-bar" aria-label="Day" hidden></nav>
+
+    <!-- Desktop: 8-column CSS grid (meal header + 7 days). Mobile: one day, stacked. Filled by app.js. -->
+    <main id="grid" class="grid" hidden></main>
+  </body>
+</html>

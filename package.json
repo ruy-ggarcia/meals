@@ -1,0 +1,23 @@
+{
+  "name": "meals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Weekly family meal planner for the home network",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "format": "biome check --write .",
+    "lint": "biome ci .",
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "supertest": "^7.3.0"
+  }
+}
