@@ -15,6 +15,7 @@ import { createElement } from "./dom.js";
 import { getJson, REQUEST_TIMEOUT_MS } from "./http.js";
 import { describeItem } from "./menus.js";
 import { createSaves } from "./saves.js";
+import { createSlotEditor } from "./slot-editor.js";
 
 const DAYS = [
   { id: "mon", label: "Monday", short: "M" },
@@ -61,6 +62,7 @@ const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
 const weekBar = document.getElementById("week-bar");
 const weekRange = document.getElementById("week-range");
+const editor = createSlotEditor(document.getElementById("slot-editor"));
 
 /** Timer that hides the "✓" badge, per slot element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
@@ -145,6 +147,7 @@ function buildSlot(day, meal) {
 
   const menuButton = createElement("button", "slot-menu");
   menuButton.type = "button";
+  menuButton.addEventListener("click", () => openEditor(slot));
 
   const status = createElement("button", "status");
   status.type = "button";
@@ -177,6 +180,27 @@ function renderSlot(slot, menu) {
   }
   const content = lines.length === 0 ? "empty" : lines.join(", ");
   button.setAttribute("aria-label", `${day.label}, ${meal.label}: ${content}`);
+}
+
+// Opens the editor on the slot's menu. That is the menu confirmed with Done,
+// even when its save failed, so a retry from the editor keeps the changes.
+function openEditor(slot) {
+  const { week } = grid.dataset;
+  const { day, meal } = slot.dataset;
+  const key = slotKey(week, day, meal);
+  const dayIndexInWeek = DAYS.findIndex((entry) => entry.id === day);
+  const mealLabel = MEALS.find((entry) => entry.id === meal).label;
+  editor.open({
+    title: `${formatLongDate(addDays(weekStart(week), dayIndexInWeek))} · ${mealLabel}`,
+    menu: menus.get(key),
+    recipes: [...recipesById.values()],
+    opener: slot.querySelector(".slot-menu"),
+    onDone: (menu) => {
+      menus.set(key, menu);
+      renderSlot(slot, menu);
+      saves.queueSave(key);
+    },
+  });
 }
 
 function selectDay(dayId) {
@@ -316,7 +340,7 @@ async function leaveLoadedWeek() {
 // Shows `week` without ever dropping an unsaved menu silently. On mobile, the
 // selected day stays the same unless `selectToday` is set.
 async function goToWeek(week, { selectToday = false } = {}) {
-  if (changingWeek) return;
+  if (changingWeek || editor.isOpen()) return;
   // Disabling the clicked button (a week bar button or Retry) moves focus to
   // <body>; remember it so it can be refocused afterward.
   const focused = document.activeElement;
@@ -358,10 +382,16 @@ document
   .addEventListener("click", () => goToWeek(weekIdOf(new Date()), { selectToday: true }));
 window.addEventListener("hashchange", () => {
   const week = location.hash.slice(1);
-  if (isWeekId(week)) goToWeek(week);
+  // The week never changes behind an open editor.
+  if (isWeekId(week) && !editor.isOpen()) goToWeek(week);
   else syncHash();
 });
 window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
+// Unconfirmed changes in the editor would be lost: ask before leaving.
+window.addEventListener("beforeunload", (event) => {
+  if (!editor.hasChanges()) return;
+  event.preventDefault();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
   else markToday(); // the day may have changed while the page was hidden

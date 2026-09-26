@@ -96,28 +96,44 @@ On mobile, changing weeks keeps the selected day. The address bar holds the
 displayed week, for example `http://localhost:3000/#2026-09-21`, so a reload
 shows the same week and you can bookmark a week.
 
-To plan a meal, type one dish per line in a cell. The app saves the cell when
-you leave it, switch days, change weeks, reload the page, or close the page.
-Below the cell, an icon shows the save status:
+## Plan a meal
+
+To plan a meal, click or tap its slot. The slot editor opens with the slot's
+menu:
+
+- To add a recipe, type part of its name in **Add recipe**. Then click the
+  recipe, or select it with the arrow keys and press `Enter`. A menu holds up
+  to 20 recipes, and the list offers only recipes that aren't archived or
+  already in the menu. To add recipes to the recipe book, use the **Recipes**
+  page.
+- To change the servings of a recipe, click `−` or `+`. Servings go from 0.5
+  to 99 in steps of 0.5. A recipe that you add starts at 1.
+- To remove a recipe from the menu, click **Remove**.
+
+To save the menu, click **Done**. To close the editor without saving, click
+**Cancel** or press `Escape`. In **Add recipe**, the first `Escape` only
+clears the text. Clicking outside the editor closes it only if you haven't
+changed anything. If you reload or close the page while the editor has
+changes, the browser asks you to confirm.
+
+Below each slot, an icon shows the save status:
 
 | Icon             | Status                                                       |
 |------------------|--------------------------------------------------------------|
-| Gray clock       | The app is saving the cell.                                  |
-| Green check mark | The cell is saved. The icon disappears after a few seconds. |
-| Red cross        | The save failed. The cell keeps your text.                   |
+| Gray clock       | The app is saving the slot.                                  |
+| Green check mark | The slot is saved. The icon disappears after a few seconds. |
+| Red cross        | The save failed. The slot keeps your menu.                   |
 
 To retry a failed save, click the red cross. To see what an icon means, hover
 over it.
 
-Before the app changes weeks, it waits for pending saves. If you change weeks
-right after you type, the new week appears once the save succeeds, so you
-might not see the check mark. If a cell couldn't be saved, the app asks
-whether to leave the week anyway. To stay and retry the save, click
-**Cancel**. To discard the unsaved text and change weeks, click **OK**. The
-cell then goes back to its last saved text.
+Before the app changes weeks, it waits for pending saves. If a slot couldn't
+be saved, the app asks whether to leave the week anyway. To stay and retry the
+save, click **Cancel**. To discard the unsaved menu and change weeks, click
+**OK**. The slot then goes back to its last saved menu.
 
 Changes from other devices don't appear in real time. To see them, reload the
-page. If two people edit the same cell, the last save wins.
+page. If two people edit the same slot, the last save wins.
 
 ## Configure the server
 
@@ -228,6 +244,7 @@ public/      # User interface: HTML, CSS, and JavaScript, with no framework or b
   menus.js   # Menu functions with no DOM access.
   recipe-search.js # Recipe name matching and sorting, with no DOM access.
   saves.js   # Save logic with no DOM access, so tests run it in Node.js.
+  slot-editor.js # The slot editor dialog.
   styles.css
 server/
   app.js     # HTTP API (Express) and static files.
