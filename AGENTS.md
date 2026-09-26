@@ -13,6 +13,11 @@ explicitly asks for another language. Artifacts include the following:
 - Documentation, specs, and plans
 - Commit messages
 
+## Vocabulary
+
+Use the terms in `docs/glossary.md`. To add or rename a concept, change the
+glossary in the same commit.
+
 ## Documentation style
 
 Follow the

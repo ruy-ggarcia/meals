@@ -8,6 +8,9 @@ per line.
 The app runs on a computer at home. Any device on the same network, desktop or
 mobile, can use it from a browser.
 
+The terms that the app uses, such as *slot*, *menu*, and *recipe book*, are
+defined in [`docs/glossary.md`](docs/glossary.md).
+
 ## Before you begin
 
 Install the following:
@@ -206,6 +209,7 @@ each pull request is integrated with a merge commit.
   workflows/
     ci.yml   # Continuous integration: lint and tests.
 docs/
+  glossary.md          # The terms the app uses.
   manual-test-plan.md  # Checks that need a person with a browser.
 public/      # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js     # Grid, week changes, and saves.
