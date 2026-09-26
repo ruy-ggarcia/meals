@@ -32,6 +32,18 @@ button {
   font-size: 1.25rem;
 }
 
+.title-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.page-link {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
 .week-bar {
   display: flex;
   align-items: center;
@@ -71,24 +83,41 @@ button {
   font: inherit;
 }
 
-.cell {
+.slot {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
 }
 
-.cell textarea {
-  display: block;
+/* The slot's menu: a button that opens the slot editor. */
+.slot-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
   width: 100%;
   min-height: 5rem;
   padding: 0.4rem;
   border: 1px solid #ccc;
   border-radius: 0.3rem;
+  background: #fff;
+  color: inherit;
   font: inherit;
-  resize: vertical;
+  text-align: left;
+  cursor: pointer;
+  /* A long name without spaces wraps instead of widening the grid. */
+  overflow-wrap: anywhere;
 }
 
-/* Per-cell save status. It is a <button> so the error state is clickable;
+.slot-menu:hover {
+  border-color: #999;
+}
+
+.slot-empty {
+  color: #888;
+}
+
+/* Per-slot save status. It is a <button> so the error state is clickable;
    it is disabled in every other state. */
 .status {
   align-self: flex-start;
@@ -138,7 +167,7 @@ button {
   }
 
   .day-bar,
-  .cell-label {
+  .slot-label {
     display: none;
   }
 
@@ -182,7 +211,7 @@ button {
     z-index: 2;
   }
 
-  .cell {
+  .slot {
     padding: 0.25rem;
     border-right: 1px solid #ddd;
     border-bottom: 1px solid #ddd;
@@ -193,7 +222,7 @@ button {
     color: #fff;
   }
 
-  .cell[data-today] {
+  .slot[data-today] {
     background: #eef6ee;
   }
 }
@@ -270,28 +299,27 @@ button {
     display: none;
   }
 
-  .cell {
+  .slot {
     display: none;
     margin-bottom: 0.75rem;
   }
 
-  /* Show only the cells of the selected day (attribute set by app.js). */
-  .grid[data-selected-day="mon"] .cell[data-day="mon"],
-  .grid[data-selected-day="tue"] .cell[data-day="tue"],
-  .grid[data-selected-day="wed"] .cell[data-day="wed"],
-  .grid[data-selected-day="thu"] .cell[data-day="thu"],
-  .grid[data-selected-day="fri"] .cell[data-day="fri"],
-  .grid[data-selected-day="sat"] .cell[data-day="sat"],
-  .grid[data-selected-day="sun"] .cell[data-day="sun"] {
+  /* Show only the slots of the selected day (attribute set by app.js). */
+  .grid[data-selected-day="mon"] .slot[data-day="mon"],
+  .grid[data-selected-day="tue"] .slot[data-day="tue"],
+  .grid[data-selected-day="wed"] .slot[data-day="wed"],
+  .grid[data-selected-day="thu"] .slot[data-day="thu"],
+  .grid[data-selected-day="fri"] .slot[data-day="fri"],
+  .grid[data-selected-day="sat"] .slot[data-day="sat"],
+  .grid[data-selected-day="sun"] .slot[data-day="sun"] {
     display: flex;
   }
 
-  .cell-label {
+  .slot-label {
     font-weight: 600;
   }
 
-  /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .cell textarea {
-    font-size: 16px;
+  .slot-menu {
+    min-height: 3rem;
   }
 }

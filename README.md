@@ -2,8 +2,8 @@
 
 Meals is a web app for planning a family's weekly menu. It shows one week at a
 time as a grid of 7 days by 5 meals (breakfast, morning snack, lunch,
-afternoon snack, and dinner). Each cell holds a free-text list of dishes, one
-per line.
+afternoon snack, and dinner). Each slot of the grid holds a menu: a list of
+recipes from the recipe book, each with a number of servings.
 
 The app runs on a computer at home. Any device on the same network, desktop or
 mobile, can use it from a browser.
@@ -220,9 +220,13 @@ docs/
   glossary.md          # The terms the app uses.
   manual-test-plan.md  # Checks that need a person with a browser.
 public/      # User interface: HTML, CSS, and JavaScript, with no framework or build step.
-  app.js     # Grid, week changes, and saves.
+  app.js     # Meal plan page: grid, week changes, and saves.
   dates.js   # Date helpers with no DOM access, so tests run them in Node.js.
-  index.html
+  dom.js     # DOM helpers shared by the pages.
+  http.js    # Requests with a timeout, with no DOM access.
+  index.html # Meal plan page.
+  menus.js   # Menu functions with no DOM access.
+  recipe-search.js # Recipe name matching and sorting, with no DOM access.
   saves.js   # Save logic with no DOM access, so tests run it in Node.js.
   styles.css
 server/
