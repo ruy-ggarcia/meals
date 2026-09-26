@@ -72,9 +72,15 @@ To open the port, run the command for your firewall:
 ## Use the app
 
 - **Desktop** (windows 768 px wide or wider): the full grid shows one column
-  per day and one row per meal.
-- **Mobile:** the app shows one day at a time. To switch days, tap a letter in
-  the day bar (`M T W T F S S`). When the page opens, it shows the current day.
+  per day and one row per meal. Each day header shows the weekday and the day
+  of the month.
+- **Mobile:** the app shows one day at a time. To switch days, tap a day in the
+  day bar. Each button shows the weekday letter and the day of the month. When
+  the page opens, it shows the current day.
+
+When the displayed week contains today, the app marks today in green. On
+desktop, it marks today's column. On mobile, it outlines today's button in the
+day bar.
 
 To move between weeks, use the week bar below the title. It shows the dates of
 the displayed week:

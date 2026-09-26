@@ -1,6 +1,15 @@
 // Weekly grid frontend. Depends ONLY on the HTTP API (/api/weeks); never import from server/.
 
-import { addWeeks, dayIndex, formatWeekRange, isWeekId, weekIdOf } from "./dates.js";
+import {
+  addDays,
+  addWeeks,
+  dayIndex,
+  formatLongDate,
+  formatWeekRange,
+  isWeekId,
+  weekIdOf,
+  weekStart,
+} from "./dates.js";
 import { createSaves } from "./saves.js";
 
 const DAYS = [
@@ -95,7 +104,12 @@ function createElement(tag, className, text) {
 
 function buildDayBar() {
   for (const day of DAYS) {
-    const button = createElement("button", "", day.short);
+    const button = createElement("button");
+    // The day number is filled in when a week loads.
+    button.append(
+      createElement("span", "day-letter", day.short),
+      createElement("span", "day-number"),
+    );
     button.type = "button";
     button.dataset.day = day.id;
     button.setAttribute("aria-label", day.label);
@@ -109,7 +123,11 @@ function buildDayBar() {
 // then for each meal a meal header followed by its 7 cells.
 function buildGrid() {
   grid.append(createElement("div", "corner"));
-  for (const day of DAYS) grid.append(createElement("div", "day-header", day.label));
+  for (const day of DAYS) {
+    const header = createElement("div", "day-header", day.label);
+    header.dataset.day = day.id;
+    grid.append(header);
+  }
   for (const meal of MEALS) {
     grid.append(createElement("div", "meal-header", meal.label));
     for (const day of DAYS) grid.append(buildCell(day, meal));
@@ -179,6 +197,27 @@ function fillWeek(week, cells) {
   saves.loaded(entries);
 }
 
+// Puts the day of the month on the desktop headers and the mobile day bar.
+function showDayDates(week) {
+  const monday = weekStart(week);
+  for (const [index, day] of DAYS.entries()) {
+    const date = addDays(monday, index);
+    grid.querySelector(`.day-header[data-day="${day.id}"]`).textContent =
+      `${day.label} ${date.getDate()}`;
+    const button = dayBar.querySelector(`button[data-day="${day.id}"]`);
+    button.querySelector(".day-number").textContent = String(date.getDate());
+    button.setAttribute("aria-label", formatLongDate(date));
+  }
+}
+
+// Marks today's header, cells, and day bar button when the loaded week contains today.
+function markToday() {
+  const todayDay = weekIdOf(new Date()) === grid.dataset.week ? todayId() : null;
+  for (const element of document.querySelectorAll("[data-day]")) {
+    element.toggleAttribute("data-today", element.dataset.day === todayDay);
+  }
+}
+
 // The keys of the cells on screen.
 function shownKeys() {
   const { week } = grid.dataset;
@@ -221,6 +260,8 @@ async function loadWeek(week) {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     fillWeek(week, await response.json());
+    showDayDates(week);
+    markToday();
     dayBar.hidden = false;
     grid.hidden = false;
   } catch (error) {
@@ -279,6 +320,7 @@ async function goToWeek(week, { selectToday = false } = {}) {
       await loadWeek(week);
     }
     if (selectToday) selectDay(todayId());
+    markToday(); // covers the case where the target week was already shown
   } finally {
     setChangingWeek(false);
     // Only if focus was lost, not moved elsewhere by the user. Never refocus a
@@ -311,6 +353,7 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
+  else markToday(); // the day may have changed while the page was hidden
 });
 
 const hashWeek = location.hash.slice(1);
