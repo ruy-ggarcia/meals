@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import request from "supertest";
 import { createApp } from "../server/app.js";
-import { createStore } from "../server/store.js";
+import { createStore, weekIdOf } from "../server/store.js";
 
 const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
@@ -110,8 +110,9 @@ test("PUT with a malformed JSON body returns 400 JSON", async () => {
   assert.equal(typeof res.body.error, "string");
 });
 
-test("GET /api/week returns 500 JSON when week.json is corrupt", async () => {
-  await writeFile(path.join(dataDir, "week.json"), "{ not json");
+test("GET /api/week returns 500 JSON when the week file is corrupt", async () => {
+  await mkdir(path.join(dataDir, "weeks"));
+  await writeFile(path.join(dataDir, "weeks", `${weekIdOf(new Date())}.json`), "{ not json");
 
   const res = await request(app).get("/api/week");
 

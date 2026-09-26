@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { DAYS, MEALS } from "./store.js";
+import { DAYS, MEALS, weekIdOf } from "./store.js";
 
 export const MAX_TEXT_LENGTH = 2000;
 
@@ -11,7 +11,7 @@ export function createApp({ store }) {
   app.use(express.json());
 
   app.get("/api/week", async (_req, res) => {
-    res.json(await store.readWeek());
+    res.json(await store.readWeek(weekIdOf(new Date())));
   });
 
   app.put("/api/week/:day/:meal", async (req, res) => {
@@ -32,7 +32,8 @@ export function createApp({ store }) {
       return;
     }
 
-    res.json(await store.saveCell(day, meal, text));
+    const saved = await store.saveCell(weekIdOf(new Date()), day, meal, text);
+    res.json({ day: saved.day, meal: saved.meal, text: saved.text });
   });
 
   // Any other /api path: JSON 404 (the API only ever answers JSON).
