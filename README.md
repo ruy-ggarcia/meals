@@ -125,7 +125,7 @@ The server reads the following environment variables:
 
 | Variable   | Default  | Description                           |
 |------------|----------|---------------------------------------|
-| `DATA_DIR` | `./data` | The directory that stores the meal plan. |
+| `DATA_DIR` | `./data` | The directory that stores the meal plan and the recipe book. |
 | `PORT`     | `3000`   | The port that the server listens on.  |
 
 For example, to store data in `/srv/meals` and listen on port 8080, run the
@@ -137,31 +137,39 @@ DATA_DIR=/srv/meals PORT=8080 npm start
 
 ## Back up and restore data
 
-The meal plan lives in `data/weeks/`, with one file per week. Each file is
-named after the week's Monday, for example `data/weeks/2026-09-21.json`. The
-server creates a week's file on the first save in that week. Git ignores the
-`data/` directory.
+The meal plan and the recipe book live in the `v2/` directory inside the
+data directory, which is `data/` unless you set `DATA_DIR`:
 
-To back up the meal plan, copy the directory:
+- `v2/recipes.json` holds the recipe book.
+- `v2/weeks/` holds one file per week, named after the week's Monday, for
+  example `v2/weeks/2026-09-21.json`. The server creates a week's file on
+  the first save in that week.
+
+Git ignores the `data/` directory.
+
+To back up your data, copy the directory:
 
 ```bash
-cp -r data/weeks weeks.backup
+cp -r data/v2 "meals-backup-$(date +%F)"
 ```
 
-If a week file contains invalid JSON, the app shows
-`Couldn't load the meal plan.` for that week and doesn't overwrite the file.
+If a week file or `recipes.json` contains invalid JSON, the app shows an
+error, such as `Couldn't load the meal plan.`, and doesn't overwrite the file.
 To recover, do the following:
 
-1. Restore a backup copy of the week file, or fix the JSON by hand.
+1. Restore a backup copy of the file, or fix the JSON by hand.
 1. In the app, click **Retry**.
 
-### Upgrade from a single week
+If you restore an older `recipes.json`, menu items whose recipe it doesn't
+have disappear from the grid. They come back when you restore a recipe book
+that has them.
 
-Earlier versions stored one generic week in `data/week.json`. On startup, the
-server moves that file to the current week, for example
-`data/weeks/2026-09-21.json`, and prints a line about the move. If the current
-week already has a file, the server leaves both files unchanged and prints a
-warning.
+### Plans from earlier versions
+
+Earlier versions stored each slot as free text, in `data/weeks/` and
+`data/week.json`. The app doesn't show those plans, and the server never
+reads, changes, or deletes those files. To keep them, leave them where they
+are or copy them elsewhere.
 
 ## Check your changes
 
@@ -219,18 +227,64 @@ public/      # User interface: HTML, CSS, and JavaScript, with no framework or b
   styles.css
 server/
   app.js     # HTTP API (Express) and static files.
+  errors.js  # Errors for bad input, which app.js maps to HTTP statuses.
+  files.js   # Reads and writes JSON files. The only module that touches disk.
   index.js   # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
-  store.js   # Reads and writes week files. The only module that touches disk.
+  recipes.js # The recipe book: unique names, renaming, and archiving.
+  weeks.js   # Weeks and the menu of each slot.
 test/        # Tests that use node:test and supertest.
 biome.json   # Lint and format settings.
 ```
 
 ## API reference
 
-The user interface depends only on this API.
+The user interface depends only on this API. All responses are JSON. Errors
+have the shape `{ "error": "MESSAGE" }`. Any other path under `/api` returns
+`404`. If a data file contains invalid JSON, the requests that read it return
+`500`.
+
+A recipe has the shape `{ "id", "name", "archived" }`.
 
 A week is identified by the date of its Monday, formatted as `YYYY-MM-DD`, for
-example `2026-09-21`.
+example `2026-09-21`. Each slot of a week holds a menu:
+
+```json
+{ "items": [{ "recipeId": "RECIPE_ID", "servings": 1.5 }] }
+```
+
+### List recipes
+
+`GET /api/recipes`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "recipes": [...] }`, with every recipe, archived ones included, sorted from A to Z ignoring case and accents. |
+
+### Add a recipe
+
+`POST /api/recipes`
+
+Request body: `{ "name": "NAME" }`
+
+| Status | Meaning |
+|--------|---------|
+| `201`  | The body is the new recipe. The server trims the name and collapses runs of whitespace. |
+| `400`  | `name` is missing, isn't a string, is empty, or is longer than 100 characters. |
+| `409`  | Another recipe, active or archived, has the same name, ignoring case and accents. The body is `{ "error", "recipe" }`, where `recipe` is that recipe. |
+
+### Change a recipe
+
+`PATCH /api/recipes/ID`
+
+Request body: `{ "name": "NAME" }` to rename the recipe, or
+`{ "archived": true }` or `{ "archived": false }` to archive or restore it.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is the updated recipe. |
+| `400`  | The body doesn't have exactly one of the two fields, or the value is invalid. |
+| `404`  | No recipe has that ID. |
+| `409`  | Another recipe, active or archived, has the same name, ignoring case and accents. The body is `{ "error", "recipe" }`. |
 
 ### Get a week
 
@@ -238,17 +292,22 @@ example `2026-09-21`.
 
 | Status | Meaning |
 |--------|---------|
-| `200`  | The body is the full week. It contains the days `mon` through `sun`. Each day contains the meals `breakfast`, `snack_am`, `lunch`, `snack_pm`, and `dinner`, and each meal is a string. A week without saved cells has empty strings. |
+| `200`  | The body is the full week. It contains the days `mon` through `sun`. Each day contains the meals `breakfast`, `snack_am`, `lunch`, `snack_pm`, and `dinner`, and each meal is a menu. An empty slot is `{ "items": [] }`. |
 | `404`  | `WEEK` isn't a valid week identifier. |
 
-### Save a cell
+### Save a slot
 
 `PUT /api/weeks/WEEK/DAY/MEAL`
 
-Request body: `{ "text": "TEXT" }`
+Request body: `{ "items": [{ "recipeId": "RECIPE_ID", "servings": 1.5 }] }`
 
 | Status | Meaning |
 |--------|---------|
-| `200`  | The cell was saved. The body is `{ "week", "day", "meal", "text" }`. |
-| `400`  | `text` is missing, isn't a string, or is longer than 2000 characters. Length is counted in UTF-16 code units, like JavaScript's `String.length`. |
+| `200`  | The slot was saved. The body is `{ "week", "day", "meal", "items" }`. |
+| `400`  | The body breaks one of the following rules. |
 | `404`  | `WEEK`, `DAY`, or `MEAL` isn't a valid identifier. |
+
+- `items` is an array of at most 20 menu items.
+- Each menu item has exactly the keys `recipeId` and `servings`.
+- Each `recipeId` is an existing recipe, archived or not, and appears once.
+- Each `servings` is a multiple of 0.5 from 0.5 to 99.

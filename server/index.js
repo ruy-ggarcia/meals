@@ -1,15 +1,17 @@
 import path from "node:path";
 import { createApp } from "./app.js";
-import { createStore, weekIdOf } from "./store.js";
+import { createQueue } from "./files.js";
+import { createRecipes } from "./recipes.js";
+import { createWeeks } from "./weeks.js";
 
 const port = Number(process.env.PORT || 3000);
 const dataDir = path.resolve(process.env.DATA_DIR || "data");
 
-const store = createStore({ dataDir });
-// Data from the single-week version becomes the current week.
-await store.migrateLegacyWeek(weekIdOf(new Date()));
-
-const app = createApp({ store });
+// One queue for every file, so a save never checks recipes while they change.
+const enqueue = createQueue();
+const recipes = createRecipes({ dataDir, enqueue });
+const weeks = createWeeks({ dataDir, enqueue, recipes });
+const app = createApp({ recipes, weeks });
 
 app.listen(port, "0.0.0.0", (error) => {
   if (error) throw error;
