@@ -186,6 +186,10 @@ Before you commit, check your changes:
 [Biome](https://biomejs.dev) checks the style of JavaScript, CSS, and JSON
 files. The settings are in `biome.json`.
 
+Some behavior needs a person with a real browser, such as focus, layout on a
+phone, and saves when the page is hidden. Before you merge a change to the
+user interface, run the checks in `docs/manual-test-plan.md`.
+
 ## Continuous integration
 
 GitHub Actions runs `npm run lint` and `npm test` with Node.js 22 on every pull
@@ -201,6 +205,8 @@ each pull request is integrated with a merge commit.
 .github/
   workflows/
     ci.yml   # Continuous integration: lint and tests.
+docs/
+  manual-test-plan.md  # Checks that need a person with a browser.
 public/      # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js     # Grid, week changes, and saves.
   dates.js   # Date helpers with no DOM access, so tests run them in Node.js.

@@ -44,8 +44,8 @@ fail, and then write the code that makes it pass.
 Before you fix a bug, write an automated test that reproduces it, and watch
 the test fail. The failure confirms your hypothesis about the cause. Only then
 fix the bug and watch the test pass. If a behavior can't be tested
-automatically, such as focus or layout in a real browser, check it by hand
-in a browser.
+automatically, such as focus or layout in a real browser, cover it in
+`docs/manual-test-plan.md`.
 
 ## Checks
 
