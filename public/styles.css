@@ -17,6 +17,12 @@ body {
   background: #f6f6f6;
 }
 
+/* Tapping a button twice quickly must not zoom the page (iOS Safari). Pinch
+   zoom still works. */
+button {
+  touch-action: manipulation;
+}
+
 .page-header {
   padding: 0.75rem 1rem;
 }
