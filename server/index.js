@@ -1,11 +1,15 @@
 import path from "node:path";
 import { createApp } from "./app.js";
-import { createStore } from "./store.js";
+import { createStore, weekIdOf } from "./store.js";
 
 const port = Number(process.env.PORT || 3000);
 const dataDir = path.resolve(process.env.DATA_DIR || "data");
 
-const app = createApp({ store: createStore({ dataDir }) });
+const store = createStore({ dataDir });
+// Data from the single-week version becomes the current week.
+await store.migrateLegacyWeek(weekIdOf(new Date()));
+
+const app = createApp({ store });
 
 app.listen(port, "0.0.0.0", (error) => {
   if (error) throw error;

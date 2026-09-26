@@ -1,5 +1,6 @@
-// Weekly grid frontend. Depends ONLY on the HTTP API (/api/week); never import from server/.
+// Weekly grid frontend. Depends ONLY on the HTTP API (/api/weeks); never import from server/.
 
+import { dayIndex, weekIdOf } from "./dates.js";
 import { createSaves } from "./saves.js";
 
 const DAYS = [
@@ -46,29 +47,34 @@ const dayBar = document.getElementById("day-bar");
 const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
 
-/** Per-cell timer that hides the "✓" badge. */
+/** Timer that hides the "✓" badge, per cell element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
 
-function cellKey(day, meal) {
-  return `${day}/${meal}`;
+// Keys include the week, so the same cell in two weeks never shares save state.
+function cellKey(week, day, meal) {
+  return `${week}/${day}/${meal}`;
 }
 
+// The cell element of `key`, or null when its week isn't on screen.
 function cellOf(key) {
-  const [day, meal] = key.split("/");
+  const [week, day, meal] = key.split("/");
+  if (week !== grid.dataset.week) return null;
   return grid.querySelector(`.cell[data-day="${day}"][data-meal="${meal}"]`);
 }
 
 const saves = createSaves({
   fetch: (url, options) => fetch(url, options),
-  url: (key) => `/api/week/${key}`,
-  readText: (key) => cellOf(key).querySelector("textarea").value,
-  onStatus: (key, state) => setStatus(cellOf(key), state),
+  url: (key) => `/api/weeks/${key}`,
+  readText: (key) => cellOf(key)?.querySelector("textarea").value,
+  onStatus: (key, state) => {
+    const cell = cellOf(key);
+    if (cell) setStatus(cell, state);
+  },
   timeoutMs: REQUEST_TIMEOUT_MS,
 });
 
 function todayId() {
-  // Date#getDay(): 0 = Sunday, 1 = Monday, ..., 6 = Saturday.
-  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date().getDay()];
+  return DAYS[dayIndex(new Date())].id;
 }
 
 function createElement(tag, className, text) {
@@ -117,14 +123,19 @@ function buildCell(day, meal) {
   textarea.rows = 3;
   textarea.maxLength = MAX_TEXT_LENGTH;
   textarea.setAttribute("aria-label", `${day.label}, ${meal.label}`);
-  textarea.addEventListener("blur", () => saves.queueSave(cellKey(day.id, meal.id)));
+  textarea.addEventListener("blur", () =>
+    saves.queueSave(cellKey(grid.dataset.week, day.id, meal.id)),
+  );
 
   const status = createElement("button", "status");
   status.type = "button";
   status.disabled = true;
   status.dataset.state = "idle";
   status.setAttribute("aria-live", "polite");
-  status.addEventListener("click", () => saves.queueSave(cellKey(day.id, meal.id))); // only clickable in "error"
+  // Only clickable in "error".
+  status.addEventListener("click", () =>
+    saves.queueSave(cellKey(grid.dataset.week, day.id, meal.id)),
+  );
 
   cell.append(label, textarea, status);
   return cell;
@@ -142,27 +153,31 @@ function selectDay(dayId) {
   }
 }
 
-function fillWeek(week) {
+function fillWeek(week, cells) {
+  grid.dataset.week = week;
   const entries = [];
   for (const cell of grid.querySelectorAll(".cell")) {
     const { day, meal } = cell.dataset;
-    const text = week[day][meal];
+    const text = cells[day][meal];
     cell.querySelector("textarea").value = text;
-    entries.push([cellKey(day, meal), text]);
+    entries.push([cellKey(week, day, meal), text]);
   }
-  saves.loaded(entries); // sets every status to idle
+  // Sets every status to idle, which also clears a pending "✓" timer from the
+  // previous week.
+  saves.loaded(entries);
 }
 
-function allKeys() {
+// The keys of the cells on screen.
+function shownKeys() {
+  const { week } = grid.dataset;
   return [...grid.querySelectorAll(".cell")].map((cell) =>
-    cellKey(cell.dataset.day, cell.dataset.meal),
+    cellKey(week, cell.dataset.day, cell.dataset.meal),
   );
 }
 
 // Shows a cell's save status. The status itself comes from saves.js.
 function setStatus(cell, state) {
-  const key = cellKey(cell.dataset.day, cell.dataset.meal);
-  clearTimeout(savedTimers.get(key));
+  clearTimeout(savedTimers.get(cell));
 
   const status = cell.querySelector(".status");
   status.dataset.state = state;
@@ -179,35 +194,41 @@ function setStatus(cell, state) {
 
   if (state === "saved") {
     savedTimers.set(
-      key,
+      cell,
       setTimeout(() => setStatus(cell, "idle"), SAVED_BADGE_MS),
     );
   }
 }
 
-async function loadWeek() {
+async function loadWeek(week) {
   loadError.hidden = true;
   retryLoadButton.disabled = true;
   try {
-    const response = await fetch("/api/week", { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    const response = await fetch(`/api/weeks/${week}`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    fillWeek(await response.json());
+    fillWeek(week, await response.json());
     dayBar.hidden = false;
     grid.hidden = false;
   } catch (error) {
     console.error("Couldn't load the meal plan:", error);
+    dayBar.hidden = true;
+    grid.hidden = true;
     loadError.hidden = false;
   } finally {
     retryLoadButton.disabled = false;
   }
 }
 
+const currentWeek = weekIdOf(new Date());
+
 buildDayBar();
 buildGrid();
 selectDay(todayId());
-retryLoadButton.addEventListener("click", loadWeek);
-window.addEventListener("pagehide", () => saves.flush(allKeys(), { skipInFlight: false }));
+retryLoadButton.addEventListener("click", () => loadWeek(currentWeek));
+window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") saves.flush(allKeys(), { skipInFlight: true });
+  if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
 });
-loadWeek();
+loadWeek(currentWeek);

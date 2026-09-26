@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { DAYS, MEALS, weekIdOf } from "./store.js";
+import { DAYS, isWeekId, MEALS } from "./store.js";
 
 export const MAX_TEXT_LENGTH = 2000;
 
@@ -10,14 +10,19 @@ export function createApp({ store }) {
   const app = express();
   app.use(express.json());
 
-  app.get("/api/week", async (_req, res) => {
-    res.json(await store.readWeek(weekIdOf(new Date())));
+  app.get("/api/weeks/:week", async (req, res) => {
+    const { week } = req.params;
+    if (!isWeekId(week)) {
+      res.status(404).json({ error: `Unknown week: ${week}` });
+      return;
+    }
+    res.json(await store.readWeek(week));
   });
 
-  app.put("/api/week/:day/:meal", async (req, res) => {
-    const { day, meal } = req.params;
-    if (!DAYS.includes(day) || !MEALS.includes(meal)) {
-      res.status(404).json({ error: `Unknown day or meal: ${day}/${meal}` });
+  app.put("/api/weeks/:week/:day/:meal", async (req, res) => {
+    const { week, day, meal } = req.params;
+    if (!isWeekId(week) || !DAYS.includes(day) || !MEALS.includes(meal)) {
+      res.status(404).json({ error: `Unknown week, day, or meal: ${week}/${day}/${meal}` });
       return;
     }
 
@@ -32,8 +37,7 @@ export function createApp({ store }) {
       return;
     }
 
-    const saved = await store.saveCell(weekIdOf(new Date()), day, meal, text);
-    res.json({ day: saved.day, meal: saved.meal, text: saved.text });
+    res.json(await store.saveCell(week, day, meal, text));
   });
 
   // Any other /api path: JSON 404 (the API only ever answers JSON).

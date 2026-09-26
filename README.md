@@ -97,7 +97,7 @@ The server reads the following environment variables:
 
 | Variable   | Default  | Description                           |
 |------------|----------|---------------------------------------|
-| `DATA_DIR` | `./data` | The directory that stores `week.json`. |
+| `DATA_DIR` | `./data` | The directory that stores the meal plan. |
 | `PORT`     | `3000`   | The port that the server listens on.  |
 
 For example, to store data in `/srv/meals` and listen on port 8080, run the
@@ -109,21 +109,31 @@ DATA_DIR=/srv/meals PORT=8080 npm start
 
 ## Back up and restore data
 
-The whole meal plan lives in one file, `data/week.json`. The server creates it
-on the first save. Git ignores it.
+The meal plan lives in `data/weeks/`, with one file per week. Each file is
+named after the week's Monday, for example `data/weeks/2026-09-21.json`. The
+server creates a week's file on the first save in that week. Git ignores the
+`data/` directory.
 
-To back up the meal plan, copy the file:
+To back up the meal plan, copy the directory:
 
 ```bash
-cp data/week.json week.backup.json
+cp -r data/weeks weeks.backup
 ```
 
-If the file contains invalid JSON, the app shows
-`Couldn't load the meal plan.` and doesn't overwrite the file. To recover, do
-the following:
+If a week file contains invalid JSON, the app shows
+`Couldn't load the meal plan.` for that week and doesn't overwrite the file.
+To recover, do the following:
 
-1. Restore a backup copy of `data/week.json`, or fix the JSON by hand.
+1. Restore a backup copy of the week file, or fix the JSON by hand.
 1. In the app, click **Retry**.
+
+### Upgrade from a single week
+
+Earlier versions stored one generic week in `data/week.json`. On startup, the
+server moves that file to the current week, for example
+`data/weeks/2026-09-21.json`, and prints a line about the move. If the current
+week already has a file, the server leaves both files unchanged and prints a
+warning.
 
 ## Check your changes
 
@@ -170,7 +180,7 @@ public/      # User interface: HTML, CSS, and JavaScript, with no framework or b
 server/
   app.js     # HTTP API (Express) and static files.
   index.js   # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
-  store.js   # Reads and writes week.json. The only module that touches disk.
+  store.js   # Reads and writes week files. The only module that touches disk.
 test/        # Tests that use node:test and supertest.
 biome.json   # Lint and format settings.
 ```
@@ -179,22 +189,26 @@ biome.json   # Lint and format settings.
 
 The user interface depends only on this API.
 
-### Get the week
+A week is identified by the date of its Monday, formatted as `YYYY-MM-DD`, for
+example `2026-09-21`.
 
-`GET /api/week`
+### Get a week
 
-Returns `200` with the full week. The response contains the days `mon` through
-`sun`. Each day contains the meals `breakfast`, `snack_am`, `lunch`,
-`snack_pm`, and `dinner`, and each meal is a string.
+`GET /api/weeks/WEEK`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is the full week. It contains the days `mon` through `sun`. Each day contains the meals `breakfast`, `snack_am`, `lunch`, `snack_pm`, and `dinner`, and each meal is a string. A week without saved cells has empty strings. |
+| `404`  | `WEEK` isn't a valid week identifier. |
 
 ### Save a cell
 
-`PUT /api/week/DAY/MEAL`
+`PUT /api/weeks/WEEK/DAY/MEAL`
 
 Request body: `{ "text": "TEXT" }`
 
 | Status | Meaning |
 |--------|---------|
-| `200`  | The cell was saved. The body is `{ "day", "meal", "text" }`. |
+| `200`  | The cell was saved. The body is `{ "week", "day", "meal", "text" }`. |
 | `400`  | `text` is missing, isn't a string, or is longer than 2000 characters. Length is counted in UTF-16 code units, like JavaScript's `String.length`. |
-| `404`  | `DAY` or `MEAL` isn't a valid identifier. |
+| `404`  | `WEEK`, `DAY`, or `MEAL` isn't a valid identifier. |
