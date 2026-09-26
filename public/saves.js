@@ -13,8 +13,14 @@
  * - `timeoutMs`: how long a save waits for the server before it gives up.
  */
 export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
-  /** Last text saved, per cell. */
+  /** Last text saved, per cell, including page-hide saves still pending. */
   const lastSaved = new Map();
+  /** Last text the server confirmed, per cell. Differs from lastSaved only while a page-hide save is pending. */
+  const confirmedText = new Map();
+  /** Sequence number of the request behind confirmedText, per cell. */
+  const confirmedSequence = new Map();
+  /** Sequence number of the last PUT sent, for any cell. */
+  let lastSequence = 0;
   /** Per-cell promise chain so saves of one cell run strictly in order. */
   const saveChains = new Map();
   /** Text currently being PUT by the per-cell chain (cleared when that PUT settles). */
@@ -27,6 +33,14 @@ export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
   function setStatus(key, state) {
     statuses.set(key, state);
     onStatus(key, state);
+  }
+
+  // Records `text` as confirmed unless the server already confirmed a newer
+  // request of the cell: responses can arrive in another order than requests.
+  function markConfirmed(key, text, sequence) {
+    if (sequence < confirmedSequence.get(key)) return;
+    confirmedSequence.set(key, sequence);
+    confirmedText.set(key, text);
   }
 
   function put(key, text, options) {
@@ -42,6 +56,7 @@ export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
   function loaded(entries) {
     for (const [key, text] of entries) {
       lastSaved.set(key, text);
+      markConfirmed(key, text, lastSequence);
       setStatus(key, "idle");
     }
   }
@@ -58,10 +73,12 @@ export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
 
     setStatus(key, "saving");
     inFlight.set(key, text);
+    const sequence = ++lastSequence;
     try {
       const response = await put(key, text, { signal: AbortSignal.timeout(timeoutMs) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       lastSaved.set(key, text);
+      markConfirmed(key, text, sequence);
       setStatus(key, "saved");
     } catch (error) {
       console.error(`Couldn't save ${key}:`, error);
@@ -86,7 +103,7 @@ export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
   // settle can wait for it.
   // lastSaved is updated optimistically BEFORE the fetch so a second call
   // (visibilitychange + pagehide) or a later blur doesn't resend; it is
-  // restored on failure so the next blur retries.
+  // restored to the confirmed text on failure so the next blur retries.
   function flush(keys, { skipInFlight }) {
     for (const key of keys) {
       const text = readText(key);
@@ -98,14 +115,18 @@ export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
 
       lastSaved.set(key, text);
       // Returns true if it restored, that is, if no newer save replaced the text.
+      // It restores the confirmed text, not `previous`: `previous` may be the
+      // text of an earlier page-hide save that fails too.
       const restore = () => {
         if (lastSaved.get(key) !== text) return false;
-        lastSaved.set(key, previous);
+        lastSaved.set(key, confirmedText.get(key));
         return true;
       };
+      const sequence = ++lastSequence;
       const save = put(key, text, { keepalive: true, signal: AbortSignal.timeout(timeoutMs) })
         .then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          markConfirmed(key, text, sequence);
           // Server now has the text; clear a stale error badge, unless the cell
           // holds a newer text that failed to save since.
           if (statuses.get(key) === "error" && readText(key) === text) setStatus(key, "idle");
@@ -138,13 +159,14 @@ export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
   }
 
   /**
-   * Gives up the unsaved text of a cell: returns the saved text to show
+   * Gives up the unsaved text of a cell: returns the text the server has, to show
    * instead, and clears the cell's status. No later save sends the discarded
    * text once the cell shows the returned text.
    */
   function discard(key) {
+    lastSaved.set(key, confirmedText.get(key));
     setStatus(key, "idle");
-    return lastSaved.get(key);
+    return confirmedText.get(key);
   }
 
   return { discard, flush, loaded, queueSave, settle, unsaved };

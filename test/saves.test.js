@@ -362,3 +362,85 @@ test("a late successful page-hide save keeps the error of a newer text that fail
   await saves.settle();
   assert.equal(statuses.get(KEY), "error", "the cell still has unsaved text");
 });
+
+test("when two page-hide saves of a cell fail, a later save sends the text again", async () => {
+  const { saves, server, texts } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false });
+  texts.set(KEY, "Soup and bread");
+  saves.flush([KEY], { skipInFlight: false });
+  server.requests[0].fail();
+  server.requests[1].fail();
+  await saves.settle();
+
+  texts.set(KEY, "Soup"); // the server never received it
+  saves.queueSave(KEY);
+  await tick();
+  assert.equal(server.requests.length, 3);
+  assert.equal(server.requests[2].text, "Soup");
+});
+
+test("when two page-hide saves of a cell fail, discard returns the text the server has", async () => {
+  const { saves, server, texts } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false });
+  texts.set(KEY, "Soup and bread");
+  saves.flush([KEY], { skipInFlight: false });
+  server.requests[0].fail();
+  server.requests[1].fail();
+  await saves.settle();
+
+  assert.equal(saves.discard(KEY), "");
+});
+
+test("a page-hide save confirmed after a newer save doesn't replace the newer text", async () => {
+  const { saves, server, texts } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false }); // sent first, answered last
+  texts.set(KEY, "Soup and bread");
+  const newer = saves.queueSave(KEY);
+  await tick();
+  server.requests[1].ok();
+  await newer;
+  server.requests[0].ok();
+  await saves.settle();
+
+  texts.set(KEY, "Soup, bread, and fruit");
+  const failed = saves.queueSave(KEY);
+  await tick();
+  server.requests[2].fail();
+  await failed;
+  assert.equal(saves.discard(KEY), "Soup and bread");
+});
+
+test("after a successful page-hide save, discard returns its text", async () => {
+  const { saves, server, texts } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false });
+  server.requests[0].ok();
+  await saves.settle();
+
+  texts.set(KEY, "Soup and bread");
+  const failed = saves.queueSave(KEY);
+  await tick();
+  server.requests[1].fail();
+  await failed;
+  assert.equal(saves.discard(KEY), "Soup");
+});
+
+test("when an older page-hide save succeeds after a newer one failed, discard returns the older text", async () => {
+  const { saves, server, texts } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false });
+  texts.set(KEY, "Soup and bread");
+  saves.flush([KEY], { skipInFlight: false });
+  server.requests[1].fail();
+  await tick();
+  server.requests[0].ok();
+  await saves.settle();
+
+  texts.set(KEY, saves.discard(KEY));
+  assert.equal(texts.get(KEY), "Soup");
+  await saves.queueSave(KEY); // the server has this text, so nothing to send
+  assert.equal(server.requests.length, 2);
+});
