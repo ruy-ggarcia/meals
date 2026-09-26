@@ -106,8 +106,9 @@ export function createSaves({ fetch, url, readText, onStatus, timeoutMs }) {
       const save = put(key, text, { keepalive: true, signal: AbortSignal.timeout(timeoutMs) })
         .then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          // Server now has the text; clear a stale error badge.
-          if (statuses.get(key) === "error") setStatus(key, "idle");
+          // Server now has the text; clear a stale error badge, unless the cell
+          // holds a newer text that failed to save since.
+          if (statuses.get(key) === "error" && readText(key) === text) setStatus(key, "idle");
         })
         .catch((error) => {
           console.error(`Couldn't save ${key} on page hide:`, error);

@@ -346,3 +346,19 @@ test("discard returns the saved text and clears the error, so no later save send
   await tick();
   assert.equal(server.requests.length, 1);
 });
+
+test("a late successful page-hide save keeps the error of a newer text that failed", async () => {
+  const { saves, server, texts, statuses } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false }); // the page is hidden; this save is slow
+  texts.set(KEY, "Soup and bread");
+  const newer = saves.queueSave(KEY);
+  await tick();
+  server.requests[1].fail();
+  await newer;
+  assert.equal(statuses.get(KEY), "error");
+
+  server.requests[0].ok();
+  await saves.settle();
+  assert.equal(statuses.get(KEY), "error", "the cell still has unsaved text");
+});
