@@ -141,6 +141,14 @@ test("queueSave does nothing for a slot that isn't loaded", async () => {
   assert.equal(server.requests.length, 0);
 });
 
+test("queueSave does nothing for a slot that isn't loaded, even when readMenu returns a menu for it", async () => {
+  const { saves, server, menus } = setup();
+  menus.set("wed/lunch", SOUP); // for example, a slot element left over from a previous week
+  saves.queueSave("wed/lunch");
+  await tick();
+  assert.equal(server.requests.length, 0);
+});
+
 test("changing a menu object after its save doesn't change what counts as saved", async () => {
   const { saves, server, menus } = setup();
   const shown = menu("soup");

@@ -77,7 +77,7 @@ export function createSaves({ fetch, url, readMenu, onStatus, timeoutMs }) {
   // Never rejects. Always saves the slot's CURRENT menu.
   async function saveIfChanged(key) {
     const current = readMenu(key);
-    if (current === undefined) return; // not loaded: nothing to save
+    if (current === undefined || lastSaved.get(key) === undefined) return; // not loaded: nothing to save
 
     if (same(current, lastSaved.get(key))) {
       // Nothing to send. If a previous attempt failed, the server already has this menu.
