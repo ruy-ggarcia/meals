@@ -1,8 +1,9 @@
 # Meals
 
-Meals is a web app for planning a family's weekly menu. It shows a grid of 7
-days by 5 meals (breakfast, morning snack, lunch, afternoon snack, and dinner).
-Each cell holds a free-text list of dishes, one per line.
+Meals is a web app for planning a family's weekly menu. It shows one week at a
+time as a grid of 7 days by 5 meals (breakfast, morning snack, lunch,
+afternoon snack, and dinner). Each cell holds a free-text list of dishes, one
+per line.
 
 The app runs on a computer at home. Any device on the same network, desktop or
 mobile, can use it from a browser.
@@ -71,13 +72,30 @@ To open the port, run the command for your firewall:
 ## Use the app
 
 - **Desktop** (windows 768 px wide or wider): the full grid shows one column
-  per day and one row per meal.
-- **Mobile:** the app shows one day at a time. To switch days, tap a letter in
-  the day bar (`M T W T F S S`). When the page opens, it shows the current day.
+  per day and one row per meal. Each day header shows the weekday and the day
+  of the month.
+- **Mobile:** the app shows one day at a time. To switch days, tap a day in the
+  day bar. Each button shows the weekday letter and the day of the month. When
+  the page opens, it shows the current day.
+
+When the displayed week contains today, the app marks today in green. On
+desktop, it marks today's column. On mobile, it outlines today's button in the
+day bar.
+
+To move between weeks, use the week bar below the title. It shows the dates of
+the displayed week:
+
+- `‹` shows the previous week.
+- `›` shows the next week.
+- **Today** shows the current week. On mobile, it also selects today.
+
+On mobile, changing weeks keeps the selected day. The address bar holds the
+displayed week, for example `http://localhost:3000/#2026-09-21`, so a reload
+shows the same week and you can bookmark a week.
 
 To plan a meal, type one dish per line in a cell. The app saves the cell when
-you leave it, switch days, reload the page, or close the page. Below the cell,
-an icon shows the save status:
+you leave it, switch days, change weeks, reload the page, or close the page.
+Below the cell, an icon shows the save status:
 
 | Icon             | Status                                                       |
 |------------------|--------------------------------------------------------------|
@@ -88,6 +106,13 @@ an icon shows the save status:
 To retry a failed save, click the red cross. To see what an icon means, hover
 over it.
 
+Before the app changes weeks, it waits for pending saves. If you change weeks
+right after you type, the new week appears once the save succeeds, so you
+might not see the check mark. If a cell couldn't be saved, the app asks
+whether to leave the week anyway. To stay and retry the save, click
+**Cancel**. To discard the unsaved text and change weeks, click **OK**. The
+cell then goes back to its last saved text.
+
 Changes from other devices don't appear in real time. To see them, reload the
 page. If two people edit the same cell, the last save wins.
 
@@ -97,7 +122,7 @@ The server reads the following environment variables:
 
 | Variable   | Default  | Description                           |
 |------------|----------|---------------------------------------|
-| `DATA_DIR` | `./data` | The directory that stores `week.json`. |
+| `DATA_DIR` | `./data` | The directory that stores the meal plan. |
 | `PORT`     | `3000`   | The port that the server listens on.  |
 
 For example, to store data in `/srv/meals` and listen on port 8080, run the
@@ -109,21 +134,31 @@ DATA_DIR=/srv/meals PORT=8080 npm start
 
 ## Back up and restore data
 
-The whole meal plan lives in one file, `data/week.json`. The server creates it
-on the first save. Git ignores it.
+The meal plan lives in `data/weeks/`, with one file per week. Each file is
+named after the week's Monday, for example `data/weeks/2026-09-21.json`. The
+server creates a week's file on the first save in that week. Git ignores the
+`data/` directory.
 
-To back up the meal plan, copy the file:
+To back up the meal plan, copy the directory:
 
 ```bash
-cp data/week.json week.backup.json
+cp -r data/weeks weeks.backup
 ```
 
-If the file contains invalid JSON, the app shows
-`Couldn't load the meal plan.` and doesn't overwrite the file. To recover, do
-the following:
+If a week file contains invalid JSON, the app shows
+`Couldn't load the meal plan.` for that week and doesn't overwrite the file.
+To recover, do the following:
 
-1. Restore a backup copy of `data/week.json`, or fix the JSON by hand.
+1. Restore a backup copy of the week file, or fix the JSON by hand.
 1. In the app, click **Retry**.
+
+### Upgrade from a single week
+
+Earlier versions stored one generic week in `data/week.json`. On startup, the
+server moves that file to the current week, for example
+`data/weeks/2026-09-21.json`, and prints a line about the move. If the current
+week already has a file, the server leaves both files unchanged and prints a
+warning.
 
 ## Check your changes
 
@@ -151,6 +186,10 @@ Before you commit, check your changes:
 [Biome](https://biomejs.dev) checks the style of JavaScript, CSS, and JSON
 files. The settings are in `biome.json`.
 
+Some behavior needs a person with a real browser, such as focus, layout on a
+phone, and saves when the page is hidden. Before you merge a change to the
+user interface, run the checks in `docs/manual-test-plan.md`.
+
 ## Continuous integration
 
 GitHub Actions runs `npm run lint` and `npm test` with Node.js 22 on every pull
@@ -166,11 +205,18 @@ each pull request is integrated with a merge commit.
 .github/
   workflows/
     ci.yml   # Continuous integration: lint and tests.
+docs/
+  manual-test-plan.md  # Checks that need a person with a browser.
 public/      # User interface: HTML, CSS, and JavaScript, with no framework or build step.
+  app.js     # Grid, week changes, and saves.
+  dates.js   # Date helpers with no DOM access, so tests run them in Node.js.
+  index.html
+  saves.js   # Save logic with no DOM access, so tests run it in Node.js.
+  styles.css
 server/
   app.js     # HTTP API (Express) and static files.
   index.js   # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
-  store.js   # Reads and writes week.json. The only module that touches disk.
+  store.js   # Reads and writes week files. The only module that touches disk.
 test/        # Tests that use node:test and supertest.
 biome.json   # Lint and format settings.
 ```
@@ -179,22 +225,26 @@ biome.json   # Lint and format settings.
 
 The user interface depends only on this API.
 
-### Get the week
+A week is identified by the date of its Monday, formatted as `YYYY-MM-DD`, for
+example `2026-09-21`.
 
-`GET /api/week`
+### Get a week
 
-Returns `200` with the full week. The response contains the days `mon` through
-`sun`. Each day contains the meals `breakfast`, `snack_am`, `lunch`,
-`snack_pm`, and `dinner`, and each meal is a string.
+`GET /api/weeks/WEEK`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is the full week. It contains the days `mon` through `sun`. Each day contains the meals `breakfast`, `snack_am`, `lunch`, `snack_pm`, and `dinner`, and each meal is a string. A week without saved cells has empty strings. |
+| `404`  | `WEEK` isn't a valid week identifier. |
 
 ### Save a cell
 
-`PUT /api/week/DAY/MEAL`
+`PUT /api/weeks/WEEK/DAY/MEAL`
 
 Request body: `{ "text": "TEXT" }`
 
 | Status | Meaning |
 |--------|---------|
-| `200`  | The cell was saved. The body is `{ "day", "meal", "text" }`. |
+| `200`  | The cell was saved. The body is `{ "week", "day", "meal", "text" }`. |
 | `400`  | `text` is missing, isn't a string, or is longer than 2000 characters. Length is counted in UTF-16 code units, like JavaScript's `String.length`. |
-| `404`  | `DAY` or `MEAL` isn't a valid identifier. |
+| `404`  | `WEEK`, `DAY`, or `MEAL` isn't a valid identifier. |

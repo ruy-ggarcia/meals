@@ -10,6 +10,12 @@
   <body>
     <header class="page-header">
       <h1>Weekly meal plan</h1>
+      <nav id="week-bar" class="week-bar" aria-label="Week">
+        <button type="button" id="previous-week" aria-label="Previous week">‹</button>
+        <span id="week-range" class="week-range" aria-live="polite"></span>
+        <button type="button" id="next-week" aria-label="Next week">›</button>
+        <button type="button" id="today">Today</button>
+      </nav>
     </header>
 
     <div id="load-error" class="load-error" role="alert" hidden>

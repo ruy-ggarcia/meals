@@ -1,4 +1,16 @@
-// Weekly grid frontend. Depends ONLY on the HTTP API (/api/week); never import from server/.
+// Weekly grid frontend. Depends ONLY on the HTTP API (/api/weeks); never import from server/.
+
+import {
+  addDays,
+  addWeeks,
+  dayIndex,
+  formatLongDate,
+  formatWeekRange,
+  isWeekId,
+  weekIdOf,
+  weekStart,
+} from "./dates.js";
+import { createSaves } from "./saves.js";
 
 const DAYS = [
   { id: "mon", label: "Monday", short: "M" },
@@ -20,7 +32,9 @@ const MEALS = [
 
 const MAX_TEXT_LENGTH = 2000; // same limit the API enforces
 const SAVED_BADGE_MS = 3000; // how long the "saved" check mark stays visible
-const REQUEST_TIMEOUT_MS = 10000; // load/save give up (-> error UI) after this
+const REQUEST_TIMEOUT_MS = 5000; // load/save give up (-> error UI) after this
+const UNSAVED_QUESTION =
+  "Some changes in this week couldn't be saved. Leave anyway and discard them?";
 
 // Monochrome line icons drawn with currentColor, so CSS sets each state's color.
 const ICON_PATHS = {
@@ -43,23 +57,42 @@ const grid = document.getElementById("grid");
 const dayBar = document.getElementById("day-bar");
 const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
+const weekBar = document.getElementById("week-bar");
+const weekRange = document.getElementById("week-range");
 
-/** Last text confirmed by the server, per cell ("mon/breakfast" -> text). */
-const lastSaved = new Map();
-/** Per-cell promise chain so saves of one cell run strictly in order. */
-const saveChains = new Map();
-/** Per-cell timer that hides the "✓" badge. */
+/** Timer that hides the "✓" badge, per cell element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
-/** Text currently being PUT by the per-cell chain (cleared when that PUT settles). */
-const inFlight = new Map();
 
-function cellKey(day, meal) {
-  return `${day}/${meal}`;
+/** The week in the URL hash and the range label. Retry loads it again. */
+let requestedWeek;
+/** True while a week change runs, so two changes never overlap. */
+let changingWeek = false;
+
+// Keys include the week, so the same cell in two weeks never shares save state.
+function cellKey(week, day, meal) {
+  return `${week}/${day}/${meal}`;
 }
 
+// The cell element of `key`, or null when its week isn't on screen.
+function cellOf(key) {
+  const [week, day, meal] = key.split("/");
+  if (week !== grid.dataset.week) return null;
+  return grid.querySelector(`.cell[data-day="${day}"][data-meal="${meal}"]`);
+}
+
+const saves = createSaves({
+  fetch: (url, options) => fetch(url, options),
+  url: (key) => `/api/weeks/${key}`,
+  readText: (key) => cellOf(key)?.querySelector("textarea").value,
+  onStatus: (key, state) => {
+    const cell = cellOf(key);
+    if (cell) setStatus(cell, state);
+  },
+  timeoutMs: REQUEST_TIMEOUT_MS,
+});
+
 function todayId() {
-  // Date#getDay(): 0 = Sunday, 1 = Monday, ..., 6 = Saturday.
-  return ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][new Date().getDay()];
+  return DAYS[dayIndex(new Date())].id;
 }
 
 function createElement(tag, className, text) {
@@ -71,7 +104,12 @@ function createElement(tag, className, text) {
 
 function buildDayBar() {
   for (const day of DAYS) {
-    const button = createElement("button", "", day.short);
+    const button = createElement("button");
+    // The day number is filled in when a week loads.
+    button.append(
+      createElement("span", "day-letter", day.short),
+      createElement("span", "day-number"),
+    );
     button.type = "button";
     button.dataset.day = day.id;
     button.setAttribute("aria-label", day.label);
@@ -85,7 +123,11 @@ function buildDayBar() {
 // then for each meal a meal header followed by its 7 cells.
 function buildGrid() {
   grid.append(createElement("div", "corner"));
-  for (const day of DAYS) grid.append(createElement("div", "day-header", day.label));
+  for (const day of DAYS) {
+    const header = createElement("div", "day-header", day.label);
+    header.dataset.day = day.id;
+    grid.append(header);
+  }
   for (const meal of MEALS) {
     grid.append(createElement("div", "meal-header", meal.label));
     for (const day of DAYS) grid.append(buildCell(day, meal));
@@ -108,44 +150,85 @@ function buildCell(day, meal) {
   textarea.rows = 3;
   textarea.maxLength = MAX_TEXT_LENGTH;
   textarea.setAttribute("aria-label", `${day.label}, ${meal.label}`);
-  textarea.addEventListener("blur", () => queueSave(cell));
+  textarea.addEventListener("blur", () =>
+    saves.queueSave(cellKey(grid.dataset.week, day.id, meal.id)),
+  );
 
   const status = createElement("button", "status");
   status.type = "button";
   status.disabled = true;
   status.dataset.state = "idle";
   status.setAttribute("aria-live", "polite");
-  status.addEventListener("click", () => queueSave(cell)); // only clickable in "error"
+  // Only clickable in "error".
+  status.addEventListener("click", () =>
+    saves.queueSave(cellKey(grid.dataset.week, day.id, meal.id)),
+  );
 
   cell.append(label, textarea, status);
   return cell;
 }
 
-function selectDay(dayId) {
+function blurActiveCell() {
   // Hiding a focused textarea doesn't reliably fire blur (and Safari doesn't
   // focus buttons on click), so blur it explicitly to trigger its save.
   const active = document.activeElement;
   if (active instanceof HTMLTextAreaElement && grid.contains(active)) active.blur();
+}
 
+function selectDay(dayId) {
+  blurActiveCell();
   grid.dataset.selectedDay = dayId;
   for (const button of dayBar.querySelectorAll("button")) {
     button.setAttribute("aria-pressed", String(button.dataset.day === dayId));
   }
 }
 
-function fillWeek(week) {
+function fillWeek(week, cells) {
+  grid.dataset.week = week;
+  const entries = [];
   for (const cell of grid.querySelectorAll(".cell")) {
     const { day, meal } = cell.dataset;
-    const text = week[day][meal];
+    const text = cells[day][meal];
     cell.querySelector("textarea").value = text;
-    lastSaved.set(cellKey(day, meal), text);
-    setStatus(cell, "idle");
+    entries.push([cellKey(week, day, meal), text]);
+  }
+  // Sets every status to idle, which also clears a pending "✓" timer from the
+  // previous week.
+  saves.loaded(entries);
+}
+
+// Puts the day of the month on the desktop headers and the mobile day bar.
+function showDayDates(week) {
+  const monday = weekStart(week);
+  for (const [index, day] of DAYS.entries()) {
+    const date = addDays(monday, index);
+    grid.querySelector(`.day-header[data-day="${day.id}"]`).textContent =
+      `${day.label} ${date.getDate()}`;
+    const button = dayBar.querySelector(`button[data-day="${day.id}"]`);
+    button.querySelector(".day-number").textContent = String(date.getDate());
+    button.setAttribute("aria-label", formatLongDate(date));
   }
 }
 
+// Marks today's header, cells, and day bar button when the loaded week contains today.
+function markToday() {
+  const todayDay = weekIdOf(new Date()) === grid.dataset.week ? todayId() : null;
+  for (const element of document.querySelectorAll("[data-day]")) {
+    element.toggleAttribute("data-today", element.dataset.day === todayDay);
+  }
+}
+
+// The keys of the cells on screen.
+function shownKeys() {
+  const { week } = grid.dataset;
+  return [...grid.querySelectorAll(".cell")].map((cell) =>
+    cellKey(week, cell.dataset.day, cell.dataset.meal),
+  );
+}
+
+// Shows a cell's save status. The status itself comes from saves.js.
 function setStatus(cell, state) {
-  const key = cellKey(cell.dataset.day, cell.dataset.meal);
-  clearTimeout(savedTimers.get(key));
+  clearTimeout(savedTimers.get(cell));
 
   const status = cell.querySelector(".status");
   status.dataset.state = state;
@@ -162,114 +245,118 @@ function setStatus(cell, state) {
 
   if (state === "saved") {
     savedTimers.set(
-      key,
+      cell,
       setTimeout(() => setStatus(cell, "idle"), SAVED_BADGE_MS),
     );
   }
 }
 
-// Chains saves per cell: an older PUT can never finish after a newer one.
-function queueSave(cell) {
-  const key = cellKey(cell.dataset.day, cell.dataset.meal);
-  const previous = saveChains.get(key) ?? Promise.resolve();
-  const next = previous.then(() => saveIfChanged(cell));
-  saveChains.set(key, next);
-}
-
-// Never rejects. Always saves the textarea's CURRENT value.
-async function saveIfChanged(cell) {
-  const { day, meal } = cell.dataset;
-  const key = cellKey(day, meal);
-  const text = cell.querySelector("textarea").value;
-
-  if (text === lastSaved.get(key)) {
-    // Nothing to send. If a previous attempt failed, the server already has this text.
-    if (cell.querySelector(".status").dataset.state === "error") setStatus(cell, "idle");
-    return;
-  }
-
-  setStatus(cell, "saving");
-  inFlight.set(key, text);
-  try {
-    const response = await fetch(`/api/week/${day}/${meal}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    lastSaved.set(key, text);
-    setStatus(cell, "saved");
-  } catch (error) {
-    console.error(`Couldn't save ${key}:`, error);
-    setStatus(cell, "error"); // the text stays in the textarea
-  } finally {
-    inFlight.delete(key);
-  }
-}
-
-// Last-chance save when the page is hidden or unloaded (reload, close, app
-// switch), where blur may never fire. Uses keepalive so the PUT survives
-// unload; bypasses the per-cell chain (last-write-wins per spec).
-// lastSaved is updated optimistically BEFORE the fetch so a second call
-// (visibilitychange + pagehide) or a later blur doesn't resend; it is
-// restored on failure so the next blur retries.
-function flushUnsaved({ skipInFlight }) {
-  for (const cell of grid.querySelectorAll(".cell")) {
-    const { day, meal } = cell.dataset;
-    const key = cellKey(day, meal);
-    const text = cell.querySelector("textarea").value;
-    const previous = lastSaved.get(key);
-    if (previous === undefined || text === previous) continue; // not loaded / unchanged
-    // The page survives a visibilitychange, so a normal PUT already carrying
-    // this text will complete; on pagehide it may be cancelled, so resend.
-    if (skipInFlight && inFlight.get(key) === text) continue;
-
-    lastSaved.set(key, text);
-    const restore = () => {
-      if (lastSaved.get(key) === text) lastSaved.set(key, previous);
-    };
-    fetch(`/api/week/${day}/${meal}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      keepalive: true,
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        // Server now has the text; clear a stale error badge if the page comes back.
-        if (cell.querySelector(".status").dataset.state === "error") setStatus(cell, "idle");
-      })
-      .catch((error) => {
-        console.error(`Couldn't save ${key} on page hide:`, error);
-        restore();
-      });
-  }
-}
-
-async function loadWeek() {
+async function loadWeek(week) {
   loadError.hidden = true;
   retryLoadButton.disabled = true;
   try {
-    const response = await fetch("/api/week", { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    const response = await fetch(`/api/weeks/${week}`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    fillWeek(await response.json());
+    fillWeek(week, await response.json());
+    showDayDates(week);
+    markToday();
     dayBar.hidden = false;
     grid.hidden = false;
   } catch (error) {
     console.error("Couldn't load the meal plan:", error);
+    dayBar.hidden = true;
+    grid.hidden = true;
     loadError.hidden = false;
   } finally {
     retryLoadButton.disabled = false;
   }
 }
 
+function syncHash() {
+  // replaceState adds no history entry, so Back doesn't step through weeks.
+  if (requestedWeek) history.replaceState(null, "", `#${requestedWeek}`);
+}
+
+function setChangingWeek(changing) {
+  changingWeek = changing;
+  for (const button of weekBar.querySelectorAll("button")) button.disabled = changing;
+  grid.inert = changing; // no typing into a week that is being left
+}
+
+// Waits for pending saves, then returns true if the loaded week can be left:
+// every cell is saved, or the user agreed to discard what couldn't be saved.
+async function leaveLoadedWeek() {
+  await saves.settle();
+  const unsaved = saves.unsaved(shownKeys());
+  if (unsaved.length === 0) return true;
+  // Let the browser paint the red crosses first: confirm() blocks painting.
+  await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
+  if (!window.confirm(UNSAVED_QUESTION)) return false;
+  // Put the saved text back, so no later blur or page-hide save can send the
+  // discarded text.
+  for (const key of unsaved) {
+    cellOf(key).querySelector("textarea").value = saves.discard(key);
+  }
+  return true;
+}
+
+// Shows `week` without ever dropping unsaved text silently. On mobile, the
+// selected day stays the same unless `selectToday` is set.
+async function goToWeek(week, { selectToday = false } = {}) {
+  if (changingWeek) return;
+  // Disabling the clicked button (a week bar button or Retry) moves focus to
+  // <body>; remember it so it can be refocused afterward.
+  const focused = document.activeElement;
+  blurActiveCell(); // starts the save of the focused cell before the wait
+  setChangingWeek(true);
+  try {
+    if (week !== grid.dataset.week || grid.hidden) {
+      if (!(await leaveLoadedWeek())) return;
+      requestedWeek = week;
+      syncHash();
+      weekRange.textContent = formatWeekRange(week);
+      await loadWeek(week);
+    }
+    if (selectToday) selectDay(todayId());
+    markToday(); // covers the case where the target week was already shown
+  } finally {
+    setChangingWeek(false);
+    // Only if focus was lost, not moved elsewhere by the user, and the button
+    // is still shown (Retry hides after a successful load). Never refocus a
+    // textarea: on mobile that would open the keyboard in the new week.
+    const refocus = weekBar.contains(focused) || focused === retryLoadButton;
+    if (refocus && document.activeElement === document.body && !focused.closest("[hidden]")) {
+      focused.focus();
+    }
+    syncHash(); // also undoes a hash edit that was cancelled or ignored
+  }
+}
+
 buildDayBar();
 buildGrid();
 selectDay(todayId());
-retryLoadButton.addEventListener("click", loadWeek);
-window.addEventListener("pagehide", () => flushUnsaved({ skipInFlight: false }));
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") flushUnsaved({ skipInFlight: true });
+retryLoadButton.addEventListener("click", () => goToWeek(requestedWeek));
+document
+  .getElementById("previous-week")
+  .addEventListener("click", () => goToWeek(addWeeks(requestedWeek, -1)));
+document
+  .getElementById("next-week")
+  .addEventListener("click", () => goToWeek(addWeeks(requestedWeek, 1)));
+document
+  .getElementById("today")
+  .addEventListener("click", () => goToWeek(weekIdOf(new Date()), { selectToday: true }));
+window.addEventListener("hashchange", () => {
+  const week = location.hash.slice(1);
+  if (isWeekId(week)) goToWeek(week);
+  else syncHash();
 });
-loadWeek();
+window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
+  else markToday(); // the day may have changed while the page was hidden
+});
+
+const hashWeek = location.hash.slice(1);
+goToWeek(isWeekId(hashWeek) ? hashWeek : weekIdOf(new Date()));
