@@ -203,7 +203,7 @@ steps, in order:
 1. Blur the focused textarea, if any, so that its save starts.
 1. Wait for all pending saves of the displayed week, including saves sent
    when the page is hidden, before or during the wait. Each save gives up
-   after 10 seconds.
+   after 5 seconds.
 1. If any cell of the displayed week still has text that differs from the
    last saved text, ask with `confirm()`:
 

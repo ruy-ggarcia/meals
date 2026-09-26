@@ -32,7 +32,7 @@ const MEALS = [
 
 const MAX_TEXT_LENGTH = 2000; // same limit the API enforces
 const SAVED_BADGE_MS = 3000; // how long the "saved" check mark stays visible
-const REQUEST_TIMEOUT_MS = 10000; // load/save give up (-> error UI) after this
+const REQUEST_TIMEOUT_MS = 5000; // load/save give up (-> error UI) after this
 const UNSAVED_QUESTION =
   "Some changes in this week couldn't be saved. Leave anyway and discard them?";
 
