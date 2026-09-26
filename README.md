@@ -135,6 +135,29 @@ save, click **Cancel**. To discard the unsaved menu and change weeks, click
 Changes from other devices don't appear in real time. To see them, reload the
 page. If two people edit the same slot, the last save wins.
 
+## Manage recipes
+
+The recipe book holds the recipes that you can add to menus. To open it, click
+**Recipes** at the top of the meal plan. To go back, click **Meal plan**.
+
+A recipe is a name of up to 100 characters. Names are unique, ignoring case
+and accents, so `Café` and `cafe` are the same name.
+
+- To add a recipe, type its name in **New recipe**, and then press `Enter` or
+  click **Add**. To clear the field, press `Escape`. If an archived recipe has
+  the name, click **Restore it** to bring that recipe back.
+- To rename a recipe, click **Rename**, type the new name, and then press
+  `Enter` or click **Save**. To keep the old name, press `Escape` or click
+  **Cancel**. The new name appears in every menu that uses the recipe, in
+  every week.
+- To find a recipe, type part of its name in **Search**.
+- To archive a recipe that you no longer use, click **Archive**. The slot
+  editor stops offering it, and menus that already use it keep showing it.
+  Archived recipes are listed under **Archived**. To bring one back, click
+  **Restore**.
+
+You can't delete recipes.
+
 ## Configure the server
 
 The server reads the following environment variables:
@@ -243,6 +266,8 @@ public/      # User interface: HTML, CSS, and JavaScript, with no framework or b
   index.html # Meal plan page.
   menus.js   # Menu functions with no DOM access.
   recipe-search.js # Recipe name matching and sorting, with no DOM access.
+  recipes.html # Recipe book page.
+  recipes.js # Recipe book page logic.
   saves.js   # Save logic with no DOM access, so tests run it in Node.js.
   slot-editor.js # The slot editor dialog.
   styles.css

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recipes</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="recipes.js"></script>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="title-bar">
+        <h1>Recipes</h1>
+        <a class="page-link" href="/">Meal plan</a>
+      </div>
+    </header>
+
+    <div id="load-error" class="load-error" role="alert" hidden>
+      <span>Couldn't load the recipes.</span>
+      <button type="button" id="retry-load">Retry</button>
+    </div>
+
+    <main id="recipe-book" class="recipe-book" hidden>
+      <form id="new-recipe" class="new-recipe">
+        <label for="new-recipe-name">New recipe</label>
+        <div class="field-row">
+          <input id="new-recipe-name" type="text" autocomplete="off">
+          <button type="submit" class="primary">Add</button>
+        </div>
+        <p id="new-recipe-message" class="field-message" role="status"></p>
+      </form>
+
+      <label for="search">Search</label>
+      <input id="search" type="search" autocomplete="off">
+
+      <p id="empty-book" class="hint" hidden>No recipes yet. Add your first one above.</p>
+      <p id="no-matches" class="hint" hidden></p>
+      <ul id="active-recipes" class="recipe-list" aria-label="Recipes"></ul>
+
+      <details id="archived" class="archived" hidden>
+        <summary>Archived (<span id="archived-count">0</span>)</summary>
+        <ul id="archived-recipes" class="recipe-list" aria-label="Archived recipes"></ul>
+      </details>
+    </main>
+  </body>
+</html>

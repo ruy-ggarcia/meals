@@ -51,13 +51,17 @@ button {
   margin-top: 0.5rem;
 }
 
-.week-bar button {
-  min-width: 2.5rem;
+.week-bar button,
+.recipe-book button {
   padding: 0.4rem 0.8rem;
   border: 1px solid #ccc;
   border-radius: 0.4rem;
   background: #fff;
   font: inherit;
+}
+
+.week-bar button {
+  min-width: 2.5rem;
 }
 
 .week-range {
@@ -272,6 +276,103 @@ button {
   gap: 0.5rem;
 }
 
+/* ---------- Recipe book ---------- */
+
+.recipe-book {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 40rem;
+  padding: 0 1rem 1rem;
+}
+
+.recipe-book label {
+  font-weight: 600;
+}
+
+.recipe-book input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 0.3rem;
+  font: inherit;
+}
+
+.recipe-book .primary {
+  border-color: #2e7d32;
+  background: #2e7d32;
+  color: #fff;
+}
+
+.new-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.field-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.field-message,
+.row-message {
+  margin: 0;
+  color: #8a1c14;
+}
+
+.field-message:empty {
+  display: none;
+}
+
+.hint {
+  margin: 0.5rem 0;
+  color: #666;
+}
+
+.recipe-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.recipe-row .recipe-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.recipe-row .rename-field {
+  flex: 1;
+  width: auto;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.row-message {
+  flex-basis: 100%;
+}
+
+.archived summary {
+  padding: 0.5rem 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* ---------- Desktop (>= 768px): 7 days x 5 meals ---------- */
 @media (min-width: 768px) {
   body {
@@ -280,6 +381,13 @@ button {
     height: 100vh;
     /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh is the fallback for browsers without dvh. */
     height: 100dvh;
+  }
+
+  /* The body is a fixed-height column on desktop, so the recipe book scrolls. */
+  .recipe-book {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
   }
 
   /* Fixed width, so the buttons don't move when the range text changes. */
@@ -462,6 +570,11 @@ button {
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
   .recipe-search {
+    font-size: 16px;
+  }
+
+  /* >= 16px prevents iOS Safari from zooming in on focus. */
+  .recipe-book input {
     font-size: 16px;
   }
 }

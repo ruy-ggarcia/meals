@@ -352,6 +352,14 @@ test("GET / serves the frontend page", async () => {
   assert.match(res.text, /<title>Weekly meal plan<\/title>/);
 });
 
+test("GET /recipes.html serves the recipe book page", async () => {
+  const res = await request(app).get("/recipes.html");
+
+  assert.equal(res.status, 200);
+  assert.match(res.headers["content-type"], /text\/html/);
+  assert.match(res.text, /<title>Recipes<\/title>/);
+});
+
 test("GET /dates.js serves the date helpers", async () => {
   const res = await request(app).get("/dates.js");
 
