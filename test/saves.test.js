@@ -223,3 +223,126 @@ test("a successful flush clears an earlier error of the cell", async () => {
   await tick();
   assert.equal(statuses.get(KEY), "idle");
 });
+
+// A week change waits for every pending save, then asks about unsaved cells.
+
+test("settle waits for queued saves and page-hide saves", async () => {
+  const { saves, server, texts } = setup();
+  saves.loaded([["tue/lunch", ""]]);
+  texts.set(KEY, "Soup");
+  texts.set("tue/lunch", "Rice");
+  saves.queueSave(KEY);
+  saves.flush(["tue/lunch"], { skipInFlight: false });
+  let settled = false;
+  const done = saves.settle().then(() => {
+    settled = true;
+  });
+  await tick();
+
+  server.requests.find((request) => request.text === "Soup").ok();
+  await tick();
+  assert.equal(settled, false, "the page-hide save is still pending");
+  server.requests.find((request) => request.text === "Rice").ok();
+  await done;
+});
+
+test("settle also waits for page-hide saves that start while it waits", async () => {
+  const { saves, server, texts, statuses } = setup();
+  saves.loaded([["tue/lunch", ""]]);
+  texts.set(KEY, "Soup");
+  saves.queueSave(KEY);
+  let settled = false;
+  const done = saves.settle().then(() => {
+    settled = true;
+  });
+  await tick();
+
+  texts.set("tue/lunch", "Rice");
+  saves.flush([KEY, "tue/lunch"], { skipInFlight: true }); // the page is hidden during the wait
+  server.requests.find((request) => request.text === "Soup").ok();
+  await tick();
+  assert.equal(settled, false, "the page-hide save that started during the wait is pending");
+
+  server.requests.find((request) => request.text === "Rice").fail();
+  await done;
+  assert.equal(statuses.get("tue/lunch"), "error");
+  assert.deepEqual(saves.unsaved([KEY, "tue/lunch"]), ["tue/lunch"]);
+});
+
+test("a failed page-hide save marks the cell as an error and leaves it unsaved", async () => {
+  const { saves, server, texts, statuses } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false });
+  server.requests[0].fail();
+  await saves.settle();
+  assert.equal(statuses.get(KEY), "error");
+  assert.deepEqual(saves.unsaved([KEY]), [KEY]);
+});
+
+test("a page-hide save gives up after the timeout", async () => {
+  const { saves, texts, statuses } = setup({ timeoutMs: 20 });
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false }); // the fake server never answers
+  await sleep(50);
+  await saves.settle();
+  assert.equal(statuses.get(KEY), "error");
+});
+
+test("a failed page-hide save doesn't mark the cell when a newer save replaced its text", async () => {
+  const { saves, server, texts, statuses } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false });
+  texts.set(KEY, "Soup and bread");
+  const newer = saves.queueSave(KEY);
+  await tick();
+  server.requests[1].ok();
+  await newer;
+
+  server.requests[0].fail();
+  await saves.settle();
+  assert.equal(statuses.get(KEY), "saved");
+  assert.deepEqual(saves.unsaved([KEY]), []);
+});
+
+test("a failed page-hide save doesn't mark the cell while a newer save runs", async () => {
+  const { saves, server, texts, statuses } = setup();
+  texts.set(KEY, "Soup");
+  saves.flush([KEY], { skipInFlight: false });
+  texts.set(KEY, "Soup and bread");
+  const newer = saves.queueSave(KEY);
+  await tick();
+
+  server.requests[0].fail();
+  await tick();
+  assert.equal(statuses.get(KEY), "saving");
+  server.requests[1].ok();
+  await newer;
+  assert.equal(statuses.get(KEY), "saved");
+});
+
+test("unsaved lists loaded cells whose text differs from the saved text", () => {
+  const { saves, texts } = setup();
+  saves.loaded([["tue/lunch", "Rice"]]);
+  texts.set("tue/lunch", "Rice");
+  texts.set(KEY, "Soup");
+  texts.set("wed/lunch", "Fish"); // never loaded
+  assert.deepEqual(saves.unsaved([KEY, "tue/lunch", "wed/lunch"]), [KEY]);
+});
+
+test("discard returns the saved text and clears the error, so no later save sends the discarded text", async () => {
+  const { saves, server, texts, statuses } = setup();
+  texts.set(KEY, "Soup");
+  const failed = saves.queueSave(KEY);
+  await tick();
+  server.requests[0].fail();
+  await failed;
+
+  texts.set(KEY, saves.discard(KEY));
+  assert.equal(texts.get(KEY), "");
+  assert.equal(statuses.get(KEY), "idle");
+
+  await saves.queueSave(KEY); // for example, the window gets focus back
+  saves.flush([KEY], { skipInFlight: false });
+  await tick();
+  assert.equal(server.requests.length, 1);
+});

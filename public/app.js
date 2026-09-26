@@ -1,6 +1,6 @@
 // Weekly grid frontend. Depends ONLY on the HTTP API (/api/weeks); never import from server/.
 
-import { dayIndex, weekIdOf } from "./dates.js";
+import { addWeeks, dayIndex, formatWeekRange, isWeekId, weekIdOf } from "./dates.js";
 import { createSaves } from "./saves.js";
 
 const DAYS = [
@@ -24,6 +24,8 @@ const MEALS = [
 const MAX_TEXT_LENGTH = 2000; // same limit the API enforces
 const SAVED_BADGE_MS = 3000; // how long the "saved" check mark stays visible
 const REQUEST_TIMEOUT_MS = 10000; // load/save give up (-> error UI) after this
+const UNSAVED_QUESTION =
+  "Some changes in this week couldn't be saved. Leave anyway and discard them?";
 
 // Monochrome line icons drawn with currentColor, so CSS sets each state's color.
 const ICON_PATHS = {
@@ -46,9 +48,16 @@ const grid = document.getElementById("grid");
 const dayBar = document.getElementById("day-bar");
 const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
+const weekBar = document.getElementById("week-bar");
+const weekRange = document.getElementById("week-range");
 
 /** Timer that hides the "✓" badge, per cell element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
+
+/** The week in the URL hash and the range label. Retry loads it again. */
+let requestedWeek;
+/** True while a week change runs, so two changes never overlap. */
+let changingWeek = false;
 
 // Keys include the week, so the same cell in two weeks never shares save state.
 function cellKey(week, day, meal) {
@@ -141,12 +150,15 @@ function buildCell(day, meal) {
   return cell;
 }
 
-function selectDay(dayId) {
+function blurActiveCell() {
   // Hiding a focused textarea doesn't reliably fire blur (and Safari doesn't
   // focus buttons on click), so blur it explicitly to trigger its save.
   const active = document.activeElement;
   if (active instanceof HTMLTextAreaElement && grid.contains(active)) active.blur();
+}
 
+function selectDay(dayId) {
+  blurActiveCell();
   grid.dataset.selectedDay = dayId;
   for (const button of dayBar.querySelectorAll("button")) {
     button.setAttribute("aria-pressed", String(button.dataset.day === dayId));
@@ -221,14 +233,85 @@ async function loadWeek(week) {
   }
 }
 
-const currentWeek = weekIdOf(new Date());
+function syncHash() {
+  // replaceState adds no history entry, so Back doesn't step through weeks.
+  if (requestedWeek) history.replaceState(null, "", `#${requestedWeek}`);
+}
+
+function setChangingWeek(changing) {
+  changingWeek = changing;
+  for (const button of weekBar.querySelectorAll("button")) button.disabled = changing;
+  grid.inert = changing; // no typing into a week that is being left
+}
+
+// Waits for pending saves, then returns true if the loaded week can be left:
+// every cell is saved, or the user agreed to discard what couldn't be saved.
+async function leaveLoadedWeek() {
+  await saves.settle();
+  const unsaved = saves.unsaved(shownKeys());
+  if (unsaved.length === 0) return true;
+  // Let the browser paint the red crosses first: confirm() blocks painting.
+  await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
+  if (!window.confirm(UNSAVED_QUESTION)) return false;
+  // Put the saved text back, so no later blur or page-hide save can send the
+  // discarded text.
+  for (const key of unsaved) {
+    cellOf(key).querySelector("textarea").value = saves.discard(key);
+  }
+  return true;
+}
+
+// Shows `week` without ever dropping unsaved text silently. On mobile, the
+// selected day stays the same unless `selectToday` is set.
+async function goToWeek(week, { selectToday = false } = {}) {
+  if (changingWeek) return;
+  // Disabling the clicked week bar button moves focus to <body>; remember it
+  // so it can be refocused afterward.
+  const focused = document.activeElement;
+  blurActiveCell(); // starts the save of the focused cell before the wait
+  setChangingWeek(true);
+  try {
+    if (week !== grid.dataset.week || grid.hidden) {
+      if (!(await leaveLoadedWeek())) return;
+      requestedWeek = week;
+      syncHash();
+      weekRange.textContent = formatWeekRange(week);
+      await loadWeek(week);
+    }
+    if (selectToday) selectDay(todayId());
+  } finally {
+    setChangingWeek(false);
+    // Only if focus was lost, not moved elsewhere by the user. Never refocus a
+    // textarea: on mobile that would open the keyboard in the new week.
+    if (weekBar.contains(focused) && document.activeElement === document.body) {
+      focused.focus();
+    }
+    syncHash(); // also undoes a hash edit that was cancelled or ignored
+  }
+}
 
 buildDayBar();
 buildGrid();
 selectDay(todayId());
-retryLoadButton.addEventListener("click", () => loadWeek(currentWeek));
+retryLoadButton.addEventListener("click", () => goToWeek(requestedWeek));
+document
+  .getElementById("previous-week")
+  .addEventListener("click", () => goToWeek(addWeeks(requestedWeek, -1)));
+document
+  .getElementById("next-week")
+  .addEventListener("click", () => goToWeek(addWeeks(requestedWeek, 1)));
+document
+  .getElementById("today")
+  .addEventListener("click", () => goToWeek(weekIdOf(new Date()), { selectToday: true }));
+window.addEventListener("hashchange", () => {
+  const week = location.hash.slice(1);
+  if (isWeekId(week)) goToWeek(week);
+  else syncHash();
+});
 window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
 });
-loadWeek(currentWeek);
+
+const hashWeek = location.hash.slice(1);
+goToWeek(isWeekId(hashWeek) ? hashWeek : weekIdOf(new Date()));

@@ -1,8 +1,9 @@
 # Meals
 
-Meals is a web app for planning a family's weekly menu. It shows a grid of 7
-days by 5 meals (breakfast, morning snack, lunch, afternoon snack, and dinner).
-Each cell holds a free-text list of dishes, one per line.
+Meals is a web app for planning a family's weekly menu. It shows one week at a
+time as a grid of 7 days by 5 meals (breakfast, morning snack, lunch,
+afternoon snack, and dinner). Each cell holds a free-text list of dishes, one
+per line.
 
 The app runs on a computer at home. Any device on the same network, desktop or
 mobile, can use it from a browser.
@@ -75,9 +76,20 @@ To open the port, run the command for your firewall:
 - **Mobile:** the app shows one day at a time. To switch days, tap a letter in
   the day bar (`M T W T F S S`). When the page opens, it shows the current day.
 
+To move between weeks, use the week bar below the title. It shows the dates of
+the displayed week:
+
+- `‹` shows the previous week.
+- `›` shows the next week.
+- **Today** shows the current week. On mobile, it also selects today.
+
+On mobile, changing weeks keeps the selected day. The address bar holds the
+displayed week, for example `http://localhost:3000/#2026-09-21`, so a reload
+shows the same week and you can bookmark a week.
+
 To plan a meal, type one dish per line in a cell. The app saves the cell when
-you leave it, switch days, reload the page, or close the page. Below the cell,
-an icon shows the save status:
+you leave it, switch days, change weeks, reload the page, or close the page.
+Below the cell, an icon shows the save status:
 
 | Icon             | Status                                                       |
 |------------------|--------------------------------------------------------------|
@@ -87,6 +99,13 @@ an icon shows the save status:
 
 To retry a failed save, click the red cross. To see what an icon means, hover
 over it.
+
+Before the app changes weeks, it waits for pending saves. If you change weeks
+right after you type, the new week appears once the save succeeds, so you
+might not see the check mark. If a cell couldn't be saved, the app asks
+whether to leave the week anyway. To stay and retry the save, click
+**Cancel**. To discard the unsaved text and change weeks, click **OK**. The
+cell then goes back to its last saved text.
 
 Changes from other devices don't appear in real time. To see them, reload the
 page. If two people edit the same cell, the last save wins.
@@ -177,6 +196,11 @@ each pull request is integrated with a merge commit.
   workflows/
     ci.yml   # Continuous integration: lint and tests.
 public/      # User interface: HTML, CSS, and JavaScript, with no framework or build step.
+  app.js     # Grid, week changes, and saves.
+  dates.js   # Date helpers with no DOM access, so tests run them in Node.js.
+  index.html
+  saves.js   # Save logic with no DOM access, so tests run it in Node.js.
+  styles.css
 server/
   app.js     # HTTP API (Express) and static files.
   index.js   # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.

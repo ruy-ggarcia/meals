@@ -26,6 +26,28 @@ body {
   font-size: 1.25rem;
 }
 
+.week-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.week-bar button {
+  min-width: 2.5rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 0.4rem;
+  background: #fff;
+  font: inherit;
+}
+
+.week-range {
+  flex: 1;
+  font-weight: 600;
+  text-align: center;
+}
+
 .load-error {
   display: flex;
   align-items: center;
@@ -104,6 +126,11 @@ body {
     height: 100dvh;
   }
 
+  /* Fixed width, so the buttons don't move when the range text changes. */
+  .week-range {
+    flex: 0 0 14rem;
+  }
+
   .day-bar,
   .cell-label {
     display: none;
@@ -158,6 +185,21 @@ body {
 
 /* ---------- Mobile (< 768px): one day at a time ---------- */
 @media (max-width: 767.98px) {
+  /* Tighter than desktop so the longest range fits on one line at 390px. */
+  .week-bar {
+    gap: 0.35rem;
+  }
+
+  .week-bar button {
+    min-width: 2rem;
+    padding: 0.35rem 0.5rem;
+  }
+
+  .week-range {
+    min-width: 0; /* lets it shrink below its text width instead of overflowing */
+    font-size: 0.9rem;
+  }
+
   .day-bar {
     display: flex;
     gap: 0.25rem;
