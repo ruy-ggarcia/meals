@@ -306,8 +306,8 @@ async function leaveLoadedWeek() {
 // selected day stays the same unless `selectToday` is set.
 async function goToWeek(week, { selectToday = false } = {}) {
   if (changingWeek) return;
-  // Disabling the clicked week bar button moves focus to <body>; remember it
-  // so it can be refocused afterward.
+  // Disabling the clicked button (a week bar button or Retry) moves focus to
+  // <body>; remember it so it can be refocused afterward.
   const focused = document.activeElement;
   blurActiveCell(); // starts the save of the focused cell before the wait
   setChangingWeek(true);
@@ -323,9 +323,11 @@ async function goToWeek(week, { selectToday = false } = {}) {
     markToday(); // covers the case where the target week was already shown
   } finally {
     setChangingWeek(false);
-    // Only if focus was lost, not moved elsewhere by the user. Never refocus a
+    // Only if focus was lost, not moved elsewhere by the user, and the button
+    // is still shown (Retry hides after a successful load). Never refocus a
     // textarea: on mobile that would open the keyboard in the new week.
-    if (weekBar.contains(focused) && document.activeElement === document.body) {
+    const refocus = weekBar.contains(focused) || focused === retryLoadButton;
+    if (refocus && document.activeElement === document.body && !focused.closest("[hidden]")) {
       focused.focus();
     }
     syncHash(); // also undoes a hash edit that was cancelled or ignored
