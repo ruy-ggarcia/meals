@@ -118,9 +118,11 @@ data/
 - Each slot holds a menu object, `{ "items": [...] }`, which matches the
   body of `PUT` and leaves room to grow.
 - On read, the store normalizes the data as it does today: missing days,
-  meals, or menus become empty menus, and unknown keys are dropped. A menu
-  item that isn't an object with a string `recipeId` and a numeric
-  `servings` is dropped.
+  meals, or menus become empty menus, and unknown keys are dropped. It keeps
+  only the menu items that `PUT` would accept: an object with a string
+  `recipeId` of an existing recipe and valid `servings`, no repeated recipe,
+  and at most 20 per menu. So a hand-edited file, or a recipe book restored
+  from an older backup, never produces a slot that can't be saved again.
 - A missing file is an empty week. A file with invalid JSON makes reads fail,
   and the server never overwrites it.
 
@@ -240,8 +242,9 @@ The header gains a **Recipes** link to `/recipes.html`, next to the week bar.
 
 Each slot is a button that lists its menu items, one per line, as
 `Gnocchi carbonara × 3.5`. An empty slot shows `+ Add`. The status icon stays
-below the slot and works as today, including retrying with the red cross. A
-menu item whose `recipeId` isn't in the recipe book shows `Unknown recipe`.
+below the slot and works as today, including retrying with the red cross. As
+a safeguard, a menu item whose `recipeId` isn't in the loaded recipe book
+shows `Unknown recipe`.
 
 ### Slot editor
 
