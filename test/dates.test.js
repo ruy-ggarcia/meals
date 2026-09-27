@@ -54,6 +54,9 @@ test("addDays doesn't change its argument", () => {
   assert.deepEqual(localParts(date), [2026, 9, 21, 0]);
 });
 
+// Parallels the isWeekId tests in test/weeks.test.js on purpose: this tests
+// public/dates.js's own implementation, required by the public/-never-
+// imports-server/ rule, not a duplicate of that other test.
 test("isWeekId accepts a Monday in YYYY-MM-DD format", () => {
   for (const id of ["2026-09-21", "2026-12-28", "2027-01-04"]) {
     assert.equal(isWeekId(id), true, id);

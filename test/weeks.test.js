@@ -66,6 +66,9 @@ test("exports the stable day and meal identifiers in order", () => {
   assert.deepEqual(MEALS, EXPECTED_MEALS);
 });
 
+// Parallels the isWeekId tests in test/dates.test.js on purpose: this tests
+// server/weeks.js's own implementation, required by the public/-never-
+// imports-server/ rule, not a duplicate of that other test.
 test("isWeekId accepts a Monday in YYYY-MM-DD format", () => {
   for (const week of ["2026-09-21", "2026-12-28", "2027-01-04"]) {
     assert.equal(isWeekId(week), true, week);
@@ -98,6 +101,36 @@ test("readWeek returns a complete week of empty menus when the week has no file"
 
 test("readWeek rejects an invalid week", async () => {
   await assert.rejects(weeks.readWeek("2026-09-22"), RangeError);
+});
+
+test("readWeek reads the week before the recipe book, so a concurrent create's item isn't dropped", async () => {
+  const newRecipeId = "brand-new-recipe";
+  let listCalls = 0;
+  const stubRecipes = {
+    async list() {
+      listCalls++;
+      if (listCalls === 1) {
+        // Simulates a concurrent save that finishes writing the week file
+        // for a recipe created after readWeek's read of the week file, but
+        // before readWeek's read of the recipe book (this call).
+        await writeWeekFile(
+          WEEK,
+          JSON.stringify({ mon: { lunch: { items: [{ recipeId: newRecipeId, servings: 1 }] } } }),
+        );
+      }
+      return [{ id: newRecipeId, name: "New recipe", archived: false }];
+    },
+  };
+  const stubWeeks = createWeeks({ dataDir, enqueue: createQueue(), recipes: stubRecipes });
+
+  // The week file didn't exist yet when readWeek read it, so the item the
+  // recipe book stub wrote as a side effect of its own read isn't there.
+  const first = await stubWeeks.readWeek(WEEK);
+  assert.deepEqual(first.mon.lunch, { items: [] });
+
+  // Now the week file has the item, and the recipe is known: it's kept.
+  const second = await stubWeeks.readWeek(WEEK);
+  assert.deepEqual(second.mon.lunch, { items: [{ recipeId: newRecipeId, servings: 1 }] });
 });
 
 test("saveSlot stores the menu and it can be read back", async () => {

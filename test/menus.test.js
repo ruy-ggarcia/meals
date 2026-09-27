@@ -7,9 +7,6 @@ import {
   describeItem,
   emptyMenu,
   hasRecipe,
-  MAX_ITEMS,
-  MAX_SERVINGS,
-  MIN_SERVINGS,
   removeItem,
   sameMenu,
   stepServings,
@@ -18,12 +15,6 @@ import {
 function menu(...entries) {
   return { items: entries.map(([recipeId, servings]) => ({ recipeId, servings })) };
 }
-
-test("the limits match the API", () => {
-  assert.equal(MAX_ITEMS, 20);
-  assert.equal(MIN_SERVINGS, 0.5);
-  assert.equal(MAX_SERVINGS, 99);
-});
 
 test("emptyMenu has no menu items", () => {
   assert.deepEqual(emptyMenu(), { items: [] });

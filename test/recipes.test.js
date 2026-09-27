@@ -74,6 +74,19 @@ test("create reports blank and too long names with readable messages", async () 
   });
 });
 
+test("create counts the name length in UTF-16 code units, so a surrogate pair counts as 2", async () => {
+  // U+1F600 is a surrogate pair in UTF-16, so its .length is 2, not 1.
+  const tooLong = `${"x".repeat(99)}😀`;
+  assert.equal(tooLong.length, 101);
+  await assert.rejects(recipes.create(tooLong), {
+    message: "The name must be at most 100 characters.",
+  });
+
+  const justRight = `${"x".repeat(98)}😀`;
+  assert.equal(justRight.length, 100);
+  assert.equal((await recipes.create(justRight)).name, justRight);
+});
+
 test("create rejects a name whose key is taken, active or archived, and reports that recipe", async () => {
   const cafe = await recipes.create("Café");
 
@@ -115,6 +128,11 @@ test("update renames a recipe and keeps its ID", async () => {
 test("update accepts a new name with the recipe's own name key", async () => {
   const cafe = await recipes.create("Cafe");
   assert.equal((await recipes.update(cafe.id, { name: "Café" })).name, "Café");
+});
+
+test("update accepts a name equal to the recipe's exact current name", async () => {
+  const soup = await recipes.create("Soup");
+  assert.deepEqual(await recipes.update(soup.id, { name: "Soup" }), soup);
 });
 
 test("update rejects a name whose key another recipe has", async () => {

@@ -131,7 +131,7 @@ test("PATCH /api/recipes/ID accepts a name with the recipe's own name key", asyn
   const cafe = await addRecipe("Cafe");
   const res = await request(app).patch(`/api/recipes/${cafe.id}`).send({ name: "Café" });
   assert.equal(res.status, 200);
-  assert.equal(res.body.name, "Café");
+  assert.deepEqual(res.body, { ...cafe, name: "Café" });
 });
 
 test("PATCH /api/recipes/ID with another recipe's name returns 409 with that recipe", async () => {
@@ -190,6 +190,39 @@ test("GET /api/recipes returns 500 JSON when the recipes file is corrupt", async
   assert.equal(res.status, 500);
   assert.deepEqual(res.body, { error: "Internal server error" });
   assert.equal(error.mock.callCount(), 1);
+});
+
+test("an error with a status outside 400-499 maps to 500", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const boomApp = createApp({
+    recipes: {
+      list: async () => {
+        throw Object.assign(new Error("boom"), { status: 501 });
+      },
+    },
+    weeks: {},
+  });
+
+  const res = await request(boomApp).get("/api/recipes");
+
+  assert.equal(res.status, 500);
+  assert.deepEqual(res.body, { error: "Internal server error" });
+});
+
+test("an error with a 4xx status keeps that status and its own message", async () => {
+  const notFoundApp = createApp({
+    recipes: {
+      list: async () => {
+        throw Object.assign(new Error("Gone"), { status: 404 });
+      },
+    },
+    weeks: {},
+  });
+
+  const res = await request(notFoundApp).get("/api/recipes");
+
+  assert.equal(res.status, 404);
+  assert.deepEqual(res.body, { error: "Gone" });
 });
 
 // ---------- Weeks ----------

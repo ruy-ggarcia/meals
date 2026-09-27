@@ -13,7 +13,7 @@ afterEach(() => {
   mock.restoreAll();
 });
 
-test("requests give up after 5 seconds", () => {
+test("the timeout constant is 5 seconds", () => {
   assert.equal(REQUEST_TIMEOUT_MS, 5000);
 });
 
