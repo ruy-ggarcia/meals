@@ -360,7 +360,8 @@ test("PUT with a malformed JSON body returns 400 JSON", async () => {
   assertJsonError(res, 400, "malformed JSON");
 });
 
-test("GET returns 500 JSON when the week file is corrupt", async () => {
+test("GET returns 500 JSON when the week file is corrupt", async (t) => {
+  const error = t.mock.method(console, "error", () => {});
   await mkdir(path.join(dataDir, "v2", "weeks"), { recursive: true });
   await writeFile(path.join(dataDir, "v2", "weeks", `${WEEK}.json`), "{ not json");
 
@@ -368,6 +369,7 @@ test("GET returns 500 JSON when the week file is corrupt", async () => {
 
   assert.equal(res.status, 500);
   assert.deepEqual(res.body, { error: "Internal server error" });
+  assert.equal(error.mock.callCount(), 1);
 });
 
 // ---------- Other routes ----------
