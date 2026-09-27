@@ -13,6 +13,11 @@ explicitly asks for another language. Artifacts include the following:
 - Documentation, specs, and plans
 - Commit messages
 
+## Vocabulary
+
+Use the terms in `docs/glossary.md`. To add or rename a concept, change the
+glossary in the same commit.
+
 ## Documentation style
 
 Follow the
@@ -49,8 +54,8 @@ automatically, such as focus or layout in a real browser, cover it in
 
 ## Checks
 
-Before every commit, run `npm run lint` and `npm test`, and make sure both
-pass. To fix formatting, run `npm run format`.
+Before every commit, follow [Check your changes](README.md#check-your-changes):
+`npm run lint` and `npm test` must pass.
 
 ## Content boundaries
 

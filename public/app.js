@@ -1,4 +1,5 @@
-// Weekly grid frontend. Depends ONLY on the HTTP API (/api/weeks); never import from server/.
+// Meal plan page. Depends ONLY on the HTTP API (/api/weeks and /api/recipes);
+// never import from server/.
 
 import {
   addDays,
@@ -10,7 +11,11 @@ import {
   weekIdOf,
   weekStart,
 } from "./dates.js";
+import { createElement, withLoadState } from "./dom.js";
+import { getJson, REQUEST_TIMEOUT_MS } from "./http.js";
+import { describeItem } from "./menus.js";
 import { createSaves } from "./saves.js";
+import { createSlotEditor } from "./slot-editor.js";
 
 const DAYS = [
   { id: "mon", label: "Monday", short: "M" },
@@ -30,9 +35,7 @@ const MEALS = [
   { id: "dinner", label: "Dinner" },
 ];
 
-const MAX_TEXT_LENGTH = 2000; // same limit the API enforces
 const SAVED_BADGE_MS = 3000; // how long the "saved" check mark stays visible
-const REQUEST_TIMEOUT_MS = 5000; // load/save give up (-> error UI) after this
 const UNSAVED_QUESTION =
   "Some changes in this week couldn't be saved. Leave anyway and discard them?";
 
@@ -46,7 +49,7 @@ const ICON_PATHS = {
 const STATUS_LABEL = {
   saving: "Saving…",
   saved: "Saved",
-  error: "Couldn't save. Click to retry",
+  error: "Couldn't save. Select to retry.",
 };
 
 function statusIcon(state) {
@@ -59,47 +62,45 @@ const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
 const weekBar = document.getElementById("week-bar");
 const weekRange = document.getElementById("week-range");
+const editor = createSlotEditor(document.getElementById("slot-editor"));
 
-/** Timer that hides the "✓" badge, per cell element: it acts on what is on screen, whatever the week. */
+/** Timer that hides the "✓" badge, per slot element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
+/** The menu of each slot of the loaded week, by slot key. Saves send these. */
+const menus = new Map();
+/** The recipe book as last loaded, by recipe ID. */
+let recipesById = new Map();
 
 /** The week in the URL hash and the range label. Retry loads it again. */
 let requestedWeek;
 /** True while a week change runs, so two changes never overlap. */
 let changingWeek = false;
 
-// Keys include the week, so the same cell in two weeks never shares save state.
-function cellKey(week, day, meal) {
+// Keys include the week, so the same slot in two weeks never shares save state.
+function slotKey(week, day, meal) {
   return `${week}/${day}/${meal}`;
 }
 
-// The cell element of `key`, or null when its week isn't on screen.
-function cellOf(key) {
+// The slot element of `key`, or null when its week isn't on screen.
+function slotOf(key) {
   const [week, day, meal] = key.split("/");
   if (week !== grid.dataset.week) return null;
-  return grid.querySelector(`.cell[data-day="${day}"][data-meal="${meal}"]`);
+  return grid.querySelector(`.slot[data-day="${day}"][data-meal="${meal}"]`);
 }
 
 const saves = createSaves({
   fetch: (url, options) => fetch(url, options),
   url: (key) => `/api/weeks/${key}`,
-  readText: (key) => cellOf(key)?.querySelector("textarea").value,
+  readMenu: (key) => menus.get(key),
   onStatus: (key, state) => {
-    const cell = cellOf(key);
-    if (cell) setStatus(cell, state);
+    const slot = slotOf(key);
+    if (slot) setStatus(slot, state);
   },
   timeoutMs: REQUEST_TIMEOUT_MS,
 });
 
 function todayId() {
   return DAYS[dayIndex(new Date())].id;
-}
-
-function createElement(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
 }
 
 function buildDayBar() {
@@ -120,7 +121,7 @@ function buildDayBar() {
 }
 
 // DOM order = CSS grid order on desktop: corner, 7 day headers,
-// then for each meal a meal header followed by its 7 cells.
+// then for each meal a meal header followed by its 7 slots.
 function buildGrid() {
   grid.append(createElement("div", "corner"));
   for (const day of DAYS) {
@@ -130,29 +131,23 @@ function buildGrid() {
   }
   for (const meal of MEALS) {
     grid.append(createElement("div", "meal-header", meal.label));
-    for (const day of DAYS) grid.append(buildCell(day, meal));
+    for (const day of DAYS) grid.append(buildSlot(day, meal));
   }
 }
 
-function buildCell(day, meal) {
-  const cell = createElement("div", "cell");
-  cell.dataset.day = day.id;
-  cell.dataset.meal = meal.id;
+function buildSlot(day, meal) {
+  const slot = createElement("div", "slot");
+  slot.dataset.day = day.id;
+  slot.dataset.meal = meal.id;
 
-  const textareaId = `cell-${day.id}-${meal.id}`;
+  // Visible only on mobile, where the meal header column is hidden. The
+  // button's accessible name already says the meal.
+  const label = createElement("span", "slot-label", meal.label);
+  label.setAttribute("aria-hidden", "true");
 
-  // Visible only on mobile, where the meal header column is hidden.
-  const label = createElement("label", "cell-label", meal.label);
-  label.htmlFor = textareaId;
-
-  const textarea = createElement("textarea");
-  textarea.id = textareaId;
-  textarea.rows = 3;
-  textarea.maxLength = MAX_TEXT_LENGTH;
-  textarea.setAttribute("aria-label", `${day.label}, ${meal.label}`);
-  textarea.addEventListener("blur", () =>
-    saves.queueSave(cellKey(grid.dataset.week, day.id, meal.id)),
-  );
+  const menuButton = createElement("button", "slot-menu");
+  menuButton.type = "button";
+  menuButton.addEventListener("click", () => openEditor(slot));
 
   const status = createElement("button", "status");
   status.type = "button";
@@ -161,36 +156,71 @@ function buildCell(day, meal) {
   status.setAttribute("aria-live", "polite");
   // Only clickable in "error".
   status.addEventListener("click", () =>
-    saves.queueSave(cellKey(grid.dataset.week, day.id, meal.id)),
+    saves.queueSave(slotKey(grid.dataset.week, day.id, meal.id)),
   );
 
-  cell.append(label, textarea, status);
-  return cell;
+  slot.append(label, menuButton, status);
+  return slot;
 }
 
-function blurActiveCell() {
-  // Hiding a focused textarea doesn't reliably fire blur (and Safari doesn't
-  // focus buttons on click), so blur it explicitly to trigger its save.
-  const active = document.activeElement;
-  if (active instanceof HTMLTextAreaElement && grid.contains(active)) active.blur();
+function recipeName(recipeId) {
+  return recipesById.get(recipeId)?.name ?? "Unknown recipe";
+}
+
+// Shows `menu` in the slot, one menu item per line.
+function renderSlot(slot, menu) {
+  const day = DAYS.find((entry) => entry.id === slot.dataset.day);
+  const meal = MEALS.find((entry) => entry.id === slot.dataset.meal);
+  const lines = menu.items.map((item) => describeItem(recipeName(item.recipeId), item.servings));
+  const button = slot.querySelector(".slot-menu");
+  if (lines.length === 0) {
+    button.replaceChildren(createElement("span", "slot-empty", "+ Add"));
+  } else {
+    button.replaceChildren(...lines.map((line) => createElement("span", undefined, line)));
+  }
+  const content = lines.length === 0 ? "empty" : lines.join(", ");
+  button.setAttribute("aria-label", `${day.label}, ${meal.label}: ${content}`);
+}
+
+// Opens the editor on the slot's menu. That is the menu confirmed with Done,
+// even when its save failed, so a retry from the editor keeps the changes.
+function openEditor(slot) {
+  const { week } = grid.dataset;
+  const { day, meal } = slot.dataset;
+  const key = slotKey(week, day, meal);
+  const dayIndexInWeek = DAYS.findIndex((entry) => entry.id === day);
+  const mealLabel = MEALS.find((entry) => entry.id === meal).label;
+  editor.open({
+    title: `${formatLongDate(addDays(weekStart(week), dayIndexInWeek))} · ${mealLabel}`,
+    menu: menus.get(key),
+    recipes: [...recipesById.values()],
+    opener: slot.querySelector(".slot-menu"),
+    onDone: (menu) => {
+      menus.set(key, menu);
+      renderSlot(slot, menu);
+      saves.queueSave(key);
+    },
+  });
 }
 
 function selectDay(dayId) {
-  blurActiveCell();
   grid.dataset.selectedDay = dayId;
   for (const button of dayBar.querySelectorAll("button")) {
     button.setAttribute("aria-pressed", String(button.dataset.day === dayId));
   }
 }
 
-function fillWeek(week, cells) {
+function fillWeek(week, weekData) {
   grid.dataset.week = week;
+  menus.clear();
   const entries = [];
-  for (const cell of grid.querySelectorAll(".cell")) {
-    const { day, meal } = cell.dataset;
-    const text = cells[day][meal];
-    cell.querySelector("textarea").value = text;
-    entries.push([cellKey(week, day, meal), text]);
+  for (const slot of grid.querySelectorAll(".slot")) {
+    const { day, meal } = slot.dataset;
+    const key = slotKey(week, day, meal);
+    const menu = weekData[day][meal];
+    menus.set(key, menu);
+    renderSlot(slot, menu);
+    entries.push([key, menu]);
   }
   // Sets every status to idle, which also clears a pending "✓" timer from the
   // previous week.
@@ -210,7 +240,7 @@ function showDayDates(week) {
   }
 }
 
-// Marks today's header, cells, and day bar button when the loaded week contains today.
+// Marks today's header, slots, and day bar button when the loaded week contains today.
 function markToday() {
   const todayDay = weekIdOf(new Date()) === grid.dataset.week ? todayId() : null;
   for (const element of document.querySelectorAll("[data-day]")) {
@@ -218,19 +248,19 @@ function markToday() {
   }
 }
 
-// The keys of the cells on screen.
+// The keys of the slots on screen.
 function shownKeys() {
   const { week } = grid.dataset;
-  return [...grid.querySelectorAll(".cell")].map((cell) =>
-    cellKey(week, cell.dataset.day, cell.dataset.meal),
+  return [...grid.querySelectorAll(".slot")].map((slot) =>
+    slotKey(week, slot.dataset.day, slot.dataset.meal),
   );
 }
 
-// Shows a cell's save status. The status itself comes from saves.js.
-function setStatus(cell, state) {
-  clearTimeout(savedTimers.get(cell));
+// Shows a slot's save status. The status itself comes from saves.js.
+function setStatus(slot, state) {
+  clearTimeout(savedTimers.get(slot));
 
-  const status = cell.querySelector(".status");
+  const status = slot.querySelector(".status");
   status.dataset.state = state;
   status.disabled = state !== "error";
   if (state === "idle") {
@@ -245,33 +275,31 @@ function setStatus(cell, state) {
 
   if (state === "saved") {
     savedTimers.set(
-      cell,
-      setTimeout(() => setStatus(cell, "idle"), SAVED_BADGE_MS),
+      slot,
+      setTimeout(() => setStatus(slot, "idle"), SAVED_BADGE_MS),
     );
   }
 }
 
 async function loadWeek(week) {
-  loadError.hidden = true;
-  retryLoadButton.disabled = true;
-  try {
-    const response = await fetch(`/api/weeks/${week}`, {
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    fillWeek(week, await response.json());
-    showDayDates(week);
-    markToday();
-    dayBar.hidden = false;
-    grid.hidden = false;
-  } catch (error) {
-    console.error("Couldn't load the meal plan:", error);
-    dayBar.hidden = true;
-    grid.hidden = true;
-    loadError.hidden = false;
-  } finally {
-    retryLoadButton.disabled = false;
-  }
+  await withLoadState({
+    loadError,
+    retryButton: retryLoadButton,
+    content: [dayBar, grid],
+    errorMessage: "Couldn't load the meal plan:",
+    run: async () => {
+      // The recipe book loads with every week, so recipes added on the
+      // Recipes page show up without a reload.
+      const [weekData, recipeBook] = await Promise.all([
+        getJson(`/api/weeks/${week}`),
+        getJson("/api/recipes"),
+      ]);
+      recipesById = new Map(recipeBook.recipes.map((recipe) => [recipe.id, recipe]));
+      fillWeek(week, weekData);
+      showDayDates(week);
+      markToday();
+    },
+  });
 }
 
 function syncHash() {
@@ -282,11 +310,11 @@ function syncHash() {
 function setChangingWeek(changing) {
   changingWeek = changing;
   for (const button of weekBar.querySelectorAll("button")) button.disabled = changing;
-  grid.inert = changing; // no typing into a week that is being left
+  grid.inert = changing; // no editing a week that is being left
 }
 
 // Waits for pending saves, then returns true if the loaded week can be left:
-// every cell is saved, or the user agreed to discard what couldn't be saved.
+// every slot is saved, or the user agreed to discard what couldn't be saved.
 async function leaveLoadedWeek() {
   await saves.settle();
   const unsaved = saves.unsaved(shownKeys());
@@ -294,22 +322,23 @@ async function leaveLoadedWeek() {
   // Let the browser paint the red crosses first: confirm() blocks painting.
   await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
   if (!window.confirm(UNSAVED_QUESTION)) return false;
-  // Put the saved text back, so no later blur or page-hide save can send the
-  // discarded text.
+  // Put the saved menu back, so no later page-hide save can send the
+  // discarded menu.
   for (const key of unsaved) {
-    cellOf(key).querySelector("textarea").value = saves.discard(key);
+    const menu = saves.discard(key);
+    menus.set(key, menu);
+    renderSlot(slotOf(key), menu);
   }
   return true;
 }
 
-// Shows `week` without ever dropping unsaved text silently. On mobile, the
+// Shows `week` without ever dropping an unsaved menu silently. On mobile, the
 // selected day stays the same unless `selectToday` is set.
 async function goToWeek(week, { selectToday = false } = {}) {
-  if (changingWeek) return;
+  if (changingWeek || editor.isOpen()) return;
   // Disabling the clicked button (a week bar button or Retry) moves focus to
   // <body>; remember it so it can be refocused afterward.
   const focused = document.activeElement;
-  blurActiveCell(); // starts the save of the focused cell before the wait
   setChangingWeek(true);
   try {
     if (week !== grid.dataset.week || grid.hidden) {
@@ -324,8 +353,7 @@ async function goToWeek(week, { selectToday = false } = {}) {
   } finally {
     setChangingWeek(false);
     // Only if focus was lost, not moved elsewhere by the user, and the button
-    // is still shown (Retry hides after a successful load). Never refocus a
-    // textarea: on mobile that would open the keyboard in the new week.
+    // is still shown (Retry hides after a successful load).
     const refocus = weekBar.contains(focused) || focused === retryLoadButton;
     if (refocus && document.activeElement === document.body && !focused.closest("[hidden]")) {
       focused.focus();
@@ -349,10 +377,16 @@ document
   .addEventListener("click", () => goToWeek(weekIdOf(new Date()), { selectToday: true }));
 window.addEventListener("hashchange", () => {
   const week = location.hash.slice(1);
-  if (isWeekId(week)) goToWeek(week);
+  // The week never changes behind an open editor.
+  if (isWeekId(week) && !editor.isOpen()) goToWeek(week);
   else syncHash();
 });
 window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
+// Unconfirmed changes in the editor would be lost: ask before leaving.
+window.addEventListener("beforeunload", (event) => {
+  if (!editor.hasChanges()) return;
+  event.preventDefault();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
   else markToday(); // the day may have changed while the page was hidden

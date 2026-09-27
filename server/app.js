@@ -1,14 +1,28 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { DAYS, isWeekId, MEALS } from "./store.js";
-
-export const MAX_TEXT_LENGTH = 2000;
+import { NameConflictError, NotFoundError, ValidationError } from "./errors.js";
+import { DAYS, isWeekId, MEALS } from "./weeks.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
-export function createApp({ store }) {
+export function createApp({ recipes, weeks }) {
   const app = express();
   app.use(express.json());
+
+  app.get("/api/recipes", async (_req, res) => {
+    res.json({ recipes: await recipes.list() });
+  });
+
+  // From here on, every route that passes req.body to a store: Express 5
+  // leaves req.body undefined when there is no JSON body. The stores
+  // validate what they get and throw the errors that the handler below maps.
+  app.post("/api/recipes", async (req, res) => {
+    res.status(201).json(await recipes.create(req.body?.name));
+  });
+
+  app.patch("/api/recipes/:id", async (req, res) => {
+    res.json(await recipes.update(req.params.id, req.body));
+  });
 
   app.get("/api/weeks/:week", async (req, res) => {
     const { week } = req.params;
@@ -16,7 +30,7 @@ export function createApp({ store }) {
       res.status(404).json({ error: `Unknown week: ${week}` });
       return;
     }
-    res.json(await store.readWeek(week));
+    res.json(await weeks.readWeek(week));
   });
 
   app.put("/api/weeks/:week/:day/:meal", async (req, res) => {
@@ -25,19 +39,7 @@ export function createApp({ store }) {
       res.status(404).json({ error: `Unknown week, day, or meal: ${week}/${day}/${meal}` });
       return;
     }
-
-    // Express 5 leaves req.body undefined when there is no JSON body.
-    const text = req.body?.text;
-    if (typeof text !== "string") {
-      res.status(400).json({ error: '"text" must be a string' });
-      return;
-    }
-    if (text.length > MAX_TEXT_LENGTH) {
-      res.status(400).json({ error: `"text" must be at most ${MAX_TEXT_LENGTH} characters` });
-      return;
-    }
-
-    res.json(await store.saveCell(week, day, meal, text));
+    res.json(await weeks.saveSlot(week, day, meal, req.body?.items));
   });
 
   // Any other /api path: JSON 404 (the API only ever answers JSON).
@@ -51,6 +53,18 @@ export function createApp({ store }) {
   // 4xx errors from body parsing (for example, malformed JSON -> 400) keep their status.
   // Keep all four parameters: Express identifies error handlers by arity.
   app.use((err, _req, res, _next) => {
+    if (err instanceof ValidationError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (err instanceof NotFoundError) {
+      res.status(404).json({ error: err.message });
+      return;
+    }
+    if (err instanceof NameConflictError) {
+      res.status(409).json({ error: err.message, recipe: err.recipe });
+      return;
+    }
     const status =
       Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
     if (status === 500) console.error(err);

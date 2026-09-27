@@ -1,3 +1,11 @@
+:root {
+  --accent: #2e7d32;
+  --border: #ccc;
+  --border-light: #ddd;
+  --error: #8a1c14;
+  --bg: #f6f6f6;
+}
+
 *,
 *::before,
 *::after {
@@ -14,7 +22,7 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: #222;
-  background: #f6f6f6;
+  background: var(--bg);
 }
 
 /* Tapping a button twice quickly must not zoom the page (iOS Safari). Pinch
@@ -32,6 +40,18 @@ button {
   font-size: 1.25rem;
 }
 
+.title-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.page-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .week-bar {
   display: flex;
   align-items: center;
@@ -39,13 +59,18 @@ button {
   margin-top: 0.5rem;
 }
 
-.week-bar button {
-  min-width: 2.5rem;
+.week-bar button,
+.recipe-book button,
+.slot-editor button {
   padding: 0.4rem 0.8rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 0.4rem;
   background: #fff;
   font: inherit;
+}
+
+.week-bar button {
+  min-width: 2.5rem;
 }
 
 .week-range {
@@ -63,7 +88,7 @@ button {
   border: 1px solid #f5c2c0;
   border-radius: 0.4rem;
   background: #fdecea;
-  color: #8a1c14;
+  color: var(--error);
 }
 
 .load-error button {
@@ -71,24 +96,41 @@ button {
   font: inherit;
 }
 
-.cell {
+.slot {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
 }
 
-.cell textarea {
-  display: block;
+/* The slot's menu: a button that opens the slot editor. */
+.slot-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
   width: 100%;
   min-height: 5rem;
   padding: 0.4rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 0.3rem;
+  background: #fff;
+  color: inherit;
   font: inherit;
-  resize: vertical;
+  text-align: left;
+  cursor: pointer;
+  /* A long name without spaces wraps instead of widening the grid. */
+  overflow-wrap: anywhere;
 }
 
-/* Per-cell save status. It is a <button> so the error state is clickable;
+.slot-menu:hover {
+  border-color: #999;
+}
+
+.slot-empty {
+  color: #888;
+}
+
+/* Per-slot save status. It is a <button> so the error state is clickable;
    it is disabled in every other state. */
 .status {
   align-self: flex-start;
@@ -102,7 +144,7 @@ button {
 }
 
 .status[data-state="saved"] {
-  color: #2e7d32;
+  color: var(--accent);
 }
 
 .status[data-state="error"] {
@@ -122,6 +164,216 @@ button {
   stroke-linejoin: round;
 }
 
+/* ---------- Slot editor ---------- */
+
+/* No padding: slot-editor.js treats a click whose target is the dialog itself
+   as a click on the backdrop. The body inside carries the padding. */
+.slot-editor {
+  width: min(32rem, calc(100% - 2rem));
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 25%);
+}
+
+.slot-editor::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+
+.slot-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.slot-editor-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+/* The title takes focus when the dialog opens, only so a phone doesn't open
+   its keyboard: that programmatic focus shows no ring. A keyboard user who
+   tabs back to the title still sees the browser's own focus ring. */
+.slot-editor-title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.menu-items,
+.recipe-options {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.menu-item .recipe-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.servings {
+  min-width: 2.5rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-editor .step {
+  min-width: 2.25rem;
+  padding: 0.4rem 0;
+}
+
+.slot-editor .done {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.recipe-search {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  font: inherit;
+}
+
+.recipe-options {
+  max-height: 12rem;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 0.3rem;
+}
+
+.recipe-option {
+  padding: 0.4rem;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.recipe-option:hover {
+  background: #f3f3f3;
+}
+
+.recipe-option[aria-selected="true"] {
+  background: #eef6ee;
+}
+
+.no-match {
+  margin: 0;
+  color: #666;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* ---------- Recipe book ---------- */
+
+.recipe-book {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 40rem;
+  padding: 0 1rem 1rem;
+}
+
+.recipe-book label {
+  font-weight: 600;
+}
+
+.recipe-book input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  font: inherit;
+}
+
+.recipe-book .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.new-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.field-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.field-message,
+.row-message {
+  margin: 0;
+  color: var(--error);
+}
+
+.field-message:empty {
+  display: none;
+}
+
+.hint {
+  margin: 0.5rem 0;
+  color: #666;
+}
+
+.recipe-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.recipe-row .recipe-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.recipe-row .rename-field {
+  flex: 1;
+  width: auto;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.row-message {
+  flex-basis: 100%;
+}
+
+.archived summary {
+  padding: 0.5rem 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* ---------- Desktop (>= 768px): 7 days x 5 meals ---------- */
 @media (min-width: 768px) {
   body {
@@ -132,13 +384,20 @@ button {
     height: 100dvh;
   }
 
+  /* The body is a fixed-height column on desktop, so the recipe book scrolls. */
+  .recipe-book {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
   /* Fixed width, so the buttons don't move when the range text changes. */
   .week-range {
     flex: 0 0 14rem;
   }
 
   .day-bar,
-  .cell-label {
+  .slot-label {
     display: none;
   }
 
@@ -150,7 +409,7 @@ button {
     overflow: auto;
     grid-template-columns: 8rem repeat(7, minmax(9rem, 1fr));
     align-content: start;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--border-light);
     background: #fff;
   }
 
@@ -158,8 +417,8 @@ button {
   .day-header,
   .meal-header {
     padding: 0.5rem;
-    border-right: 1px solid #ddd;
-    border-bottom: 1px solid #ddd;
+    border-right: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
     background: #eee;
     font-weight: 600;
   }
@@ -182,18 +441,18 @@ button {
     z-index: 2;
   }
 
-  .cell {
+  .slot {
     padding: 0.25rem;
-    border-right: 1px solid #ddd;
-    border-bottom: 1px solid #ddd;
+    border-right: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
   }
 
   .day-header[data-today] {
-    background: #2e7d32;
+    background: var(--accent);
     color: #fff;
   }
 
-  .cell[data-today] {
+  .slot[data-today] {
     background: #eef6ee;
   }
 }
@@ -222,13 +481,13 @@ button {
     top: 0;
     z-index: 1;
     padding: 0.5rem 1rem;
-    background: #f6f6f6;
+    background: var(--bg);
   }
 
   .day-bar button {
     flex: 1;
     padding: 0.6rem 0;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     border-radius: 0.4rem;
     background: #fff;
     font: inherit;
@@ -240,8 +499,8 @@ button {
   }
 
   .day-bar button[aria-pressed="true"] {
-    border-color: #2e7d32;
-    background: #2e7d32;
+    border-color: var(--accent);
+    background: var(--accent);
     color: #fff;
   }
 
@@ -252,8 +511,8 @@ button {
 
   /* Today: accent outline. Selected: filled accent. Both: filled with an inner white ring. */
   .day-bar button[data-today] {
-    border-color: #2e7d32;
-    box-shadow: inset 0 0 0 1px #2e7d32;
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
 
   .day-bar button[data-today][aria-pressed="true"] {
@@ -270,28 +529,53 @@ button {
     display: none;
   }
 
-  .cell {
+  .slot {
     display: none;
     margin-bottom: 0.75rem;
   }
 
-  /* Show only the cells of the selected day (attribute set by app.js). */
-  .grid[data-selected-day="mon"] .cell[data-day="mon"],
-  .grid[data-selected-day="tue"] .cell[data-day="tue"],
-  .grid[data-selected-day="wed"] .cell[data-day="wed"],
-  .grid[data-selected-day="thu"] .cell[data-day="thu"],
-  .grid[data-selected-day="fri"] .cell[data-day="fri"],
-  .grid[data-selected-day="sat"] .cell[data-day="sat"],
-  .grid[data-selected-day="sun"] .cell[data-day="sun"] {
+  /* Show only the slots of the selected day (attribute set by app.js). */
+  .grid[data-selected-day="mon"] .slot[data-day="mon"],
+  .grid[data-selected-day="tue"] .slot[data-day="tue"],
+  .grid[data-selected-day="wed"] .slot[data-day="wed"],
+  .grid[data-selected-day="thu"] .slot[data-day="thu"],
+  .grid[data-selected-day="fri"] .slot[data-day="fri"],
+  .grid[data-selected-day="sat"] .slot[data-day="sat"],
+  .grid[data-selected-day="sun"] .slot[data-day="sun"] {
     display: flex;
   }
 
-  .cell-label {
+  .slot-label {
     font-weight: 600;
   }
 
+  .slot-menu {
+    min-height: 3rem;
+  }
+
+  /* The slot editor fills the screen on phones. */
+  .slot-editor {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  /* Fills the dialog, so a tap below the actions still lands inside it
+     instead of on the dialog's own (backdrop) box. */
+  .slot-editor-body {
+    min-height: 100%;
+  }
+
   /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .cell textarea {
+  .recipe-search {
+    font-size: 16px;
+  }
+
+  /* >= 16px prevents iOS Safari from zooming in on focus. */
+  .recipe-book input {
     font-size: 16px;
   }
 }
