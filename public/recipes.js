@@ -5,6 +5,7 @@
 
 import { createButton, createElement, withLoadState } from "./dom.js";
 import { getJson, sendJson } from "./http.js";
+import { conflictText, quoted } from "./messages.js";
 import { filterRecipes, sortRecipes } from "./recipe-search.js";
 
 const loadError = document.getElementById("load-error");
@@ -33,10 +34,6 @@ const busy = new Set();
 /** True while render() replaces rows, so focus changes it causes are ignored. */
 let rendering = false;
 
-function quoted(name) {
-  return `"${name}"`;
-}
-
 function recipeUrl(id) {
   return `/api/recipes/${encodeURIComponent(id)}`;
 }
@@ -58,12 +55,6 @@ function button(text, label, onClick) {
   const element = createButton(text, label);
   element.addEventListener("click", onClick);
   return element;
-}
-
-function conflictText(holder) {
-  return holder.archived
-    ? `${quoted(holder.name)} is archived.`
-    : `${quoted(holder.name)} already exists.`;
 }
 
 // Clears every row message and re-renders, so a new request starts without

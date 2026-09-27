@@ -265,6 +265,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   http.js          # Requests with a timeout.*
   index.html       # Meal plan page.
   menus.js         # Menu functions.*
+  messages.js      # Recipe book message text.*
   recipe-search.js # Recipe name matching and sorting.*
   recipes.html     # Recipe book page.
   recipes.js       # Recipe book page logic.
