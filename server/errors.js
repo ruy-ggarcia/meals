@@ -11,12 +11,16 @@ export class NotFoundError extends Error {
   name = "NotFoundError";
 }
 
-/** Another recipe already has the name key. `recipe` is that recipe. */
+/**
+ * Another entry already has the name key. `kind` is "recipe" or
+ * "ingredient", and `entity` is that entry.
+ */
 export class NameConflictError extends Error {
   name = "NameConflictError";
 
-  constructor(message, recipe) {
+  constructor(message, kind, entity) {
     super(message);
-    this.recipe = recipe;
+    this.kind = kind;
+    this.entity = entity;
   }
 }

@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { NameConflictError, NotFoundError, ValidationError } from "../server/errors.js";
 import { createQueue } from "../server/files.js";
-import { cleanName, createRecipes, nameKey } from "../server/recipes.js";
+import { createRecipes } from "../server/recipes.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -23,16 +23,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
-});
-
-test("cleanName trims the name and collapses runs of whitespace", () => {
-  assert.equal(cleanName("  Green \t salad\n "), "Green salad");
-});
-
-test("nameKey ignores case and accents", () => {
-  assert.equal(nameKey("Café"), nameKey("CAFE"));
-  assert.equal(nameKey("Ñoquis"), "noquis");
-  assert.notEqual(nameKey("Cafe"), nameKey("Cafes"));
 });
 
 test("list returns an empty recipe book when there is no file", async () => {
@@ -92,14 +82,16 @@ test("create rejects a name whose key is taken, active or archived, and reports 
 
   await assert.rejects(recipes.create("  cafe "), (error) => {
     assert.ok(error instanceof NameConflictError);
-    assert.deepEqual(error.recipe, cafe);
+    assert.equal(error.kind, "recipe");
+    assert.deepEqual(error.entity, cafe);
     return true;
   });
 
   const archived = await recipes.update(cafe.id, { archived: true });
   await assert.rejects(recipes.create("CAFE"), (error) => {
     assert.ok(error instanceof NameConflictError);
-    assert.deepEqual(error.recipe, archived);
+    assert.equal(error.kind, "recipe");
+    assert.deepEqual(error.entity, archived);
     return true;
   });
   assert.equal((await recipes.list()).length, 1);
@@ -141,7 +133,8 @@ test("update rejects a name whose key another recipe has", async () => {
 
   await assert.rejects(recipes.update(salad.id, { name: "SOUP" }), (error) => {
     assert.ok(error instanceof NameConflictError);
-    assert.deepEqual(error.recipe, soup);
+    assert.equal(error.kind, "recipe");
+    assert.deepEqual(error.entity, soup);
     return true;
   });
   assert.deepEqual(await recipes.list(), [salad, soup]);

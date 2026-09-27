@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { filterRecipes, nameKey, sortRecipes } from "../public/recipe-search.js";
-import { cleanName, nameKey as serverNameKey } from "../server/recipes.js";
+import { cleanName, nameKey as serverNameKey } from "../server/names.js";
 
 function recipe(name, archived = false) {
   return { id: `id-${name}`, name, archived };
@@ -44,7 +44,7 @@ test("filterRecipes with a blank query matches every recipe", () => {
   assert.deepEqual(filterRecipes(recipes, "   "), recipes);
 });
 
-// The browser never imports from server/, so server/recipes.js#nameKey and
+// The browser never imports from server/, so server/names.js#nameKey and
 // public/recipe-search.js#nameKey are separate implementations of the same
 // rule on purpose. This pins them to each other.
 test("nameKey equals the server's nameKey for accented, cased, and emoji names", () => {

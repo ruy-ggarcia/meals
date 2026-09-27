@@ -62,7 +62,7 @@ export function createApp({ recipes, weeks }) {
       return;
     }
     if (err instanceof NameConflictError) {
-      res.status(409).json({ error: err.message, recipe: err.recipe });
+      res.status(409).json({ error: err.message, [err.kind]: err.entity });
       return;
     }
     const status =

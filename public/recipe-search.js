@@ -3,7 +3,7 @@
 
 /**
  * Decides matching and order. It ignores case and accents, so "Café" and
- * "cafe" share a key. The server has the same rule in server/recipes.js.
+ * "cafe" share a key. The server has the same rule in server/names.js.
  */
 export function nameKey(name) {
   return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();

@@ -5,38 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { NameConflictError, NotFoundError, ValidationError } from "./errors.js";
 import { dataPath, readJson, writeJson } from "./files.js";
-
-export const MAX_NAME_LENGTH = 100;
-
-/** The name as stored: trimmed, with runs of whitespace collapsed to one space. */
-export function cleanName(name) {
-  return name.trim().replace(/\s+/g, " ");
-}
-
-/**
- * Decides uniqueness and order. It ignores case and accents, so "Café" and
- * "cafe" share a key. public/recipe-search.js has the same rule.
- */
-export function nameKey(name) {
-  return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-}
-
-function byNameKey(a, b) {
-  const keyA = nameKey(a.name);
-  const keyB = nameKey(b.name);
-  if (keyA < keyB) return -1;
-  return keyA > keyB ? 1 : 0;
-}
-
-function validName(name) {
-  if (typeof name !== "string") throw new ValidationError('"name" must be a string.');
-  const clean = cleanName(name);
-  if (clean === "") throw new ValidationError("The name can't be empty.");
-  if (clean.length > MAX_NAME_LENGTH) {
-    throw new ValidationError(`The name must be at most ${MAX_NAME_LENGTH} characters.`);
-  }
-  return clean;
-}
+import { byNameKey, holderOf, validName } from "./names.js";
 
 // A PATCH body: exactly one of { name } or { archived }.
 function validChanges(changes) {
@@ -77,14 +46,12 @@ export function createRecipes({ dataDir, enqueue }) {
     return normalize(await readJson(file));
   }
 
-  // The recipe, other than `exceptId`, whose name key equals the key of `name`.
-  function holderOf(all, name, exceptId) {
-    const key = nameKey(name);
-    return all.find((recipe) => recipe.id !== exceptId && nameKey(recipe.name) === key);
-  }
-
   function conflict(recipe) {
-    return new NameConflictError(`A recipe named "${recipe.name}" already exists.`, recipe);
+    return new NameConflictError(
+      `A recipe named "${recipe.name}" already exists.`,
+      "recipe",
+      recipe,
+    );
   }
 
   /** Every recipe, archived ones included, from A to Z. Never waits for the queue. */
