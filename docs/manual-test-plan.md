@@ -1,10 +1,10 @@
 # Manual test plan
 
-This test plan checks the app in real browsers: the grid, the slot editor,
-saves, the week bar, the week in the URL, dates on days, the today marker, and
-the recipe book. The automated tests (`npm test`) cover the server, the date,
-menu, recipe name, and HTTP helpers, and the save logic. This plan covers what
-only a person with a browser can check. Run it before you merge a change to
+This plan checks what only a real browser or device can check: layout and
+scrolling, native browser behavior such as the focus trap in a dialog and
+the leave-page prompt, real network timing, screen readers, and the system
+clock. The automated tests (`npm test`) cover the rest, including the page
+scripts against a simulated DOM. Run this plan before you merge a change to
 the user interface.
 
 Each test has an ID, such as `6.3`. To report a failure, give the test ID and
@@ -82,9 +82,8 @@ Keep the server's terminal open. Several tests ask you to stop the server with
 
 | ID  | Step | Expected result |
 |-----|------|-----------------|
-| 2.1 | Change the hash to `#NEXT_MONDAY` by hand. | The page shows the next week. |
-| 2.2 | Change the hash to `#hello`, then to a Tuesday such as `#2026-09-22`, then to `#2026-02-30`. | Each time, the hash changes back to the displayed week, and nothing else changes. |
-| 2.3 | In a new tab, go to `http://localhost:3000/#hello`. | The page shows the current week, and the hash changes to `#MONDAY`. |
+| 2.1 | Change the hash to `#hello`, then to a Tuesday such as `#2026-09-22`, then to `#2026-02-30`. | Each time, the hash changes back to the displayed week, and nothing else changes. |
+| 2.2 | In a new tab, go to `http://localhost:3000/#hello`. | The page shows the current week, and the hash changes to `#MONDAY`. |
 
 ## 3. Dates and today marker
 
@@ -125,24 +124,18 @@ Run these tests on desktop.
 | 5.5 | On `Green salad`, click `+` three times and `−` once. | The servings read `1.5`, `2`, `2.5`, and then `2`. |
 | 5.6 | On `Russian salad`, click `−` once. | The servings read `0.5`. `−` is disabled, and focus moves to `+`. |
 | 5.7 | Click **Done**. | The editor closes. The slot shows `Russian salad × 0.5` and `Green salad × 2`, and a check mark. The slot has focus. |
-| 5.8 | Open the slot, click `+`, click the editor's title, and press `Enter`. | Same as **Done**: the editor closes and saves the change. |
-| 5.9 | Open the slot again, click **Remove** on `Russian salad`, and click **Cancel**. | The slot doesn't change, and no save icon appears. |
-| 5.10 | Open a slot, add `Russian salad` and `Green salad`, and click **Remove** on `Russian salad`. Then click **Remove** again. | Each time, focus moves to the **Remove** button of the row now in that place; after the second click, the list is empty and focus moves to the editor's title. Click **Cancel**. |
-| 5.11 | Open the slot, click `+`, and press `Escape`. | Same as `5.9`. |
-| 5.12 | Open the slot, type `sal`, and press `Escape`. Press `Escape` again. | The first `Escape` clears the field, and the editor stays open. The second closes the editor. |
-| 5.13 | Open the slot and, without changing anything, click the dark area outside the editor. | The editor closes. |
-| 5.14 | Open the slot, click `+`, and click outside the editor. | The editor stays open with the change. Click **Cancel**. |
-| 5.15 | Open the slot, type `sal` in **Add recipe**, press the mouse button down in the field, drag out to the dark area outside the editor, and release the button there. | The editor stays open and keeps the text. |
-| 5.16 | Open the slot and type `xyz`. | The list disappears, and `No recipes found. Add them on the Recipes page.` appears. |
-| 5.17 | Add `<b>Bold</b> soup` to a slot and click **Done**. | The slot and the editor show the name with the tags as literal text, not in bold. |
-| 5.18 | Add `Supercalifragilisticexpialidocious-casserole-with-a-very-long-name` to a slot and click **Done**. Repeat on mobile. | The name wraps inside the slot and inside the editor. The page doesn't scroll sideways. |
-| 5.19 | Open a slot, change the hash by hand to `#NEXT_MONDAY`. | The hash changes back, the editor stays open, and the week doesn't change. |
-| 5.20 | Open a slot, add a recipe, and reload the page. | The browser asks whether to leave. Click **Cancel** or **Stay**: the editor still has the recipe. |
-| 5.21 | In the editor from `5.20`, click **Cancel**, and reload the page. | The page reloads without asking. |
-| 5.22 | Open a slot and press `Tab` repeatedly. | Focus moves through the editor's controls and never reaches the page behind it. |
-| 5.23 | Optional. Run the command after this table to add 20 recipes, reload, and add all 20 to one slot. | After the 20th, **Add recipe** is disabled and reads `A menu holds up to 20 recipes.` Focus moves to **Done**. |
+| 5.8 | Open the slot, type `sal` in **Add recipe**, press the mouse button down in the field, drag out to the dark area outside the editor, and release the button there. | The editor stays open and keeps the text. |
+| 5.9 | Open a slot, type `sal`, and press `Escape`. Press `Escape` again. | The first `Escape` clears the field, and the editor stays open. The second closes the editor without saving. |
+| 5.10 | Open a slot and, without changing anything, click the dark area outside the editor. | The editor closes. |
+| 5.11 | Open a slot, click `+`, and click the dark area outside the editor. | The editor stays open with the change. Click **Cancel**. |
+| 5.12 | Open the slot and type `xyz`. | The list disappears, and `No matching recipes. To add recipes, use the Recipes page.` appears. |
+| 5.13 | Add `Supercalifragilisticexpialidocious-casserole-with-a-very-long-name` to a slot and click **Done**. Repeat on mobile. | The name wraps inside the slot and inside the editor. The page doesn't scroll sideways. |
+| 5.14 | Open a slot, add a recipe, and reload the page. | The browser asks whether to leave. Click **Cancel** or **Stay**: the editor still has the recipe. |
+| 5.15 | In the editor from `5.14`, click **Cancel**, and reload the page. | The page reloads without asking. |
+| 5.16 | Open a slot and press `Tab` repeatedly. | Focus moves through the editor's controls and never reaches the page behind it. |
+| 5.17 | Optional. Run the command after this table to add 20 recipes, reload, and add all 20 to one slot. | After the 20th, focus moves to **Done**. |
 
-The command for `5.23`:
+The command for `5.17`:
 
 ```bash
 for index in $(seq 1 20); do
@@ -191,29 +184,22 @@ Run these tests on desktop unless a test says otherwise.
 | ID  | Step | Expected result |
 |-----|------|-----------------|
 | 8.1 | On the meal plan, click **Recipes**. | The recipe book opens with the test recipes from A to Z, and no **Archived** section. |
-| 8.2 | In **New recipe**, type `Café` and press `Enter`. | `Café` appears in its sorted place. The field clears and keeps focus. |
-| 8.3 | Click **Archive** on `Café`. Then add `  cafe `. | `Café` moves under **Archived (1)**. Adding shows `"Café" is archived.` with **Restore it**. |
-| 8.4 | Click **Restore it**. | `Café` is back in the main list, the message disappears, and the field is empty. |
-| 8.5 | Add `GREEN SALAD`. | The page shows `"Green salad" already exists.`, and the text stays in the field. Press `Escape`: the field and the message clear. |
-| 8.6 | Click **Rename** on `Lentil soup`, type `Red lentil soup`, and press `Enter`. | The row shows `Red lentil soup` in its sorted place, and its **Rename** button has focus. |
-| 8.7 | Go to the meal plan, show the next week, and look at the slot from `1.3`. | It shows `Red lentil soup × 1`. |
-| 8.8 | Click **Rename** on `Omelette`, and click in **Search** without typing. | The rename field closes, and the name stays `Omelette`. |
-| 8.9 | Click **Rename** on `Omelette`, type `x`, and click in **Search**. | The rename field stays open with `x`. |
-| 8.10 | Click **Cancel** in the row from `8.9`. | The field closes, the name stays `Omelette`, and nothing is saved. |
-| 8.11 | Click **Rename** on `Omelette`, type `y`, press `Tab` to move focus to **Save**, and press `Escape`. | The field closes, the name stays `Omelette`, and nothing is saved. |
-| 8.12 | Click **Rename** on `Omelette`, type `Green salad`, and click **Save**. | The field stays open, with `"Green salad" already exists.` below the row. Press `Escape`: the field closes. |
-| 8.13 | Click **Rename** on one recipe, don't type, and then click **Archive** on another recipe. | The rename field closes, and the other recipe is archived with that single click. |
-| 8.14 | Click **Rename** on one recipe, don't type, and press `Tab`. | The rename field closes, and focus moves to the next control, not to the top of the page. |
-| 8.15 | Optional. Pause the server with `Control+Z`, click **Archive** on a recipe, and start typing in **Search**. Run `fg` in the server's terminal. | The recipe is archived, and focus stays in **Search** with your text. |
-| 8.16 | Type `sal` in **Search**. Then type `zzz`. | `sal` shows only the salads. `zzz` shows `No recipes match "zzz".` Clear the search. |
-| 8.17 | Archive `Green salad`, which the slot from `5.7` uses. Go to the meal plan. | The slot still shows `Green salad × 2`. In its editor, the list doesn't offer `Green salad`, and `+` on it followed by **Done** saves without a red cross. |
-| 8.18 | Stop the server. Add a recipe, rename a recipe, and archive a recipe. | Each shows its `Couldn't … Try again.` message, and nothing changes. |
-| 8.19 | Start the server. In **New recipe**, add a recipe with a new name. | The recipe is added, and the archive error message from `8.18` disappears from its row. |
-| 8.20 | Archive `Omelette`. In **New recipe**, type `Omelette`, and press `Enter`. | `Omelette` moves under **Archived**. Adding shows `"Omelette" is archived.` with **Restore it**. |
-| 8.21 | Stop the server, and click **Restore it**. | After a moment, `Couldn't restore the recipe. Try again.` appears, followed by **Restore it**, which is still there. |
-| 8.22 | Start the server, and click **Restore it** again. | `Omelette` is restored, the message disappears, and the field is empty. |
-| 8.23 | Stop the server again, and reload the recipe book. Start the server and click **Retry**. | The page shows `Couldn't load the recipes.`, and **Retry** loads the recipe book. |
-| 8.24 | On mobile, open the recipe book, and tap **New recipe**. | The keyboard opens, the page doesn't zoom, and the page doesn't scroll sideways. |
+| 8.2 | Click **Rename** on `Lentil soup`, type `Red lentil soup`, and press `Enter`. | The row shows `Red lentil soup` in its sorted place, and its **Rename** button has focus. |
+| 8.3 | Go to the meal plan, show the next week, and look at the slot from `1.3`. | It shows `Red lentil soup × 1`. |
+| 8.4 | Click **Rename** on `Omelette`, type `x`, and click in **Search**. | The rename field stays open with `x`. |
+| 8.5 | Click **Cancel** in the row from `8.4`. | The field closes, the name stays `Omelette`, and nothing is saved. |
+| 8.6 | Click **Rename** on `Omelette`, type `y`, press `Tab` to move focus to **Save**, and press `Escape`. | The field closes, the name stays `Omelette`, and nothing is saved. |
+| 8.7 | Click **Rename** on `Omelette`, type `Green salad`, and click **Save**. | The field stays open, with `"Green salad" already exists.` below the row. Press `Escape`: the field closes. |
+| 8.8 | Click **Rename** on one recipe, don't type, and press `Tab`. | The rename field closes, and focus moves to the next control, not to the top of the page. |
+| 8.9 | Optional. Pause the server with `Control+Z`, click **Archive** on a recipe, and start typing in **Search**. Run `fg` in the server's terminal. | The recipe is archived, and focus stays in **Search** with your text. |
+| 8.10 | Archive `Green salad`, which the slot from `5.7` uses. Go to the meal plan. | The slot still shows `Green salad × 2`. In its editor, `+` on `Green salad` followed by **Done** saves without a red cross. |
+| 8.11 | Stop the server. Rename a recipe, and archive a recipe. | Each shows its `Couldn't … Try again.` message, and nothing changes. |
+| 8.12 | Start the server. In **New recipe**, add a recipe with a new name. | The recipe is added, and the archive error from `8.11` disappears. The rename field from `8.11` stays open with its message. Press `Escape` to close it. |
+| 8.13 | Archive `Omelette`. In **New recipe**, type `Omelette`, and press `Enter`. | `Omelette` moves under **Archived**. Adding shows `"Omelette" is archived.` with **Restore it**. |
+| 8.14 | Stop the server, and click **Restore it**. | After a moment, `Couldn't restore the recipe. Try again.` appears, followed by **Restore it**, which is still there. |
+| 8.15 | Start the server, and click **Restore it** again. | `Omelette` is restored, the message disappears, and the field is empty. |
+| 8.16 | Stop the server again, and reload the recipe book. Start the server and click **Retry**. | The page shows `Couldn't load the recipes.`, and **Retry** loads the recipe book. |
+| 8.17 | On mobile, open the recipe book, and tap **New recipe**. | The keyboard opens, the page doesn't zoom, and the page doesn't scroll sideways. |
 
 ## 9. Keyboard and screen readers (optional)
 
