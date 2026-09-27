@@ -5,7 +5,7 @@
 // - Clicking the backdrop closes the editor only when the copy has no
 //   changes, so a stray click never throws work away.
 
-import { createElement } from "./dom.js";
+import { createButton, createElement } from "./dom.js";
 import {
   addableRecipes,
   addItem,
@@ -79,23 +79,14 @@ export function createSlotEditor(dialog) {
     opener.focus();
   }
 
-  function stepButton(symbol, label) {
-    const button = createElement("button", "step", symbol);
-    button.type = "button";
-    button.setAttribute("aria-label", label);
-    return button;
-  }
-
   function itemRow(item) {
     const name = nameOf(item.recipeId);
     const row = createElement("li", "menu-item");
     const servings = createElement("span", "servings", String(item.servings));
     servings.setAttribute("aria-live", "polite");
-    const decrease = stepButton("−", `Decrease servings of ${name}`);
-    const increase = stepButton("+", `Increase servings of ${name}`);
-    const remove = createElement("button", "remove", "Remove");
-    remove.type = "button";
-    remove.setAttribute("aria-label", `Remove ${name}`);
+    const decrease = createButton("−", `Decrease servings of ${name}`, "step");
+    const increase = createButton("+", `Increase servings of ${name}`, "step");
+    const remove = createButton("Remove", `Remove ${name}`, "remove");
     decrease.disabled = item.servings <= MIN_SERVINGS;
     increase.disabled = item.servings >= MAX_SERVINGS;
     decrease.addEventListener("click", () => step(item.recipeId, -1, row));

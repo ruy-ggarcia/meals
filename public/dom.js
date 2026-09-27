@@ -11,6 +11,14 @@ export function createElement(tag, className, text) {
   return node;
 }
 
+/** A `<button type="button">` with an accessible name. Callers attach their own listener. */
+export function createButton(text, label, className) {
+  const button = createElement("button", className, text);
+  button.type = "button";
+  button.setAttribute("aria-label", label);
+  return button;
+}
+
 /**
  * Runs `run()` as a load: hides `loadError` and disables `retryButton` while
  * it runs, then shows `content` on success or `loadError` on failure, logging

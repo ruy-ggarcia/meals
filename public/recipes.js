@@ -3,7 +3,7 @@
 // button confirms, Escape or Cancel discards, and leaving a field never
 // discards changes.
 
-import { createElement, withLoadState } from "./dom.js";
+import { createButton, createElement, withLoadState } from "./dom.js";
 import { getJson, sendJson } from "./http.js";
 import { filterRecipes, sortRecipes } from "./recipe-search.js";
 
@@ -55,9 +55,7 @@ function rowElement(id) {
 }
 
 function button(text, label, onClick) {
-  const element = createElement("button", undefined, text);
-  element.type = "button";
-  element.setAttribute("aria-label", label);
+  const element = createButton(text, label);
   element.addEventListener("click", onClick);
   return element;
 }
