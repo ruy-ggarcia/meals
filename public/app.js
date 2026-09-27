@@ -49,7 +49,7 @@ const ICON_PATHS = {
 const STATUS_LABEL = {
   saving: "Saving…",
   saved: "Saved",
-  error: "Couldn't save. Click to retry",
+  error: "Couldn't save. Select to retry.",
 };
 
 function statusIcon(state) {
