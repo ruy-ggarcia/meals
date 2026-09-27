@@ -5,9 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import request from "supertest";
 import { createApp } from "../server/app.js";
-import { createQueue } from "../server/files.js";
-import { createRecipes } from "../server/recipes.js";
-import { createWeeks } from "../server/weeks.js";
+import { createStores } from "../server/stores.js";
 import { blankWeek } from "./helpers.js";
 
 const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -23,9 +21,7 @@ let app;
 
 beforeEach(async () => {
   dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-api-"));
-  const enqueue = createQueue();
-  const recipes = createRecipes({ dataDir, enqueue });
-  app = createApp({ recipes, weeks: createWeeks({ dataDir, enqueue, recipes }) });
+  app = createApp(createStores({ dataDir }));
 });
 
 afterEach(async () => {
@@ -59,10 +55,22 @@ test("POST /api/recipes returns 201 with the new recipe, and GET lists it", asyn
 
   assert.equal(res.status, 201);
   assert.equal(typeof res.body.id, "string");
-  assert.deepEqual(res.body, { id: res.body.id, name: "Gnocchi carbonara", archived: false });
+  assert.deepEqual(res.body, {
+    id: res.body.id,
+    name: "Gnocchi carbonara",
+    archived: false,
+    ingredients: [],
+  });
 
   const get = await request(app).get("/api/recipes");
   assert.deepEqual(get.body, { recipes: [res.body] });
+});
+
+test("POST /api/recipes with fields other than name and ingredients returns 400", async () => {
+  const res = await request(app).post("/api/recipes").send({ name: "Soup", archived: false });
+
+  assertJsonError(res, 400, "extra field");
+  assert.deepEqual((await request(app).get("/api/recipes")).body, { recipes: [] });
 });
 
 test("GET /api/recipes lists archived recipes too, from A to Z by name key", async () => {

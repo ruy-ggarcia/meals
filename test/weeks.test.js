@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { ValidationError } from "../server/errors.js";
 import { createQueue } from "../server/files.js";
-import { createRecipes } from "../server/recipes.js";
+import { createStores } from "../server/stores.js";
 import { createWeeks, DAYS, isWeekId, MEALS } from "../server/weeks.js";
 import { blankWeek } from "./helpers.js";
 
@@ -36,17 +36,14 @@ async function writeWeekFile(week, content) {
 }
 
 function newWeeks() {
-  const enqueue = createQueue();
-  return createWeeks({ dataDir, enqueue, recipes: createRecipes({ dataDir, enqueue }) });
+  return createStores({ dataDir }).weeks;
 }
 
 beforeEach(async () => {
   dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-weeks-"));
-  const enqueue = createQueue();
-  recipes = createRecipes({ dataDir, enqueue });
-  weeks = createWeeks({ dataDir, enqueue, recipes });
-  soup = await recipes.create("Soup");
-  salad = await recipes.create("Salad");
+  ({ recipes, weeks } = createStores({ dataDir }));
+  soup = await recipes.create({ name: "Soup" });
+  salad = await recipes.create({ name: "Salad" });
 });
 
 afterEach(async () => {
@@ -97,11 +94,11 @@ test("readWeek rejects an invalid week", async () => {
 
 test("readWeek reads the week before the recipe book, so a concurrent create's item isn't dropped", async () => {
   const newRecipeId = "brand-new-recipe";
-  let listCalls = 0;
+  let idsCalls = 0;
   const stubRecipes = {
-    async list() {
-      listCalls++;
-      if (listCalls === 1) {
+    async ids() {
+      idsCalls++;
+      if (idsCalls === 1) {
         // Simulates a concurrent save that finishes writing the week file
         // for a recipe created after readWeek's read of the week file, but
         // before readWeek's read of the recipe book (this call).
@@ -110,7 +107,7 @@ test("readWeek reads the week before the recipe book, so a concurrent create's i
           JSON.stringify({ mon: { lunch: { items: [{ recipeId: newRecipeId, servings: 1 }] } } }),
         );
       }
-      return [{ id: newRecipeId, name: "New recipe", archived: false }];
+      return [newRecipeId];
     },
   };
   const stubWeeks = createWeeks({ dataDir, enqueue: createQueue(), recipes: stubRecipes });
@@ -148,13 +145,23 @@ test("saveSlot doesn't drop another slot's items when the recipe book on disk is
   // Simulates a recipe book restored from an older backup, or a missing
   // file, that doesn't know about `soup` yet.
   await writeFile(recipesFile(), JSON.stringify({ recipes: [] }));
-  const saladOnly = await recipes.create("Salad only");
+  const saladOnly = await recipes.create({ name: "Salad only" });
   await weeks.saveSlot(WEEK, "tue", "lunch", [{ recipeId: saladOnly.id, servings: 1 }]);
 
   await writeFile(recipesFile(), currentRecipes);
 
   const week = await weeks.readWeek(WEEK);
   assert.deepEqual(week.mon.lunch, { items: [{ recipeId: soup.id, servings: 1 }] });
+});
+
+test("readWeek and saveSlot work when the ingredient catalog isn't valid JSON", async () => {
+  await writeFile(path.join(dataDir, "v2", "ingredients.json"), "{ not json");
+  const items = [{ recipeId: soup.id, servings: 1 }];
+
+  await weeks.saveSlot(WEEK, "mon", "lunch", items);
+
+  const week = await weeks.readWeek(WEEK);
+  assert.deepEqual(week.mon.lunch, { items });
 });
 
 test("saveSlot with no items empties the slot", async () => {
@@ -259,7 +266,7 @@ test("saveSlot accepts the limits: 0.5 and 99 servings, and 20 menu items", asyn
 
   const items = [];
   for (let index = 0; index < 20; index++) {
-    const recipe = await recipes.create(`Recipe ${index}`);
+    const recipe = await recipes.create({ name: `Recipe ${index}` });
     items.push({ recipeId: recipe.id, servings: 1 });
   }
   const result = await weeks.saveSlot(WEEK, "mon", "dinner", items);
@@ -316,7 +323,7 @@ test("readWeek keeps only the menu items that saveSlot would accept", async () =
 test("readWeek keeps at most 20 menu items per slot", async () => {
   const items = [];
   for (let index = 0; index < 25; index++) {
-    const recipe = await recipes.create(`Recipe ${index}`);
+    const recipe = await recipes.create({ name: `Recipe ${index}` });
     items.push({ recipeId: recipe.id, servings: 1 });
   }
   await writeWeekFile(WEEK, JSON.stringify({ sun: { dinner: { items } } }));

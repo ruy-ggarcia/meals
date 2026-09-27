@@ -17,7 +17,7 @@ export function createApp({ recipes, weeks }) {
   // leaves req.body undefined when there is no JSON body. The stores
   // validate what they get and throw the errors that the handler below maps.
   app.post("/api/recipes", async (req, res) => {
-    res.status(201).json(await recipes.create(req.body?.name));
+    res.status(201).json(await recipes.create(req.body));
   });
 
   app.patch("/api/recipes/:id", async (req, res) => {
