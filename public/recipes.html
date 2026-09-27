@@ -42,5 +42,38 @@
         <ul id="archived-recipes" class="recipe-list" aria-label="Archived recipes"></ul>
       </details>
     </main>
+
+    <!-- Recipe editor. Filled and opened by recipe-editor.js. -->
+    <dialog id="recipe-editor" class="dialog" aria-labelledby="recipe-editor-title">
+      <div class="dialog-body">
+        <!-- biome-ignore lint/a11y/useHeadingContent: recipe-editor.js sets the text when it opens. -->
+        <h2 id="recipe-editor-title" class="dialog-title" tabindex="-1"></h2>
+        <label class="field-label" for="recipe-name">Name</label>
+        <input id="recipe-name" class="name-field" type="text" autocomplete="off">
+        <p class="field-message name-message" role="status"></p>
+        <h3 class="dialog-subtitle">Ingredients (per serving)</h3>
+        <p class="hint no-ingredients">No ingredients yet.</p>
+        <ul class="ingredient-rows" aria-label="Ingredients in this recipe"></ul>
+        <label class="field-label" for="ingredient-search">Add ingredient</label>
+        <input
+          id="ingredient-search"
+          class="option-search"
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="ingredient-options"
+          aria-expanded="false"
+          autocomplete="off"
+        >
+        <!-- biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the combobox pattern needs a listbox. -->
+        <ul id="ingredient-options" class="options" role="listbox" aria-label="Ingredients" hidden></ul>
+        <p class="no-match" hidden>No matching ingredients. To add ingredients, use the Ingredients page.</p>
+        <p class="field-message save-message" role="status"></p>
+        <div class="dialog-actions">
+          <button type="button" class="cancel">Cancel</button>
+          <button type="button" class="done">Done</button>
+        </div>
+      </div>
+    </dialog>
   </body>
 </html>

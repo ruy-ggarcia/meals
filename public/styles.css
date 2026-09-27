@@ -278,6 +278,61 @@ button {
   gap: 0.5rem;
 }
 
+/* ---------- Recipe and ingredient editors ---------- */
+
+.field-label {
+  font-weight: 600;
+}
+
+.dialog-subtitle {
+  margin: 0.5rem 0 0;
+  font-size: 1rem;
+}
+
+.name-field,
+.quantity-field,
+.unit-field {
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  font: inherit;
+}
+
+.name-field {
+  width: 100%;
+}
+
+.ingredient-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ingredient-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.ingredient-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quantity-field {
+  width: 5.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  min-width: 2rem;
+}
+
 /* ---------- Recipe book ---------- */
 
 .recipe-book {
@@ -572,6 +627,13 @@ button {
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
   .option-search {
+    font-size: 16px;
+  }
+
+  /* >= 16px prevents iOS Safari from zooming in on focus. */
+  .name-field,
+  .quantity-field,
+  .unit-field {
     font-size: 16px;
   }
 
