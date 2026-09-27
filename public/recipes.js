@@ -66,6 +66,13 @@ function conflictText(holder) {
     : `${quoted(holder.name)} already exists.`;
 }
 
+// Clears every row message and re-renders, so a new request starts without
+// a stale error from an earlier one.
+function resetMessages() {
+  rowMessages.clear();
+  render();
+}
+
 // The control that started a request is disabled while the request runs, so
 // its focus falls to <body>. Anything else means the user moved on, and a
 // finished request must not steal focus back.
@@ -171,8 +178,7 @@ function setFormBusy(isBusy) {
 async function addRecipe() {
   setFormBusy(true);
   showFormMessage();
-  rowMessages.clear();
-  render();
+  resetMessages();
   try {
     const { status, body } = await sendJson("POST", "/api/recipes", { name: nameField.value });
     if (status === 201) {
@@ -202,8 +208,7 @@ async function addRecipe() {
 
 async function restoreFromForm(id, name) {
   setFormBusy(true);
-  rowMessages.clear();
-  render();
+  resetMessages();
   try {
     const { status, body } = await sendJson("PATCH", recipeUrl(id), { archived: false });
     if (status !== 200) throw new Error(`HTTP ${status}`);
@@ -266,8 +271,7 @@ function renameControls(recipe, rename, item) {
 
 function startRename(id) {
   renaming.set(id, { value: recipeById(id).name, message: "", busy: false });
-  rowMessages.clear();
-  render();
+  resetMessages();
   const field = rowElement(id).querySelector(".rename-field");
   field.focus();
   field.select();
@@ -288,8 +292,7 @@ async function saveRename(id) {
   }
   rename.busy = true;
   rename.message = "";
-  rowMessages.clear();
-  render();
+  resetMessages();
   let message = "Couldn't rename the recipe. Try again.";
   try {
     const { status, body } = await sendJson("PATCH", recipeUrl(id), { name: rename.value });
@@ -327,8 +330,7 @@ async function setArchived(id, archive) {
   const list = archive ? activeList : archivedList;
   const index = [...list.children].findIndex((element) => element.dataset.id === id);
   busy.add(id);
-  rowMessages.clear();
-  render();
+  resetMessages();
   try {
     const { status, body } = await sendJson("PATCH", recipeUrl(id), { archived: archive });
     if (status !== 200) throw new Error(`HTTP ${status}`);
