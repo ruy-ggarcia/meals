@@ -11,7 +11,7 @@ import {
   weekIdOf,
   weekStart,
 } from "./dates.js";
-import { createElement } from "./dom.js";
+import { createElement, withLoadState } from "./dom.js";
 import { getJson, REQUEST_TIMEOUT_MS } from "./http.js";
 import { describeItem } from "./menus.js";
 import { createSaves } from "./saves.js";
@@ -282,29 +282,24 @@ function setStatus(slot, state) {
 }
 
 async function loadWeek(week) {
-  loadError.hidden = true;
-  retryLoadButton.disabled = true;
-  try {
-    // The recipe book loads with every week, so recipes added on the Recipes
-    // page show up without a reload.
-    const [weekData, recipeBook] = await Promise.all([
-      getJson(`/api/weeks/${week}`),
-      getJson("/api/recipes"),
-    ]);
-    recipesById = new Map(recipeBook.recipes.map((recipe) => [recipe.id, recipe]));
-    fillWeek(week, weekData);
-    showDayDates(week);
-    markToday();
-    dayBar.hidden = false;
-    grid.hidden = false;
-  } catch (error) {
-    console.error("Couldn't load the meal plan:", error);
-    dayBar.hidden = true;
-    grid.hidden = true;
-    loadError.hidden = false;
-  } finally {
-    retryLoadButton.disabled = false;
-  }
+  await withLoadState({
+    loadError,
+    retryButton: retryLoadButton,
+    content: [dayBar, grid],
+    errorMessage: "Couldn't load the meal plan:",
+    run: async () => {
+      // The recipe book loads with every week, so recipes added on the
+      // Recipes page show up without a reload.
+      const [weekData, recipeBook] = await Promise.all([
+        getJson(`/api/weeks/${week}`),
+        getJson("/api/recipes"),
+      ]);
+      recipesById = new Map(recipeBook.recipes.map((recipe) => [recipe.id, recipe]));
+      fillWeek(week, weekData);
+      showDayDates(week);
+      markToday();
+    },
+  });
 }
 
 function syncHash() {

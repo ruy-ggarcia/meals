@@ -3,7 +3,7 @@
 // button confirms, Escape or Cancel discards, and leaving a field never
 // discards changes.
 
-import { createElement } from "./dom.js";
+import { createElement, withLoadState } from "./dom.js";
 import { getJson, sendJson } from "./http.js";
 import { filterRecipes, sortRecipes } from "./recipe-search.js";
 
@@ -146,19 +146,16 @@ function row(recipe) {
 // ---------- Loading ----------
 
 async function load() {
-  loadError.hidden = true;
-  retryLoadButton.disabled = true;
-  try {
-    recipes = (await getJson("/api/recipes")).recipes;
-    render();
-    book.hidden = false;
-  } catch (error) {
-    console.error("Couldn't load the recipes:", error);
-    book.hidden = true;
-    loadError.hidden = false;
-  } finally {
-    retryLoadButton.disabled = false;
-  }
+  await withLoadState({
+    loadError,
+    retryButton: retryLoadButton,
+    content: [book],
+    errorMessage: "Couldn't load the recipes:",
+    run: async () => {
+      recipes = (await getJson("/api/recipes")).recipes;
+      render();
+    },
+  });
 }
 
 // ---------- Adding ----------
