@@ -7,6 +7,7 @@ import { ValidationError } from "../server/errors.js";
 import { createQueue } from "../server/files.js";
 import { createRecipes } from "../server/recipes.js";
 import { createWeeks, DAYS, isWeekId, MEALS } from "../server/weeks.js";
+import { blankWeek } from "./helpers.js";
 
 // Expected values are written out literally so the tests do not trust the module under test.
 const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -14,15 +15,6 @@ const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 
 const WEEK = "2026-09-21";
 const OTHER_WEEK = "2026-09-28";
-
-function blankWeek() {
-  return Object.fromEntries(
-    EXPECTED_DAYS.map((day) => [
-      day,
-      Object.fromEntries(EXPECTED_MEALS.map((meal) => [meal, { items: [] }])),
-    ]),
-  );
-}
 
 let dataDir;
 let recipes;
@@ -96,7 +88,7 @@ test("isWeekId rejects other weekdays, impossible dates, and other formats", () 
 });
 
 test("readWeek returns a complete week of empty menus when the week has no file", async () => {
-  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek());
+  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
 });
 
 test("readWeek rejects an invalid week", async () => {
@@ -142,7 +134,7 @@ test("saveSlot stores the menu and it can be read back", async () => {
   const result = await weeks.saveSlot(WEEK, "mon", "lunch", items);
   assert.deepEqual(result, { week: WEEK, day: "mon", meal: "lunch", items });
 
-  const expected = blankWeek();
+  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
   expected.mon.lunch = { items };
   assert.deepEqual(await weeks.readWeek(WEEK), expected);
   // A brand-new store over the same directory sees it too: it really is on disk.
@@ -168,7 +160,7 @@ test("saveSlot doesn't drop another slot's items when the recipe book on disk is
 test("saveSlot with no items empties the slot", async () => {
   await weeks.saveSlot(WEEK, "tue", "dinner", [{ recipeId: soup.id, servings: 1 }]);
   await weeks.saveSlot(WEEK, "tue", "dinner", []);
-  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek());
+  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
 });
 
 test("saveSlot writes each week to its own file and leaves other weeks unchanged", async () => {
@@ -178,17 +170,17 @@ test("saveSlot writes each week to its own file and leaves other weeks unchanged
     weeks.saveSlot(OTHER_WEEK, "wed", "lunch", items),
   ]);
 
-  const first = blankWeek();
+  const first = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
   first.tue.lunch = { items };
-  const second = blankWeek();
+  const second = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
   second.wed.lunch = { items };
   assert.deepEqual(await weeks.readWeek(WEEK), first);
   assert.deepEqual(await weeks.readWeek(OTHER_WEEK), second);
-  assert.deepEqual(await weeks.readWeek("2026-10-05"), blankWeek());
+  assert.deepEqual(await weeks.readWeek("2026-10-05"), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
 });
 
 test("concurrent saves to different slots are all kept", async () => {
-  const expected = blankWeek();
+  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
   const saves = [];
   for (const day of EXPECTED_DAYS) {
     for (const [index, meal] of EXPECTED_MEALS.entries()) {
@@ -303,7 +295,7 @@ test("readWeek keeps only the menu items that saveSlot would accept", async () =
     }),
   );
 
-  const expected = blankWeek();
+  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
   expected.mon.breakfast = {
     items: [
       { recipeId: soup.id, servings: 1 },
@@ -352,7 +344,7 @@ test("the free-text weeks of earlier versions are never read or changed", async 
   await writeFile(legacyWeek, legacyText);
   await writeFile(legacySingleWeek, legacyText);
 
-  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek());
+  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
   await weeks.saveSlot(WEEK, "mon", "lunch", [{ recipeId: soup.id, servings: 1 }]);
 
   assert.equal(await readFile(legacyWeek, "utf8"), legacyText);

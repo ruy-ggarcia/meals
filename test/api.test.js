@@ -8,6 +8,7 @@ import { createApp } from "../server/app.js";
 import { createQueue } from "../server/files.js";
 import { createRecipes } from "../server/recipes.js";
 import { createWeeks } from "../server/weeks.js";
+import { blankWeek } from "./helpers.js";
 
 const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
@@ -16,15 +17,6 @@ const WEEK = "2026-09-21";
 const OTHER_WEEK = "2026-09-28";
 // A Tuesday, an impossible date that JavaScript rolls over to a Monday, and non-dates.
 const INVALID_WEEKS = ["2026-09-22", "2026-02-30", "2026-9-21", "hello"];
-
-function blankWeek() {
-  return Object.fromEntries(
-    EXPECTED_DAYS.map((day) => [
-      day,
-      Object.fromEntries(EXPECTED_MEALS.map((meal) => [meal, { items: [] }])),
-    ]),
-  );
-}
 
 let dataDir;
 let app;
@@ -232,7 +224,7 @@ test("GET /api/weeks/WEEK returns 200 with a complete week of empty menus", asyn
 
   assert.equal(res.status, 200);
   assert.match(res.headers["content-type"], /application\/json/);
-  assert.deepEqual(res.body, blankWeek());
+  assert.deepEqual(res.body, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
 });
 
 test("PUT a valid menu returns 200 with the saved slot and a later GET reflects it", async () => {
@@ -249,7 +241,7 @@ test("PUT a valid menu returns 200 with the saved slot and a later GET reflects 
   assert.deepEqual(put.body, { week: WEEK, day: "wed", meal: "lunch", items });
 
   const get = await request(app).get(`/api/weeks/${WEEK}`);
-  const expected = blankWeek();
+  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
   expected.wed.lunch = { items };
   assert.deepEqual(get.body, expected);
 });
@@ -262,7 +254,7 @@ test("a PUT in one week doesn't change another week", async () => {
 
   const get = await request(app).get(`/api/weeks/${OTHER_WEEK}`);
   assert.equal(get.status, 200);
-  assert.deepEqual(get.body, blankWeek());
+  assert.deepEqual(get.body, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
 });
 
 test("PUT accepts an empty menu (clearing a slot)", async () => {
@@ -348,7 +340,7 @@ test("PUT with an invalid menu returns 400 JSON and saves nothing", async () => 
   assertJsonError(await request(app).put(url), 400, "no body at all");
 
   const get = await request(app).get(`/api/weeks/${WEEK}`);
-  assert.deepEqual(get.body, blankWeek());
+  assert.deepEqual(get.body, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
 });
 
 test("PUT with a malformed JSON body returns 400 JSON", async () => {

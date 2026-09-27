@@ -5,19 +5,11 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { blankWeek } from "./helpers.js";
 
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 const WEEK = "2026-09-21"; // a Monday
-
-function blankWeekData() {
-  const data = {};
-  for (const day of DAYS) {
-    data[day] = {};
-    for (const meal of MEALS) data[day][meal] = { items: [] };
-  }
-  return data;
-}
 
 function withSlot(weekData, day, meal, items) {
   return { ...weekData, [day]: { ...weekData[day], [meal]: { items } } };
@@ -26,7 +18,7 @@ function withSlot(weekData, day, meal, items) {
 let page;
 let server;
 
-async function openWeek({ week = WEEK, weekData = blankWeekData(), recipes = [] } = {}) {
+async function openWeek({ week = WEEK, weekData = blankWeek(DAYS, MEALS), recipes = [] } = {}) {
   server = fakeFetch();
   page = await loadPage({
     html: "index.html",
@@ -55,7 +47,7 @@ afterEach(async () => {
 });
 
 test("a loaded week renders NAME × SERVINGS lines, or + Add when the slot is empty", async () => {
-  const weekData = withSlot(blankWeekData(), "mon", "lunch", [
+  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "soup", servings: 1 },
     { recipeId: "salad", servings: 1.5 },
   ]);
@@ -78,7 +70,9 @@ test("a loaded week renders NAME × SERVINGS lines, or + Add when the slot is em
 });
 
 test("a menu item whose recipe isn't in the recipe book falls back to Unknown recipe", async () => {
-  const weekData = withSlot(blankWeekData(), "mon", "lunch", [{ recipeId: "gone", servings: 2 }]);
+  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
+    { recipeId: "gone", servings: 2 },
+  ]);
   await openWeek({ weekData, recipes: [] });
 
   assert.equal(slotButton("mon", "lunch").querySelector("span").textContent, "Unknown recipe × 2");
@@ -92,7 +86,7 @@ test("the shown week stays in sync with the hash", async () => {
   const nextWeek = "2026-09-28";
   page.window.location.hash = `#${nextWeek}`; // a real hash edit, as in the address bar
   await waitFor(() => server.requestFor("GET", `/api/weeks/${nextWeek}`) !== undefined);
-  server.requestFor("GET", `/api/weeks/${nextWeek}`).respond(200, blankWeekData());
+  server.requestFor("GET", `/api/weeks/${nextWeek}`).respond(200, blankWeek(DAYS, MEALS));
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   await tick();
 
@@ -101,7 +95,9 @@ test("the shown week stays in sync with the hash", async () => {
 });
 
 test("leaving a week with an unsaved slot asks confirm; cancel keeps the week", async () => {
-  const weekData = withSlot(blankWeekData(), "mon", "lunch", [{ recipeId: "soup", servings: 1 }]);
+  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
+    { recipeId: "soup", servings: 1 },
+  ]);
   await openWeek({
     weekData,
     recipes: [
@@ -140,7 +136,9 @@ test("leaving a week with an unsaved slot asks confirm; cancel keeps the week", 
 });
 
 test("leaving a week with an unsaved slot asks confirm; OK shows the last saved menu", async () => {
-  const weekData = withSlot(blankWeekData(), "mon", "lunch", [{ recipeId: "soup", servings: 1 }]);
+  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
+    { recipeId: "soup", servings: 1 },
+  ]);
   await openWeek({
     weekData,
     recipes: [
@@ -176,7 +174,7 @@ test("leaving a week with an unsaved slot asks confirm; OK shows the last saved 
     ["Soup × 1"],
   );
 
-  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeekData());
+  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek(DAYS, MEALS));
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   await tick();
 });
@@ -196,7 +194,7 @@ test("a hash change while the editor is open is undone", async () => {
 
 test("beforeunload calls preventDefault() only while the editor has changes", async () => {
   await openWeek({
-    weekData: blankWeekData(),
+    weekData: blankWeek(DAYS, MEALS),
     recipes: [{ id: "soup", name: "Soup", archived: false }],
   });
   slotButton("mon", "lunch").click();
@@ -242,7 +240,7 @@ test("a load failure shows the error, and Retry reloads", async () => {
   );
   const weekRequests = server.requests.filter((request) => request.url === `/api/weeks/${WEEK}`);
   assert.equal(weekRequests.length, 2, "Retry sends a new request");
-  weekRequests[1].respond(200, blankWeekData());
+  weekRequests[1].respond(200, blankWeek(DAYS, MEALS));
   server.requests
     .filter((request) => request.url === "/api/recipes")[1]
     .respond(200, {
