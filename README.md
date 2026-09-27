@@ -1,9 +1,9 @@
 # Meals
 
-Meals is a web app for planning a family's weekly menu. It shows one week at a
-time as a grid of 7 days by 5 meals (breakfast, morning snack, lunch,
-afternoon snack, and dinner). Each slot of the grid holds a menu: a list of
-recipes from the recipe book, each with a number of servings.
+Meals is a web app for planning a family's meals week by week. It shows one
+week at a time as a grid of 7 days by 5 meals (breakfast, morning snack,
+lunch, afternoon snack, and dinner). Each slot of the grid holds a menu: a
+list of recipes from the recipe book, each with a number of servings.
 
 The app runs on a computer at home. Any device on the same network, desktop or
 mobile, can use it from a browser.
@@ -72,7 +72,7 @@ To open the port, run the command for your firewall:
   sudo firewall-cmd --add-port=3000/tcp
   ```
 
-## Use the app
+## Navigate the meal plan
 
 - **Desktop** (windows 768 px wide or wider): the full grid shows one column
   per day and one row per meal. Each day header shows the weekday and the day
@@ -124,8 +124,8 @@ Below each slot, an icon shows the save status:
 | Green check mark | The slot is saved. The icon disappears after a few seconds. |
 | Red cross        | The save failed. The slot keeps your menu.                   |
 
-To retry a failed save, click the red cross. To see what an icon means, hover
-over it.
+To retry a failed save, select the red cross. To see what an icon means,
+hover over it.
 
 Before the app changes weeks, it waits for pending saves. If a slot couldn't
 be saved, the app asks whether to leave the week anyway. To stay and retry the
@@ -236,9 +236,8 @@ Before you commit, check your changes:
 [Biome](https://biomejs.dev) checks the style of JavaScript, CSS, and JSON
 files. The settings are in `biome.json`.
 
-Some behavior needs a person with a real browser, such as focus, layout on a
-phone, and saves when the page is hidden. Before you merge a change to the
-user interface, run the checks in `docs/manual-test-plan.md`.
+Before you merge a change to the user interface, also run the
+[manual test plan](docs/manual-test-plan.md).
 
 ## Continuous integration
 
@@ -246,8 +245,8 @@ GitHub Actions runs `npm run lint` and `npm test` with Node.js 22 on every pull
 request and on every push to `main`. The workflow is in
 `.github/workflows/ci.yml`.
 
-Changes reach `main` only through pull requests that pass the `ci` check, and
-each pull request is integrated with a merge commit.
+Changes reach `main` only through pull requests that pass the `ci` check.
+Each pull request merges with a merge commit.
 
 ## Project structure
 
