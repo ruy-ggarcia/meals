@@ -24,3 +24,8 @@ export class NameConflictError extends Error {
     this.entity = entity;
   }
 }
+
+/** The request conflicts with the data in another way, such as a new unit for an ingredient in use. */
+export class ConflictError extends Error {
+  name = "ConflictError";
+}
