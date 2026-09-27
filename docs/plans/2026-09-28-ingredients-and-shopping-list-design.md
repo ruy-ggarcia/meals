@@ -444,8 +444,9 @@ mobile. It opens a read-only modal `<dialog>`:
 - The total of an ingredient is the sum of `quantity × servings` over every
   menu item of the week whose recipe has that ingredient, rounded up to a
   whole number. The module computes in integers, hundredths of a unit times
-  half servings, and divides once at the end. So `0.56 × 12.5` gives exactly
-  `7`, not `8`.
+  half servings, and divides once at the end. So `4.4 × 12.5` gives exactly
+  `55`, not `56`, `0.56 × 12.5` gives exactly `7`, not `8`, and
+  `0.1 + 2.7 + 0.2` gives exactly `3`, not `4`.
 - If any recipe in the week's menus has no ingredients, a block with a
   warning icon follows the list: `Not included: these recipes have no
   ingredients.` It lists each such recipe once, sorted from A to Z, with the
@@ -464,8 +465,10 @@ These modules run in Node.js tests:
 - `public/quantities.js`: new. Parses a quantity typed with `.` or `,`,
   checks the quantity rules, formats a quantity, and holds the integer
   arithmetic of the shopping list.
-- `public/shopping-list.js`: new. `shoppingList(week, recipes, ingredients)`
-  returns `{ lines, recipesWithoutIngredients }`. Each line is
+- `public/shopping-list.js`: new. `shoppingList(slots, recipes, ingredients)`,
+  where `slots` lists the week's slots in day and meal order as
+  `{ day, meal, menu }`, returns `{ lines, recipesWithoutIngredients }`. Each
+  line is
   `{ ingredientId, name, unit, total }`. Each recipe without ingredients is
   `{ recipeId, name, slots }`, where each slot is `{ day, meal }`.
 - `public/name-search.js`: replaces `public/recipe-search.js`.
@@ -482,7 +485,6 @@ Each change follows test-driven development: a failing test first. A green
 | File | Covers |
 |------|--------|
 | `test/api.test.js` | Every new route, status code, and validation rule in this design. |
-| `test/catalog-list.test.js` | Search, archived lists, archiving and restoring, and focus, with happy-dom. |
 | `test/ingredient-editor.test.js` | The ingredient editor, including the disabled unit. |
 | `test/ingredients-page.test.js` | Loading, adding, the unit choice, conflicts, and editing. |
 | `test/ingredients.test.js` | Name cleanup, unique name keys, units, archiving, and the in-use rule. |
@@ -490,7 +492,7 @@ Each change follows test-driven development: a failing test first. A green
 | `test/name-search.test.js` | Replaces `test/recipe-search.test.js`. |
 | `test/quantities.test.js` | Parsing with `.` and `,`, limits, two decimals, and the integer arithmetic. |
 | `test/recipe-editor.test.js` | New and existing recipes, validation, adding and removing ingredients, archived ingredients, errors, and the interaction rules. |
-| `test/recipes-page.test.js` | Loading both catalogs, **New recipe**, **Edit**, and the warning icon. Rename tests go away. |
+| `test/recipes-page.test.js` | Loading both catalogs, **New recipe**, **Edit**, the warning icon, and the shared list logic in `catalog-list.js`. Rename tests go away. |
 | `test/recipes.test.js` | Ingredients on create and update, normalized reads, and writes that keep other recipes' ingredients. |
 | `test/shopping-list.test.js` | Totals, rounding up, floating-point cases, sorting, archived ingredients, and recipes without ingredients. |
 
