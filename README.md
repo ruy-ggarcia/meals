@@ -254,33 +254,35 @@ each pull request is integrated with a merge commit.
 ```none
 .github/
   workflows/
-    ci.yml   # Continuous integration: lint and tests.
+    ci.yml              # Continuous integration: lint and tests.
 docs/
-  glossary.md          # The terms the app uses.
-  manual-test-plan.md  # Checks that need a person with a browser.
-public/      # User interface: HTML, CSS, and JavaScript, with no framework or build step.
-  app.js     # Meal plan page: grid, week changes, and saves.
-  dates.js   # Date helpers with no DOM access, so tests run them in Node.js.
-  dom.js     # DOM helpers shared by the pages.
-  http.js    # Requests with a timeout, with no DOM access.
-  index.html # Meal plan page.
-  menus.js   # Menu functions with no DOM access.
-  recipe-search.js # Recipe name matching and sorting, with no DOM access.
-  recipes.html # Recipe book page.
-  recipes.js # Recipe book page logic.
-  saves.js   # Save logic with no DOM access, so tests run it in Node.js.
-  slot-editor.js # The slot editor dialog.
+  glossary.md           # The terms the app uses.
+  manual-test-plan.md   # Checks that need a person with a browser.
+public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
+  app.js           # Meal plan page: grid, week changes, and saves.
+  dates.js         # Date helpers.*
+  dom.js           # DOM helpers shared by both pages.
+  http.js          # Requests with a timeout.*
+  index.html       # Meal plan page.
+  menus.js         # Menu functions.*
+  recipe-search.js # Recipe name matching and sorting.*
+  recipes.html     # Recipe book page.
+  recipes.js       # Recipe book page logic.
+  saves.js         # Save logic.*
+  slot-editor.js   # The slot editor dialog.
   styles.css
 server/
-  app.js     # HTTP API (Express) and static files.
-  errors.js  # Errors for bad input, which app.js maps to HTTP statuses.
-  files.js   # Reads and writes JSON files. The only module that touches disk.
-  index.js   # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
-  recipes.js # The recipe book: unique names, renaming, and archiving.
-  weeks.js   # Weeks and the menu of each slot.
-test/        # Tests that use node:test and supertest.
-biome.json   # Lint and format settings.
+  app.js           # HTTP API (Express) and static files.
+  errors.js        # Errors for bad input, which app.js maps to HTTP statuses.
+  files.js         # JSON files and the write queue. The only module that touches disk.
+  index.js         # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
+  recipes.js       # The recipe book: unique names, renaming, and archiving.
+  weeks.js         # Weeks and the menu of each slot.
+test/              # Tests: node:test, with supertest for the API and happy-dom for the pages.
+biome.json         # Lint and format settings.
 ```
+
+`*` No DOM access, so tests import the module directly in Node.js.
 
 ## API reference
 
