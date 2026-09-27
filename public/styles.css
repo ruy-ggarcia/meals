@@ -1,3 +1,11 @@
+:root {
+  --accent: #2e7d32;
+  --border: #ccc;
+  --border-light: #ddd;
+  --error: #8a1c14;
+  --bg: #f6f6f6;
+}
+
 *,
 *::before,
 *::after {
@@ -14,7 +22,7 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: #222;
-  background: #f6f6f6;
+  background: var(--bg);
 }
 
 /* Tapping a button twice quickly must not zoom the page (iOS Safari). Pinch
@@ -40,7 +48,7 @@ button {
 }
 
 .page-link {
-  color: #2e7d32;
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -52,9 +60,10 @@ button {
 }
 
 .week-bar button,
-.recipe-book button {
+.recipe-book button,
+.slot-editor button {
   padding: 0.4rem 0.8rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 0.4rem;
   background: #fff;
   font: inherit;
@@ -79,7 +88,7 @@ button {
   border: 1px solid #f5c2c0;
   border-radius: 0.4rem;
   background: #fdecea;
-  color: #8a1c14;
+  color: var(--error);
 }
 
 .load-error button {
@@ -102,7 +111,7 @@ button {
   width: 100%;
   min-height: 5rem;
   padding: 0.4rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 0.3rem;
   background: #fff;
   color: inherit;
@@ -135,7 +144,7 @@ button {
 }
 
 .status[data-state="saved"] {
-  color: #2e7d32;
+  color: var(--accent);
 }
 
 .status[data-state="error"] {
@@ -217,29 +226,21 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.slot-editor button {
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #ccc;
-  border-radius: 0.4rem;
-  background: #fff;
-  font: inherit;
-}
-
 .slot-editor .step {
   min-width: 2.25rem;
   padding: 0.4rem 0;
 }
 
 .slot-editor .done {
-  border-color: #2e7d32;
-  background: #2e7d32;
+  border-color: var(--accent);
+  background: var(--accent);
   color: #fff;
 }
 
 .recipe-search {
   width: 100%;
   padding: 0.4rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 0.3rem;
   font: inherit;
 }
@@ -294,14 +295,14 @@ button {
   width: 100%;
   min-width: 0;
   padding: 0.4rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 0.3rem;
   font: inherit;
 }
 
 .recipe-book .primary {
-  border-color: #2e7d32;
-  background: #2e7d32;
+  border-color: var(--accent);
+  background: var(--accent);
   color: #fff;
 }
 
@@ -320,7 +321,7 @@ button {
 .field-message,
 .row-message {
   margin: 0;
-  color: #8a1c14;
+  color: var(--error);
 }
 
 .field-message:empty {
@@ -344,7 +345,7 @@ button {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .recipe-row .recipe-name {
@@ -408,7 +409,7 @@ button {
     overflow: auto;
     grid-template-columns: 8rem repeat(7, minmax(9rem, 1fr));
     align-content: start;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--border-light);
     background: #fff;
   }
 
@@ -416,8 +417,8 @@ button {
   .day-header,
   .meal-header {
     padding: 0.5rem;
-    border-right: 1px solid #ddd;
-    border-bottom: 1px solid #ddd;
+    border-right: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
     background: #eee;
     font-weight: 600;
   }
@@ -442,12 +443,12 @@ button {
 
   .slot {
     padding: 0.25rem;
-    border-right: 1px solid #ddd;
-    border-bottom: 1px solid #ddd;
+    border-right: 1px solid var(--border-light);
+    border-bottom: 1px solid var(--border-light);
   }
 
   .day-header[data-today] {
-    background: #2e7d32;
+    background: var(--accent);
     color: #fff;
   }
 
@@ -480,13 +481,13 @@ button {
     top: 0;
     z-index: 1;
     padding: 0.5rem 1rem;
-    background: #f6f6f6;
+    background: var(--bg);
   }
 
   .day-bar button {
     flex: 1;
     padding: 0.6rem 0;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     border-radius: 0.4rem;
     background: #fff;
     font: inherit;
@@ -498,8 +499,8 @@ button {
   }
 
   .day-bar button[aria-pressed="true"] {
-    border-color: #2e7d32;
-    background: #2e7d32;
+    border-color: var(--accent);
+    background: var(--accent);
     color: #fff;
   }
 
@@ -510,8 +511,8 @@ button {
 
   /* Today: accent outline. Selected: filled accent. Both: filled with an inner white ring. */
   .day-bar button[data-today] {
-    border-color: #2e7d32;
-    box-shadow: inset 0 0 0 1px #2e7d32;
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
   }
 
   .day-bar button[data-today][aria-pressed="true"] {
