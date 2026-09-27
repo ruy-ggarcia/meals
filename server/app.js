@@ -1,16 +1,20 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { NameConflictError, NotFoundError, ValidationError } from "./errors.js";
+import { ConflictError, NameConflictError, NotFoundError, ValidationError } from "./errors.js";
 import { DAYS, isWeekId, MEALS } from "./weeks.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
-export function createApp({ recipes, weeks }) {
+export function createApp({ ingredients, recipes, weeks }) {
   const app = express();
   app.use(express.json());
 
   app.get("/api/recipes", async (_req, res) => {
     res.json({ recipes: await recipes.list() });
+  });
+
+  app.get("/api/ingredients", async (_req, res) => {
+    res.json({ ingredients: await ingredients.list() });
   });
 
   // From here on, every route that passes req.body to a store: Express 5
@@ -22,6 +26,14 @@ export function createApp({ recipes, weeks }) {
 
   app.patch("/api/recipes/:id", async (req, res) => {
     res.json(await recipes.update(req.params.id, req.body));
+  });
+
+  app.post("/api/ingredients", async (req, res) => {
+    res.status(201).json(await ingredients.create(req.body));
+  });
+
+  app.patch("/api/ingredients/:id", async (req, res) => {
+    res.json(await ingredients.update(req.params.id, req.body));
   });
 
   app.get("/api/weeks/:week", async (req, res) => {
@@ -63,6 +75,10 @@ export function createApp({ recipes, weeks }) {
     }
     if (err instanceof NameConflictError) {
       res.status(409).json({ error: err.message, [err.kind]: err.entity });
+      return;
+    }
+    if (err instanceof ConflictError) {
+      res.status(409).json({ error: err.message });
       return;
     }
     const status =

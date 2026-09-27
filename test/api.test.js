@@ -225,6 +225,156 @@ test("an error with a 4xx status keeps that status and its own message", async (
   assert.deepEqual(res.body, { error: "Gone" });
 });
 
+// ---------- Ingredients ----------
+
+async function addIngredient(name, unit = "g") {
+  const res = await request(app).post("/api/ingredients").send({ name, unit });
+  assert.equal(res.status, 201, name);
+  return res.body;
+}
+
+test("GET /api/ingredients returns an empty catalog at first", async () => {
+  const res = await request(app).get("/api/ingredients");
+
+  assert.equal(res.status, 200);
+  assert.match(res.headers["content-type"], /application\/json/);
+  assert.deepEqual(res.body, { ingredients: [] });
+});
+
+test("POST /api/ingredients returns 201 with the new ingredient, and GET lists them all from A to Z", async () => {
+  const res = await request(app).post("/api/ingredients").send({ name: " Onion ", unit: "g" });
+
+  assert.equal(res.status, 201);
+  assert.deepEqual(res.body, { id: res.body.id, name: "Onion", unit: "g", archived: false });
+
+  const egg = await addIngredient("Egg", "pcs");
+  await request(app).patch(`/api/ingredients/${egg.id}`).send({ archived: true });
+  const get = await request(app).get("/api/ingredients");
+  assert.deepEqual(get.body, { ingredients: [{ ...egg, archived: true }, res.body] });
+});
+
+test("POST /api/ingredients with an invalid body returns 400 JSON and stores nothing", async () => {
+  const bodies = [
+    {},
+    { name: "Onion" },
+    { name: "Onion", unit: "kg" },
+    { name: "", unit: "g" },
+    { name: "Onion", unit: "g", archived: false },
+  ];
+  for (const body of bodies) {
+    assertJsonError(
+      await request(app).post("/api/ingredients").send(body),
+      400,
+      JSON.stringify(body),
+    );
+  }
+  assertJsonError(await request(app).post("/api/ingredients"), 400, "no body");
+  assert.deepEqual((await request(app).get("/api/ingredients")).body, { ingredients: [] });
+});
+
+test("POST /api/ingredients with a taken name returns 409 with that ingredient", async () => {
+  const onion = await addIngredient("Onion");
+
+  const res = await request(app).post("/api/ingredients").send({ name: "ONION", unit: "pcs" });
+
+  assertJsonError(res, 409, "taken name");
+  assert.deepEqual(res.body.ingredient, onion);
+  assert.equal(res.body.recipe, undefined);
+});
+
+test("PATCH /api/ingredients/ID renames, changes the unit, and archives", async () => {
+  const milk = await addIngredient("Milk");
+
+  const both = await request(app)
+    .patch(`/api/ingredients/${milk.id}`)
+    .send({ name: "Whole milk", unit: "ml" });
+  assert.equal(both.status, 200);
+  assert.deepEqual(both.body, { ...milk, name: "Whole milk", unit: "ml" });
+
+  const archived = await request(app).patch(`/api/ingredients/${milk.id}`).send({ archived: true });
+  assert.deepEqual(archived.body, { ...both.body, archived: true });
+});
+
+test("PATCH /api/ingredients/ID returns 400, 404, and 409 JSON errors", async () => {
+  const onion = await addIngredient("Onion");
+  const egg = await addIngredient("Egg", "pcs");
+
+  assertJsonError(
+    await request(app).patch(`/api/ingredients/${egg.id}`).send({ archived: true, unit: "g" }),
+    400,
+    "archived with unit",
+  );
+  assertJsonError(
+    await request(app).patch("/api/ingredients/no-such-id").send({ archived: true }),
+    404,
+    "unknown ID",
+  );
+  const conflict = await request(app).patch(`/api/ingredients/${egg.id}`).send({ name: "onion" });
+  assertJsonError(conflict, 409, "taken name");
+  assert.deepEqual(conflict.body.ingredient, onion);
+});
+
+test("PATCH /api/ingredients/ID with a new unit returns 409 while a recipe uses it", async () => {
+  const onion = await addIngredient("Onion");
+  await request(app)
+    .post("/api/recipes")
+    .send({ name: "Soup", ingredients: [{ ingredientId: onion.id, quantity: 100 }] });
+
+  const res = await request(app).patch(`/api/ingredients/${onion.id}`).send({ unit: "pcs" });
+
+  assertJsonError(res, 409, "unit in use");
+  assert.deepEqual(Object.keys(res.body), ["error"]);
+  assert.equal((await request(app).get("/api/ingredients")).body.ingredients[0].unit, "g");
+});
+
+test("POST and PATCH /api/recipes save ingredients, and GET returns them", async () => {
+  const onion = await addIngredient("Onion");
+  const egg = await addIngredient("Egg", "pcs");
+
+  const created = await request(app)
+    .post("/api/recipes")
+    .send({ name: "Omelette", ingredients: [{ ingredientId: egg.id, quantity: 2 }] });
+  assert.equal(created.status, 201);
+  assert.deepEqual(created.body.ingredients, [{ ingredientId: egg.id, quantity: 2 }]);
+
+  const updated = await request(app)
+    .patch(`/api/recipes/${created.body.id}`)
+    .send({
+      name: "Onion omelette",
+      ingredients: [
+        { ingredientId: egg.id, quantity: 2 },
+        { ingredientId: onion.id, quantity: 50.5 },
+      ],
+    });
+  assert.equal(updated.status, 200);
+  assert.deepEqual((await request(app).get("/api/recipes")).body, { recipes: [updated.body] });
+});
+
+test("POST /api/recipes with invalid or unknown ingredients returns 400 JSON", async () => {
+  const onion = await addIngredient("Onion");
+  const bodies = [
+    { name: "Soup", ingredients: "Onion" },
+    { name: "Soup", ingredients: [{ ingredientId: onion.id, quantity: 1.255 }] },
+    { name: "Soup", ingredients: [{ ingredientId: "gone", quantity: 1 }] },
+  ];
+
+  for (const body of bodies) {
+    assertJsonError(await request(app).post("/api/recipes").send(body), 400, JSON.stringify(body));
+  }
+});
+
+test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes return 500", async (t) => {
+  t.mock.method(console, "error", () => {});
+  await mkdir(path.join(dataDir, "v2"), { recursive: true });
+  await writeFile(path.join(dataDir, "v2", "ingredients.json"), "{ not json");
+
+  for (const url of ["/api/ingredients", "/api/recipes"]) {
+    const res = await request(app).get(url);
+    assert.equal(res.status, 500, url);
+    assert.deepEqual(res.body, { error: "Internal server error" });
+  }
+});
+
 // ---------- Weeks ----------
 
 test("GET /api/weeks/WEEK returns 200 with a complete week of empty menus", async () => {
