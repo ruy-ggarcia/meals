@@ -3,6 +3,7 @@
   --border: #ccc;
   --border-light: #ddd;
   --error: #8a1c14;
+  --warning: #8a5a00;
   --bg: #f6f6f6;
 }
 
@@ -60,7 +61,7 @@ button {
 }
 
 .week-bar button,
-.recipe-book button,
+.catalog button,
 .dialog button {
   padding: 0.4rem 0.8rem;
   border: 1px solid var(--border);
@@ -333,9 +334,9 @@ button {
   min-width: 2rem;
 }
 
-/* ---------- Recipe book ---------- */
+/* ---------- Recipe book and ingredient catalog ---------- */
 
-.recipe-book {
+.catalog {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -343,11 +344,11 @@ button {
   padding: 0 1rem 1rem;
 }
 
-.recipe-book label {
+.catalog label {
   font-weight: 600;
 }
 
-.recipe-book input {
+.catalog input {
   width: 100%;
   min-width: 0;
   padding: 0.4rem;
@@ -356,13 +357,13 @@ button {
   font: inherit;
 }
 
-.recipe-book .primary {
+.catalog .primary {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
 }
 
-.new-recipe {
+.new-entry {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -389,13 +390,13 @@ button {
   color: #666;
 }
 
-.recipe-list {
+.catalog-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.recipe-row {
+.catalog-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -404,15 +405,43 @@ button {
   border-bottom: 1px solid var(--border-light);
 }
 
-.recipe-row .recipe-name {
+.entry {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.entry-name {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.recipe-row .rename-field {
-  flex: 1;
-  width: auto;
+.entry-unit {
+  color: #666;
+}
+
+.new-entry-button {
+  align-self: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.warning-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--warning);
+}
+
+.warning-icon svg {
+  width: 1.1em;
+  height: 1.1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .row-actions {
@@ -441,7 +470,7 @@ button {
   }
 
   /* The body is a fixed-height column on desktop, so the recipe book scrolls. */
-  .recipe-book {
+  .catalog {
     flex: 1;
     min-height: 0;
     overflow: auto;
@@ -638,7 +667,7 @@ button {
   }
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .recipe-book input {
+  .catalog input {
     font-size: 16px;
   }
 }

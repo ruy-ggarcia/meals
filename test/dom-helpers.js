@@ -26,8 +26,7 @@
 // Known gap vs. real browsers: happy-dom's synthetic `element.click()` never
 // moves focus, unlike a real click, which focuses a focusable target before
 // its "click" event fires. A test of code that depends on that focus move
-// (for example, `recipes.js`'s rename row closing on "focusout") calls
-// `element.focus()` itself right before `element.click()`.
+// calls `element.focus()` itself right before `element.click()`.
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";

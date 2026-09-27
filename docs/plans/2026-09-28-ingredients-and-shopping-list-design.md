@@ -268,7 +268,7 @@ editing a recipe happen in the recipe editor.
 │                                                      │
 │ Search: [                              ]             │
 │                                                      │
-│ Burritos  ⚠                        [Edit] [Archive]  │
+│ Burritos                         ⚠ [Edit] [Archive]  │
 │ Gnocchi carbonara                  [Edit] [Archive]  │
 │                                                      │
 │ ▸ Archived (1)                                       │
@@ -282,8 +282,9 @@ editing a recipe happen in the recipe editor.
 - **New recipe** opens the recipe editor, empty.
 - Each row, active or archived, has **Edit**. Active rows also have
   **Archive**, and archived rows have **Restore**, which work as today.
-- A recipe with no ingredients shows a warning icon after its name, with the
-  accessible name and tooltip `No ingredients`.
+- A recipe with no ingredients shows a warning icon at the right end of
+  the row, next to **Edit**, with the accessible name and tooltip
+  `No ingredients`.
 - Search, the **Archived (N)** section, and the empty recipe book work as
   today. The empty recipe book reads `No recipes yet. Add your first one with
   New recipe.`

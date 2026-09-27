@@ -20,26 +20,19 @@
       <button type="button" id="retry-load">Retry</button>
     </div>
 
-    <main id="recipe-book" class="recipe-book" hidden>
-      <form id="new-recipe" class="new-recipe">
-        <label for="new-recipe-name">New recipe</label>
-        <div class="field-row">
-          <input id="new-recipe-name" type="text" autocomplete="off">
-          <button type="submit" class="primary">Add</button>
-        </div>
-        <p id="new-recipe-message" class="field-message" role="status"></p>
-      </form>
+    <main id="recipe-book" class="catalog" hidden>
+      <button type="button" id="new-recipe" class="primary new-entry-button">New recipe</button>
 
       <label for="search">Search</label>
       <input id="search" type="search" autocomplete="off">
 
-      <p id="empty-book" class="hint" hidden>No recipes yet. Add your first one above.</p>
+      <p id="empty-book" class="hint" hidden>No recipes yet. Add your first one with New recipe.</p>
       <p id="no-matches" class="hint" hidden></p>
-      <ul id="active-recipes" class="recipe-list" aria-label="Recipes"></ul>
+      <ul id="active-recipes" class="catalog-list" aria-label="Recipes"></ul>
 
       <details id="archived" class="archived" hidden>
         <summary>Archived (<span id="archived-count">0</span>)</summary>
-        <ul id="archived-recipes" class="recipe-list" aria-label="Archived recipes"></ul>
+        <ul id="archived-recipes" class="catalog-list" aria-label="Archived recipes"></ul>
       </details>
     </main>
 

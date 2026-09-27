@@ -1,13 +1,17 @@
 // Tests for the recipe book page (public/recipes.js) against a real DOM,
 // built from the real public/recipes.html. See test/dom-helpers.js for the
-// harness and the DOM library choice.
+// harness and the DOM library choice. The recipe editor itself has its own
+// tests in test/recipe-editor.test.js.
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
 
-function recipe(id, name, archived = false) {
-  return { id, name, archived };
+const ONION = { id: "onion", name: "Onion", unit: "g", archived: false };
+const WITH_ONION = [{ ingredientId: "onion", quantity: 100 }];
+
+function recipe(id, name, archived = false, ingredients = []) {
+  return { id, name, archived, ingredients };
 }
 
 let page;
@@ -15,12 +19,13 @@ let server;
 let document;
 let window;
 
-async function openRecipesPage(recipes = []) {
+async function openRecipesPage(recipes = [], ingredients = [ONION]) {
   server = fakeFetch();
   page = await loadPage({ html: "recipes.html", script: "recipes.js", fetch: server.fetch });
   ({ document, window } = page);
   await tick();
   server.requestFor("GET", "/api/recipes").respond(200, { recipes });
+  server.requestFor("GET", "/api/ingredients").respond(200, { ingredients });
   await tick();
 }
 
@@ -35,39 +40,36 @@ function keydownOn(element, key) {
   return event;
 }
 
-function nameField() {
-  return document.getElementById("new-recipe-name");
-}
-
-function addButton() {
-  return document.querySelector('#new-recipe button[type="submit"]');
-}
-
-function formMessage() {
-  return document.getElementById("new-recipe-message");
-}
-
 function searchField() {
   return document.getElementById("search");
 }
 
 function activeNames() {
-  return [...document.querySelectorAll("#active-recipes .recipe-name")].map((el) => el.textContent);
+  return [...document.querySelectorAll("#active-recipes .entry-name")].map((el) => el.textContent);
 }
 
 function archivedNames() {
-  return [...document.querySelectorAll("#archived-recipes .recipe-name")].map(
+  return [...document.querySelectorAll("#archived-recipes .entry-name")].map(
     (el) => el.textContent,
   );
 }
 
-// Identifies a row by ID: a row in rename mode has no .recipe-name to search by.
 function rowById(id) {
-  return document.querySelector(`.recipe-row[data-id="${id}"]`);
+  return document.querySelector(`.catalog-row[data-id="${id}"]`);
 }
 
 function buttonLabeled(label) {
   return document.querySelector(`[aria-label="${label}"]`);
+}
+
+function editorDialog() {
+  return document.getElementById("recipe-editor");
+}
+
+async function respondTo(method, url, status, body) {
+  await waitFor(() => server.requestFor(method, url) !== undefined);
+  server.requestFor(method, url).respond(status, body);
+  await tick();
 }
 
 beforeEach(() => {
@@ -79,198 +81,139 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-test("adding a recipe (201) clears the field, keeps focus, and shows it in its sorted place", async () => {
-  await openRecipesPage([recipe("1", "Green salad")]);
+test("New recipe opens the editor, and the saved recipe appears in its sorted place with focus on Edit", async () => {
+  await openRecipesPage([recipe("1", "Green salad", false, WITH_ONION)]);
 
-  setValue(nameField(), "Café");
-  addButton().click();
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  server.requestFor("POST", "/api/recipes").respond(201, recipe("2", "Café"));
-  await tick();
+  document.getElementById("new-recipe").click();
 
-  assert.equal(nameField().value, "");
-  assert.equal(document.activeElement, nameField());
-  assert.deepEqual(activeNames(), ["Café", "Green salad"]); // A to Z
+  assert.equal(editorDialog().open, true);
+  assert.equal(editorDialog().querySelector(".dialog-title").textContent, "New recipe");
+  setValue(document.getElementById("recipe-name"), "Apple pie");
+  editorDialog().querySelector(".done").click();
+  await respondTo("POST", "/api/recipes", 201, recipe("2", "Apple pie"));
+
+  assert.equal(editorDialog().open, false);
+  assert.deepEqual(activeNames(), ["Apple pie", "Green salad"]);
+  assert.equal(document.activeElement, buttonLabeled("Edit Apple pie"));
 });
 
-test("adding a recipe that conflicts with an active recipe (409) shows the conflict", async () => {
-  await openRecipesPage([recipe("1", "Green salad")]);
+test("Cancel in a new recipe returns focus to New recipe and sends nothing", async () => {
+  await openRecipesPage();
+  const newRecipe = document.getElementById("new-recipe");
 
-  setValue(nameField(), "GREEN SALAD");
-  addButton().click();
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  server.requestFor("POST", "/api/recipes").respond(409, { recipe: recipe("1", "Green salad") });
-  await tick();
+  newRecipe.click();
+  editorDialog().querySelector(".cancel").click();
 
-  assert.equal(formMessage().textContent, '"Green salad" already exists.');
-  assert.equal(nameField().value, "GREEN SALAD"); // the text stays in the field
+  assert.equal(editorDialog().open, false);
+  assert.equal(document.activeElement, newRecipe);
+  assert.equal(server.requestFor("POST", "/api/recipes"), undefined);
 });
 
-test("adding a recipe that conflicts with an archived recipe (409) offers Restore it", async () => {
+test("Edit opens the recipe with its ingredients, and a save updates its row", async () => {
+  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+
+  buttonLabeled("Edit Soup").click();
+
+  assert.equal(document.getElementById("recipe-name").value, "Soup");
+  assert.equal(editorDialog().querySelector(".quantity-field").value, "100");
+  setValue(document.getElementById("recipe-name"), "Onion soup");
+  editorDialog().querySelector(".done").click();
+  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Onion soup", false, WITH_ONION));
+
+  assert.deepEqual(activeNames(), ["Onion soup"]);
+  assert.equal(document.activeElement, buttonLabeled("Edit Onion soup"));
+});
+
+test("a save whose recipe the search hides focuses Search", async () => {
+  await openRecipesPage([recipe("1", "Green salad", false, WITH_ONION)]);
+  setValue(searchField(), "sal");
+
+  buttonLabeled("Edit Green salad").click();
+  setValue(document.getElementById("recipe-name"), "Soup");
+  editorDialog().querySelector(".done").click();
+  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
+
+  assert.deepEqual(activeNames(), []);
+  assert.equal(document.activeElement, searchField());
+});
+
+test("Cancel after Edit returns focus to the recipe's Edit button", async () => {
+  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+
+  buttonLabeled("Edit Soup").click();
+  editorDialog().querySelector(".cancel").click();
+
+  assert.equal(editorDialog().open, false);
+  assert.equal(document.activeElement, buttonLabeled("Edit Soup"));
+});
+
+test("Escape after Edit returns focus to the recipe's Edit button", async () => {
+  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+
+  buttonLabeled("Edit Soup").click();
+  editorDialog().close(); // what Escape does to a modal dialog
+
+  assert.equal(document.activeElement, buttonLabeled("Edit Soup"));
+});
+
+test("archived recipes have Edit and Restore", async () => {
   await openRecipesPage([recipe("1", "Café", true)]);
 
-  setValue(nameField(), "cafe");
-  addButton().click();
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  server.requestFor("POST", "/api/recipes").respond(409, { recipe: recipe("1", "Café", true) });
-  await tick();
-
-  assert.match(formMessage().textContent, /^"Café" is archived\./);
-  const restore = buttonLabeled("Restore it: Café");
-  assert.ok(restore);
-
-  restore.click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/1") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/1").respond(200, recipe("1", "Café", false));
-  await tick();
-
-  assert.deepEqual(activeNames(), ["Café"]);
-  assert.equal(formMessage().textContent, "");
-  assert.equal(nameField().value, "");
+  assert.ok(buttonLabeled("Edit Café"));
+  assert.ok(buttonLabeled("Restore Café"));
+  assert.equal(buttonLabeled("Archive Café"), null);
 });
 
-test("adding a recipe rejected as invalid (400) shows the server's message", async () => {
-  await openRecipesPage([]);
+test("a recipe without ingredients shows a warning icon, and one with ingredients doesn't", async () => {
+  await openRecipesPage([recipe("1", "Coffee"), recipe("2", "Soup", false, WITH_ONION)]);
 
-  setValue(nameField(), "   ");
-  addButton().click();
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  server.requestFor("POST", "/api/recipes").respond(400, { error: "The name can't be empty." });
-  await tick();
-
-  assert.equal(formMessage().textContent, "The name can't be empty.");
-  assert.equal(nameField().value, "   "); // the text stays in the field
+  const icon = rowById("1").querySelector(".warning-icon");
+  assert.equal(icon.getAttribute("role"), "img");
+  assert.equal(icon.getAttribute("aria-label"), "No ingredients");
+  assert.equal(icon.title, "No ingredients");
+  assert.equal(rowById("2").querySelector(".warning-icon"), null);
 });
 
-test("a network error adding a recipe keeps the typed text", async () => {
-  await openRecipesPage([]);
+test("saving ingredients for a recipe removes its warning icon", async () => {
+  await openRecipesPage([recipe("1", "Soup")]);
 
-  setValue(nameField(), "Soup");
-  addButton().click();
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  server.requestFor("POST", "/api/recipes").fail();
-  await tick();
+  buttonLabeled("Edit Soup").click();
+  const search = editorDialog().querySelector(".option-search");
+  setValue(search, "oni");
+  keydownOn(search, "Enter");
+  setValue(editorDialog().querySelector(".quantity-field"), "100");
+  editorDialog().querySelector(".done").click();
+  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
 
-  assert.equal(formMessage().textContent, "Couldn't add the recipe. Try again.");
-  assert.equal(nameField().value, "Soup");
+  assert.equal(rowById("1").querySelector(".warning-icon"), null);
 });
 
-test("Escape clears New recipe", async () => {
-  await openRecipesPage([]);
-  setValue(nameField(), "Soup");
+test("beforeunload prevents leaving only while the editor has changes", async () => {
+  await openRecipesPage();
+  function dispatchBeforeUnload() {
+    const event = new window.Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event;
+  }
 
-  keydownOn(nameField(), "Escape");
-
-  assert.equal(nameField().value, "");
-  assert.equal(formMessage().textContent, "");
-});
-
-test("rename: Enter saves the new name", async () => {
-  await openRecipesPage([recipe("1", "Omelette")]);
-
-  buttonLabeled("Rename Omelette").click();
-  const field = rowById("1").querySelector(".rename-field");
-  setValue(field, "Tomato omelette");
-  keydownOn(field, "Enter");
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/1") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/1").respond(200, recipe("1", "Tomato omelette"));
-  await tick();
-
-  assert.deepEqual(activeNames(), ["Tomato omelette"]);
-  assert.equal(document.activeElement, buttonLabeled("Rename Tomato omelette"));
-});
-
-test("rename: the Save button saves the new name", async () => {
-  await openRecipesPage([recipe("1", "Omelette")]);
-
-  buttonLabeled("Rename Omelette").click();
-  setValue(rowById("1").querySelector(".rename-field"), "Tomato omelette");
-  buttonLabeled("Save the name of Omelette").click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/1") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/1").respond(200, recipe("1", "Tomato omelette"));
-  await tick();
-
-  assert.deepEqual(activeNames(), ["Tomato omelette"]);
-});
-
-test("rename: Escape cancels without sending a request", async () => {
-  await openRecipesPage([recipe("1", "Omelette")]);
-
-  buttonLabeled("Rename Omelette").click();
-  setValue(rowById("1").querySelector(".rename-field"), "Tomato omelette");
-  keydownOn(rowById("1"), "Escape");
-
-  assert.equal(rowById("1").querySelector(".rename-field"), null);
-  assert.deepEqual(activeNames(), ["Omelette"]);
-  assert.equal(
-    server.requestFor("PATCH", () => true),
-    undefined,
-  );
-});
-
-test("rename: the Cancel button cancels without sending a request", async () => {
-  await openRecipesPage([recipe("1", "Omelette")]);
-
-  buttonLabeled("Rename Omelette").click();
-  setValue(rowById("1").querySelector(".rename-field"), "Tomato omelette");
-  buttonLabeled("Cancel renaming Omelette").click();
-
-  assert.equal(rowById("1").querySelector(".rename-field"), null);
-  assert.deepEqual(activeNames(), ["Omelette"]);
-  assert.equal(
-    server.requestFor("PATCH", () => true),
-    undefined,
-  );
-});
-
-test("an unchanged rename doesn't send a request", async () => {
-  await openRecipesPage([recipe("1", "Omelette")]);
-
-  buttonLabeled("Rename Omelette").click();
-  keydownOn(rowById("1").querySelector(".rename-field"), "Enter"); // same name, not edited
-  await tick();
-
-  assert.equal(rowById("1").querySelector(".rename-field"), null);
-  assert.equal(
-    server.requestFor("PATCH", () => true),
-    undefined,
-  );
-});
-
-test("focusout closes only an unchanged rename, and a click on another row's button after that still works", async () => {
-  await openRecipesPage([recipe("1", "Omelette"), recipe("2", "Salad")]);
-
-  buttonLabeled("Rename Omelette").click();
-  assert.ok(rowById("1").querySelector(".rename-field"));
-
-  const archiveSalad = buttonLabeled("Archive Salad");
-  // A real click also focuses the clicked control first; happy-dom's
-  // synthetic .click() doesn't move focus on its own, so this does both,
-  // in that order, to exercise the row's focusout handler.
-  archiveSalad.focus();
-  archiveSalad.click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/2") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/2").respond(200, recipe("2", "Salad", true));
-  await tick();
-
-  assert.equal(rowById("1").querySelector(".rename-field"), null); // closed, unchanged
-  assert.deepEqual(archivedNames(), ["Salad"]); // the single click still archived it
+  document.getElementById("new-recipe").click();
+  assert.equal(dispatchBeforeUnload().defaultPrevented, false);
+  setValue(document.getElementById("recipe-name"), "Pie");
+  assert.equal(dispatchBeforeUnload().defaultPrevented, true);
+  editorDialog().querySelector(".cancel").click();
+  assert.equal(dispatchBeforeUnload().defaultPrevented, false);
 });
 
 test("Archive and Restore move a recipe between the lists", async () => {
   await openRecipesPage([recipe("1", "Omelette"), recipe("2", "Café", true)]);
 
   buttonLabeled("Archive Omelette").click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/1") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/1").respond(200, recipe("1", "Omelette", true));
-  await tick();
+  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Omelette", true));
   assert.deepEqual(activeNames(), []);
   assert.deepEqual(archivedNames(), ["Café", "Omelette"]);
 
   buttonLabeled("Restore Café").click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/2") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/2").respond(200, recipe("2", "Café", false));
-  await tick();
+  await respondTo("PATCH", "/api/recipes/2", 200, recipe("2", "Café", false));
   assert.deepEqual(activeNames(), ["Café"]);
   assert.deepEqual(archivedNames(), ["Omelette"]);
 });
@@ -292,7 +235,10 @@ test("a failed archive shows its message and leaves the recipe in place", async 
 
 test("shows the empty-book message when there are no recipes", async () => {
   await openRecipesPage([]);
-  assert.equal(document.getElementById("empty-book").hidden, false);
+
+  const empty = document.getElementById("empty-book");
+  assert.equal(empty.hidden, false);
+  assert.equal(empty.textContent, "No recipes yet. Add your first one with New recipe.");
 });
 
 test("search filters the active list to matches", async () => {
@@ -333,9 +279,7 @@ test("the Archived count reflects the archived recipes", async () => {
   assert.equal(document.getElementById("archived-count").textContent, "1");
 
   buttonLabeled("Archive Omelette").click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/1") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/1").respond(200, recipe("1", "Omelette", true));
-  await tick();
+  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Omelette", true));
 
   assert.equal(document.getElementById("archived-count").textContent, "2");
 });
@@ -347,4 +291,32 @@ test("a search that doesn't match an archived recipe leaves the Archived count u
   setValue(searchField(), "zzz");
 
   assert.equal(document.getElementById("archived-count").textContent, "1");
+});
+
+test("a failed load of the ingredient catalog shows the error, and Retry loads both again", async () => {
+  server = fakeFetch();
+  page = await loadPage({ html: "recipes.html", script: "recipes.js", fetch: server.fetch });
+  ({ document, window } = page);
+  await tick();
+  server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
+  server.requestFor("GET", "/api/ingredients").fail();
+  await tick();
+
+  assert.equal(document.getElementById("load-error").hidden, false);
+  assert.equal(document.getElementById("recipe-book").hidden, true);
+
+  document.getElementById("retry-load").click();
+  await waitFor(
+    () => server.requests.filter((request) => request.url === "/api/ingredients").length === 2,
+  );
+  server.requests
+    .filter((request) => request.url === "/api/recipes")[1]
+    .respond(200, { recipes: [recipe("1", "Soup")] });
+  server.requests
+    .filter((request) => request.url === "/api/ingredients")[1]
+    .respond(200, { ingredients: [] });
+  await tick();
+
+  assert.equal(document.getElementById("load-error").hidden, true);
+  assert.deepEqual(activeNames(), ["Soup"]);
 });
