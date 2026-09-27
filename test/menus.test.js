@@ -5,7 +5,6 @@ import {
   addItem,
   copyMenu,
   describeItem,
-  emptyMenu,
   hasRecipe,
   removeItem,
   sameMenu,
@@ -15,10 +14,6 @@ import {
 function menu(...entries) {
   return { items: entries.map(([recipeId, servings]) => ({ recipeId, servings })) };
 }
-
-test("emptyMenu has no menu items", () => {
-  assert.deepEqual(emptyMenu(), { items: [] });
-});
 
 test("copyMenu returns a copy that shares nothing with the original", () => {
   const original = menu(["soup", 1]);
@@ -32,7 +27,7 @@ test("copyMenu returns a copy that shares nothing with the original", () => {
 
 test("sameMenu compares recipes, servings, and order", () => {
   assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1])), true);
-  assert.equal(sameMenu(emptyMenu(), emptyMenu()), true);
+  assert.equal(sameMenu(menu(), menu()), true);
   assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1.5])), false);
   assert.equal(sameMenu(menu(["soup", 1], ["bread", 1]), menu(["bread", 1], ["soup", 1])), false);
   assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1], ["bread", 1])), false);

@@ -11,10 +11,6 @@ export const MIN_SERVINGS = 0.5;
 export const MAX_SERVINGS = 99;
 const SERVINGS_STEP = 0.5;
 
-export function emptyMenu() {
-  return { items: [] };
-}
-
 /** A copy that shares nothing with `menu`, so changing one never changes the other. */
 export function copyMenu(menu) {
   return { items: menu.items.map((item) => ({ ...item })) };
