@@ -61,7 +61,7 @@ button {
 
 .week-bar button,
 .recipe-book button,
-.slot-editor button {
+.dialog button {
   padding: 0.4rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
@@ -164,11 +164,12 @@ button {
   stroke-linejoin: round;
 }
 
-/* ---------- Slot editor ---------- */
+/* ---------- Dialogs ---------- */
 
-/* No padding: slot-editor.js treats a click whose target is the dialog itself
-   as a click on the backdrop. The body inside carries the padding. */
-.slot-editor {
+/* No padding: onBackdropClick in dom.js treats a click whose target is the
+   dialog itself as a click on the backdrop. The body inside carries the
+   padding. */
+.dialog {
   width: min(32rem, calc(100% - 2rem));
   padding: 0;
   border: 0;
@@ -176,18 +177,18 @@ button {
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 25%);
 }
 
-.slot-editor::backdrop {
+.dialog::backdrop {
   background: rgb(0 0 0 / 40%);
 }
 
-.slot-editor-body {
+.dialog-body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem;
 }
 
-.slot-editor-title {
+.dialog-title {
   margin: 0;
   font-size: 1.1rem;
 }
@@ -195,12 +196,12 @@ button {
 /* The title takes focus when the dialog opens, only so a phone doesn't open
    its keyboard: that programmatic focus shows no ring. A keyboard user who
    tabs back to the title still sees the browser's own focus ring. */
-.slot-editor-title:focus:not(:focus-visible) {
+.dialog-title:focus:not(:focus-visible) {
   outline: none;
 }
 
 .menu-items,
-.recipe-options {
+.options {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -226,18 +227,18 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.slot-editor .step {
+.dialog .step {
   min-width: 2.25rem;
   padding: 0.4rem 0;
 }
 
-.slot-editor .done {
+.dialog .done {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
 }
 
-.recipe-search {
+.option-search {
   width: 100%;
   padding: 0.4rem;
   border: 1px solid var(--border);
@@ -245,24 +246,24 @@ button {
   font: inherit;
 }
 
-.recipe-options {
+.options {
   max-height: 12rem;
   overflow-y: auto;
   border: 1px solid #eee;
   border-radius: 0.3rem;
 }
 
-.recipe-option {
+.option {
   padding: 0.4rem;
   cursor: pointer;
   overflow-wrap: anywhere;
 }
 
-.recipe-option:hover {
+.option:hover {
   background: #f3f3f3;
 }
 
-.recipe-option[aria-selected="true"] {
+.option[aria-selected="true"] {
   background: #eef6ee;
 }
 
@@ -553,8 +554,8 @@ button {
     min-height: 3rem;
   }
 
-  /* The slot editor fills the screen on phones. */
-  .slot-editor {
+  /* Dialogs fill the screen on phones. */
+  .dialog {
     width: 100%;
     max-width: none;
     height: 100%;
@@ -565,12 +566,12 @@ button {
 
   /* Fills the dialog, so a tap below the actions still lands inside it
      instead of on the dialog's own (backdrop) box. */
-  .slot-editor-body {
+  .dialog-body {
     min-height: 100%;
   }
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .recipe-search {
+  .option-search {
     font-size: 16px;
   }
 

@@ -1,6 +1,6 @@
-// Test harness for the page scripts (app.js, slot-editor.js, recipes.js). It
-// builds a document from the page's own HTML, installs the globals those
-// scripts read, and imports the script fresh so its top-level
+// Test harness for the page scripts (app.js, recipes.js, and the dialog
+// modules). It builds a document from the page's own HTML, installs the
+// globals those scripts read, and imports the script fresh so its top-level
 // `document.getElementById(...)` calls succeed against that document.
 //
 // DOM library: happy-dom, which implements `showModal()`, `close()`, the
@@ -123,27 +123,38 @@ export async function loadPage({ html, script, fetch, url = "http://localhost/" 
 }
 
 /**
- * Builds a document holding only the `<dialog class="slot-editor">` markup
- * from the real public/index.html, installs the globals slot-editor.js
- * needs, and returns `createSlotEditor` applied to that real dialog element.
+ * Builds a document holding only the `<dialog id="ID">` markup from the real
+ * public/HTML, installs the globals a dialog module needs, with `fetch` for
+ * the network, and imports public/SCRIPT fresh.
  *
- * Returns `{ window, document, dialog, cleanup }`. Always call `cleanup()`.
+ * Returns `{ window, document, dialog, module, cleanup }`. Always call
+ * `cleanup()`.
  */
-export async function loadSlotEditorDialog() {
-  const indexHtml = await readFile(path.join(PUBLIC_DIR, "index.html"), "utf8");
-  const dialogMarkup = indexHtml.match(/<dialog[\s\S]*?<\/dialog>/)[0];
+export async function loadDialog({ html, id, script, fetch }) {
+  const markup = await readFile(path.join(PUBLIC_DIR, html), "utf8");
+  const dialogMarkup = markup.match(new RegExp(`<dialog id="${id}"[\\s\\S]*?</dialog>`))[0];
 
   const window = new Window({ url: "http://localhost/" });
   window.document.write(`<!doctype html><html><body>${dialogMarkup}</body></html>`);
   const { document } = window;
 
-  const cleanup = installGlobals(window);
-  const { createSlotEditor } = await import(
-    `../public/slot-editor.js?instance=${nextInstanceId++}`
-  );
-  const dialog = document.querySelector(".slot-editor");
+  const cleanup = installGlobals(window, fetch);
+  const module = await import(`../public/${script}?instance=${nextInstanceId++}`);
 
-  return { window, document, dialog, editor: createSlotEditor(dialog), cleanup };
+  return { window, document, dialog: document.getElementById(id), module, cleanup };
+}
+
+/**
+ * The slot editor from the real public/index.html: `loadDialog` plus
+ * `editor`, which is `createSlotEditor` applied to the dialog.
+ */
+export async function loadSlotEditorDialog() {
+  const loaded = await loadDialog({
+    html: "index.html",
+    id: "slot-editor",
+    script: "slot-editor.js",
+  });
+  return { ...loaded, editor: loaded.module.createSlotEditor(loaded.dialog) };
 }
 
 /**

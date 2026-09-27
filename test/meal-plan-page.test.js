@@ -107,10 +107,10 @@ test("leaving a week with an unsaved slot asks confirm; cancel keeps the week", 
   });
 
   slotButton("mon", "lunch").click();
-  const search = page.document.querySelector(".recipe-search");
+  const search = page.document.querySelector(".option-search");
   search.value = "salad";
   search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector(".recipe-option").click(); // adds Salad
+  page.document.querySelector(".option").click(); // adds Salad
   page.document.querySelector(".done").click(); // queues a save
 
   await waitFor(() => server.requestFor("PUT", (url) => url.includes("mon")) !== undefined);
@@ -148,10 +148,10 @@ test("leaving a week with an unsaved slot asks confirm; OK shows the last saved 
   });
 
   slotButton("mon", "lunch").click();
-  const search = page.document.querySelector(".recipe-search");
+  const search = page.document.querySelector(".option-search");
   search.value = "salad";
   search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector(".recipe-option").click(); // adds Salad
+  page.document.querySelector(".option").click(); // adds Salad
   page.document.querySelector(".done").click(); // now Soup and Salad, queues a save
 
   await waitFor(() => server.requestFor("PUT", (url) => url.includes("mon")) !== undefined);
@@ -207,10 +207,10 @@ test("beforeunload calls preventDefault() only while the editor has changes", as
 
   assert.equal(dispatchBeforeUnload().defaultPrevented, false); // no changes yet
 
-  const search = page.document.querySelector(".recipe-search");
+  const search = page.document.querySelector(".option-search");
   search.value = "soup";
   search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector("#slot-editor .recipe-option")?.click();
+  page.document.querySelector("#slot-editor .option")?.click();
 
   assert.equal(dispatchBeforeUnload().defaultPrevented, true); // has changes, still open
 

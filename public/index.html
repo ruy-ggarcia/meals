@@ -33,15 +33,15 @@
     <main id="grid" class="grid" hidden></main>
 
     <!-- Slot editor. Filled and opened by slot-editor.js. -->
-    <dialog id="slot-editor" class="slot-editor" aria-labelledby="slot-editor-title">
-      <div class="slot-editor-body">
+    <dialog id="slot-editor" class="dialog slot-editor" aria-labelledby="slot-editor-title">
+      <div class="dialog-body">
         <!-- biome-ignore lint/a11y/useHeadingContent: slot-editor.js sets the text when it opens. -->
-        <h2 id="slot-editor-title" class="slot-editor-title" tabindex="-1"></h2>
+        <h2 id="slot-editor-title" class="dialog-title" tabindex="-1"></h2>
         <ul class="menu-items" aria-label="Recipes in this menu"></ul>
         <label for="recipe-search">Add recipe</label>
         <input
           id="recipe-search"
-          class="recipe-search"
+          class="option-search"
           type="text"
           role="combobox"
           aria-autocomplete="list"
@@ -50,7 +50,7 @@
           autocomplete="off"
         >
         <!-- biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the combobox pattern needs a listbox. -->
-        <ul id="recipe-options" class="recipe-options" role="listbox" aria-label="Recipes" hidden></ul>
+        <ul id="recipe-options" class="options" role="listbox" aria-label="Recipes" hidden></ul>
         <p class="no-match" hidden>No matching recipes. To add recipes, use the Recipes page.</p>
         <div class="dialog-actions">
           <button type="button" class="cancel">Cancel</button>

@@ -20,6 +20,23 @@ export function createButton(text, label, className) {
 }
 
 /**
+ * Calls `onClick` for a click on the backdrop of `dialog`, a <dialog> with no
+ * padding, so that a click whose target is the dialog itself landed on the
+ * backdrop. A press that starts inside a field and is released after
+ * dragging over the backdrop also produces such a click, so the press must
+ * have started on the backdrop too.
+ */
+export function onBackdropClick(dialog, onClick) {
+  let pressedOnBackdrop = false;
+  dialog.addEventListener("pointerdown", (event) => {
+    pressedOnBackdrop = event.target === dialog;
+  });
+  dialog.addEventListener("click", (event) => {
+    if (pressedOnBackdrop && event.target === dialog) onClick();
+  });
+}
+
+/**
  * Runs `run()` as a load: hides `loadError` and disables `retryButton` while
  * it runs, then shows `content` on success or `loadError` on failure, logging
  * the error with `errorMessage`. Always re-enables `retryButton` at the end.

@@ -36,11 +36,11 @@ afterEach(async () => {
 });
 
 function search() {
-  return document.querySelector(".recipe-search");
+  return document.querySelector(".option-search");
 }
 
 function title() {
-  return document.querySelector(".slot-editor-title");
+  return document.querySelector(".dialog-title");
 }
 
 function itemRows() {
@@ -48,7 +48,7 @@ function itemRows() {
 }
 
 function optionEls() {
-  return [...document.querySelectorAll(".recipe-option")];
+  return [...document.querySelectorAll(".option")];
 }
 
 function openEditor({ menu: initialMenu = menu(), recipes = RECIPES } = {}) {
