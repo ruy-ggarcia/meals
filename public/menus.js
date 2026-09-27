@@ -3,7 +3,7 @@
 // same menu when nothing changes. They never touch the DOM, so tests import
 // this module directly in Node.js.
 
-import { filterRecipes, sortRecipes } from "./recipe-search.js";
+import { filterByName, sortByName } from "./name-search.js";
 
 // The same limits the API enforces.
 export const MAX_ITEMS = 20;
@@ -55,7 +55,7 @@ export function stepServings(menu, recipeId, steps) {
 /** The recipes the slot editor offers: active, not in `menu`, matching `query`, A to Z. */
 export function addableRecipes(recipes, menu, query) {
   const offered = recipes.filter((recipe) => !recipe.archived && !hasRecipe(menu, recipe.id));
-  return sortRecipes(filterRecipes(offered, query));
+  return sortByName(filterByName(offered, query));
 }
 
 /** For example, "Gnocchi carbonara × 1.5". */

@@ -6,7 +6,7 @@
 import { createButton, createElement, withLoadState } from "./dom.js";
 import { getJson, sendJson } from "./http.js";
 import { conflictText, quoted } from "./messages.js";
-import { filterRecipes, sortRecipes } from "./recipe-search.js";
+import { filterByName, sortByName } from "./name-search.js";
 
 const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
@@ -97,7 +97,7 @@ function render() {
   rendering = true;
   const focused = captureRenameFocus();
   const query = search.value.trim();
-  const matches = sortRecipes(filterRecipes(recipes, search.value));
+  const matches = sortByName(filterByName(recipes, search.value));
   const activeMatches = matches.filter((recipe) => !recipe.archived);
   const archivedTotal = recipes.filter((recipe) => recipe.archived).length;
   activeList.replaceChildren(...activeMatches.map(row));

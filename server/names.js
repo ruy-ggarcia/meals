@@ -12,7 +12,7 @@ export function cleanName(name) {
 
 /**
  * Decides uniqueness and order. It ignores case and accents, so "Café" and
- * "cafe" share a key. public/recipe-search.js has the same rule.
+ * "cafe" share a key. public/name-search.js has the same rule.
  */
 export function nameKey(name) {
   return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
