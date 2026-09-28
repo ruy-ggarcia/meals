@@ -218,6 +218,50 @@ test("beforeunload calls preventDefault() only while the editor has changes", as
   assert.equal(dispatchBeforeUnload().defaultPrevented, false); // closed again
 });
 
+// How long app.js keeps the "saved" check mark up before reverting to idle.
+// Kept in sync with SAVED_BADGE_MS in public/app.js.
+const SAVED_BADGE_MS = 3000;
+
+test("the saved badge's timer is canceled by cleanup, so it never fires against a closed page", async () => {
+  await openWeek({ recipes: [{ id: "soup", name: "Soup", archived: false }] });
+  slotButton("mon", "lunch").click();
+  const search = page.document.querySelector("#slot-editor .option-search");
+  search.value = "soup";
+  search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
+  page.document.querySelector("#slot-editor .option").click();
+  page.document.querySelector("#slot-editor .done").click();
+
+  const saveUrl = `/api/weeks/${WEEK}/mon/lunch`;
+  await waitFor(() => server.requestFor("PUT", saveUrl) !== undefined);
+  server.requestFor("PUT", saveUrl).respond(200, {
+    week: WEEK,
+    day: "mon",
+    meal: "lunch",
+    items: [{ recipeId: "soup", servings: 1 }],
+  });
+  await tick(); // the slot now shows "saved" and has scheduled the badge's timer
+
+  const status = slotButton("mon", "lunch").closest(".slot").querySelector(".status");
+  assert.equal(status.dataset.state, "saved");
+
+  // The page closes (as afterEach does for every test) before the badge's
+  // timer would naturally fire. If that timer isn't tied to the page's own
+  // window, it survives the close and later runs against a torn-down DOM.
+  let leaked;
+  const onUncaught = (error) => {
+    leaked = error;
+  };
+  process.on("uncaughtException", onUncaught);
+  try {
+    await page.cleanup();
+    await new Promise((resolve) => setTimeout(resolve, SAVED_BADGE_MS + 200));
+  } finally {
+    process.removeListener("uncaughtException", onUncaught);
+  }
+
+  assert.equal(leaked, undefined, `the saved badge's timer ran after cleanup: ${leaked?.stack}`);
+});
+
 test("a load failure shows the error, and Retry reloads", async () => {
   server = fakeFetch();
   page = await loadPage({

@@ -257,8 +257,11 @@ function shownKeys() {
 }
 
 // Shows a slot's save status. The status itself comes from saves.js.
+// window.setTimeout/clearTimeout (rather than the bare globals), so that
+// tests that close their page mid-badge never run this callback against a
+// torn-down DOM.
 function setStatus(slot, state) {
-  clearTimeout(savedTimers.get(slot));
+  window.clearTimeout(savedTimers.get(slot));
 
   const status = slot.querySelector(".status");
   status.dataset.state = state;
@@ -276,7 +279,7 @@ function setStatus(slot, state) {
   if (state === "saved") {
     savedTimers.set(
       slot,
-      setTimeout(() => setStatus(slot, "idle"), SAVED_BADGE_MS),
+      window.setTimeout(() => setStatus(slot, "idle"), SAVED_BADGE_MS),
     );
   }
 }
