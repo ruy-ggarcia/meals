@@ -319,6 +319,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   combobox.js          # The filter-and-pick field of the editors.
   dates.js             # Date helpers.*
   dom.js               # DOM helpers shared by the pages.
+  editor-dialog.js     # The dialog lifecycle shared by the recipe and ingredient editors.
   http.js              # Requests with a timeout.*
   index.html           # Meal plan page.
   ingredient-editor.js # The ingredient editor dialog.

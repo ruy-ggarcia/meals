@@ -7,7 +7,8 @@
 //   stray click never throws work away.
 
 import { createCombobox } from "./combobox.js";
-import { createButton, createElement, onBackdropClick } from "./dom.js";
+import { createButton, createElement } from "./dom.js";
+import { createEditorDialog } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
 import { filterByName, sortByName } from "./name-search.js";
@@ -33,15 +34,25 @@ export function createRecipeEditor(dialog) {
   const noIngredients = dialog.querySelector(".no-ingredients");
   const search = dialog.querySelector(".option-search");
   const saveMessage = dialog.querySelector(".save-message");
-  const doneButton = dialog.querySelector(".done");
 
   /**
-   * The open editing session, or null: { recipe, catalog, rows,
-   * restoreFocus, onSaved, busy }. `recipe` is undefined for a new recipe,
-   * and `catalog` holds every ingredient by ID. Each row is { ingredientId,
-   * text, message }, where `text` is what its quantity field holds.
+   * What the editor last opened with: { recipe, catalog, rows }. `recipe` is
+   * undefined for a new recipe, and `catalog` holds every ingredient by ID.
+   * Each row is { ingredientId, text, message }, where `text` is what its
+   * quantity field holds.
    */
   let session = null;
+
+  const lifecycle = createEditorDialog({
+    dialog,
+    hasChanges,
+    onDone: save,
+    onBusy: (busy) => {
+      search.disabled = busy || isFull();
+    },
+    // Enter in a quantity is Done too. Add ingredient handles its own Enter.
+    confirms: (target) => target.classList.contains("quantity-field"),
+  });
 
   const combobox = createCombobox({
     input: search,
@@ -72,30 +83,21 @@ export function createRecipeEditor(dialog) {
       recipe,
       catalog: new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
       rows: rowsOf(recipe),
-      restoreFocus,
-      onSaved,
-      busy: false,
     };
     title.textContent = recipe ? "Edit recipe" : "New recipe";
     nameField.value = recipe?.name ?? "";
     nameMessage.textContent = "";
     saveMessage.textContent = "";
-    setBusy(false);
     renderRows();
     combobox.reset();
-    dialog.showModal();
     // A new recipe starts with its name. An existing one starts on the
     // title: on a phone, focusing a field opens the keyboard.
-    (recipe ? title : nameField).focus();
-  }
-
-  function isOpen() {
-    return session !== null;
+    lifecycle.open({ focus: recipe ? title : nameField, restoreFocus, onSaved });
   }
 
   /** True when the fields differ from what the editor opened with. */
   function hasChanges() {
-    if (session === null) return false;
+    if (!lifecycle.isOpen()) return false;
     const original = rowsOf(session.recipe);
     return (
       nameField.value !== (session.recipe?.name ?? "") ||
@@ -105,24 +107,6 @@ export function createRecipeEditor(dialog) {
           row.ingredientId !== original[index].ingredientId || row.text !== original[index].text,
       )
     );
-  }
-
-  // Closes the editor. After a save, `onSaved` gets the saved recipe and
-  // moves focus. Otherwise, `restoreFocus` returns focus to the control that
-  // opened the editor.
-  function finish(saved) {
-    if (session === null) return;
-    const { restoreFocus, onSaved } = session;
-    session = null;
-    if (dialog.open) dialog.close();
-    if (saved) onSaved(saved);
-    else restoreFocus();
-  }
-
-  function setBusy(busy) {
-    session.busy = busy;
-    for (const control of dialog.querySelectorAll("input, button")) control.disabled = busy;
-    search.disabled = busy || isFull();
   }
 
   function rowElement(row, index) {
@@ -156,7 +140,7 @@ export function createRecipeEditor(dialog) {
   function renderRows() {
     rowList.replaceChildren(...session.rows.map(rowElement));
     noIngredients.hidden = session.rows.length > 0;
-    search.disabled = session.busy || isFull();
+    search.disabled = lifecycle.isBusy() || isFull();
     search.placeholder = isFull() ? `A recipe holds up to ${MAX_INGREDIENTS} ingredients.` : "";
   }
 
@@ -241,8 +225,9 @@ export function createRecipeEditor(dialog) {
     }
   }
 
-  async function save() {
-    if (session === null || session.busy) return;
+  // Checks the name and the quantities, then saves what changed, or closes
+  // when nothing did.
+  function save() {
     nameMessage.textContent = nameField.value.trim() === "" ? "The name can't be empty." : "";
     saveMessage.textContent = "";
     const ingredients = readIngredients();
@@ -255,45 +240,9 @@ export function createRecipeEditor(dialog) {
       return;
     }
     const body = changes(nameField.value, ingredients);
-    if (body === null) {
-      finish();
-      return;
-    }
-    setBusy(true);
-    const saved = await send(body);
-    setBusy(false);
-    if (saved) finish(saved);
-    else if (nameMessage.textContent !== "") nameField.focus();
-    else doneButton.focus();
+    if (body === null) lifecycle.close();
+    else lifecycle.submit(() => send(body));
   }
 
-  dialog.querySelector(".cancel").addEventListener("click", () => finish());
-  doneButton.addEventListener("click", save);
-  // Escape and Android's Back close the dialog, which discards the changes,
-  // except while a save runs.
-  dialog.addEventListener("cancel", (event) => {
-    if (session?.busy) event.preventDefault();
-  });
-  dialog.addEventListener("close", () => finish());
-  onBackdropClick(dialog, () => {
-    if (session !== null && !session.busy && !hasChanges()) finish();
-  });
-  // Enter confirms the innermost edit. In Name, in a quantity, on the title,
-  // or on the dialog itself, that's Done. Buttons and Add ingredient handle
-  // their own Enter.
-  dialog.addEventListener("keydown", (event) => {
-    if (event.isComposing || event.key !== "Enter") return;
-    const { target } = event;
-    if (
-      target === title ||
-      target === dialog ||
-      target === nameField ||
-      target.classList.contains("quantity-field")
-    ) {
-      event.preventDefault();
-      save();
-    }
-  });
-
-  return { hasChanges, isOpen, open };
+  return { hasChanges, isOpen: lifecycle.isOpen, open };
 }

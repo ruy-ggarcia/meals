@@ -5,7 +5,7 @@
 // - Cancel, Escape, and Android's Back discard the changes.
 // - Clicking the backdrop closes the editor only when nothing changed.
 
-import { onBackdropClick } from "./dom.js";
+import { createEditorDialog } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
 
@@ -23,49 +23,37 @@ export function createIngredientEditor(dialog) {
   const unitField = dialog.querySelector(".unit-field");
   const unitHint = dialog.querySelector(".unit-hint");
   const saveMessage = dialog.querySelector(".save-message");
-  const doneButton = dialog.querySelector(".done");
 
-  /** The open editing session, or null: { ingredient, usedIn, restoreFocus, onSaved, busy }. */
+  /** What the editor last opened with: { ingredient, usedIn }. */
   let session = null;
 
+  const lifecycle = createEditorDialog({
+    dialog,
+    hasChanges,
+    onDone: save,
+    onBusy: (busy) => {
+      unitField.disabled = busy || session.usedIn > 0;
+    },
+  });
+
   function open({ ingredient, usedIn, restoreFocus, onSaved }) {
-    session = { ingredient, usedIn, restoreFocus, onSaved, busy: false };
+    session = { ingredient, usedIn };
     nameField.value = ingredient.name;
     unitField.value = ingredient.unit;
     nameMessage.textContent = "";
     saveMessage.textContent = "";
     unitHint.textContent = usedIn > 0 ? usedInText(usedIn) : "";
     unitHint.hidden = usedIn === 0;
-    setBusy(false);
-    dialog.showModal();
     // The title, not a field: on a phone, focusing a field opens the keyboard.
-    title.focus();
+    lifecycle.open({ focus: title, restoreFocus, onSaved });
   }
 
   /** True when the fields differ from the ingredient. */
   function hasChanges() {
     return (
-      session !== null &&
+      lifecycle.isOpen() &&
       (nameField.value !== session.ingredient.name || unitField.value !== session.ingredient.unit)
     );
-  }
-
-  // Closes the editor. After a save, `onSaved` gets the saved ingredient and
-  // moves focus. Otherwise, `restoreFocus` returns focus to the control that
-  // opened the editor.
-  function finish(saved) {
-    if (session === null) return;
-    const { restoreFocus, onSaved } = session;
-    session = null;
-    if (dialog.open) dialog.close();
-    if (saved) onSaved(saved);
-    else restoreFocus();
-  }
-
-  function setBusy(busy) {
-    session.busy = busy;
-    for (const control of dialog.querySelectorAll("input, button")) control.disabled = busy;
-    unitField.disabled = busy || session.usedIn > 0;
   }
 
   // Sends `body`. Returns the saved ingredient, or undefined after showing why
@@ -94,8 +82,8 @@ export function createIngredientEditor(dialog) {
     }
   }
 
-  async function save() {
-    if (session === null || session.busy) return;
+  // Checks the name, then saves what changed, or closes when nothing did.
+  function save() {
     nameMessage.textContent = nameField.value.trim() === "" ? "The name can't be empty." : "";
     saveMessage.textContent = "";
     if (nameMessage.textContent !== "") {
@@ -106,38 +94,9 @@ export function createIngredientEditor(dialog) {
     const body = {};
     if (nameField.value !== ingredient.name) body.name = nameField.value;
     if (unitField.value !== ingredient.unit) body.unit = unitField.value;
-    if (Object.keys(body).length === 0) {
-      finish();
-      return;
-    }
-    setBusy(true);
-    const saved = await send(body);
-    setBusy(false);
-    if (saved) finish(saved);
-    else if (nameMessage.textContent !== "") nameField.focus();
-    else doneButton.focus();
+    if (Object.keys(body).length === 0) lifecycle.close();
+    else lifecycle.submit(() => send(body));
   }
-
-  dialog.querySelector(".cancel").addEventListener("click", () => finish());
-  doneButton.addEventListener("click", save);
-  // Escape and Android's Back close the dialog, which discards the changes,
-  // except while a save runs.
-  dialog.addEventListener("cancel", (event) => {
-    if (session?.busy) event.preventDefault();
-  });
-  dialog.addEventListener("close", () => finish());
-  onBackdropClick(dialog, () => {
-    if (session !== null && !session.busy && !hasChanges()) finish();
-  });
-  // Enter confirms the innermost edit. In Name, on the title, or on the
-  // dialog itself, that's Done.
-  dialog.addEventListener("keydown", (event) => {
-    if (event.isComposing || event.key !== "Enter") return;
-    if (event.target === title || event.target === dialog || event.target === nameField) {
-      event.preventDefault();
-      save();
-    }
-  });
 
   return { hasChanges, open };
 }
