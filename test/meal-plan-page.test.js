@@ -242,6 +242,30 @@ test("the saved badge's timer is canceled by cleanup, so it never fires against 
 
   const saveUrl = `/api/weeks/${WEEK}/mon/lunch`;
   await waitFor(() => server.requestFor("PUT", saveUrl) !== undefined);
+
+  // Catches setStatus() in app.js scheduling the "saved" badge's timer with
+  // the bare setTimeout instead of window.setTimeout: unlike window.setTimeout,
+  // a bare timer isn't tied to the page's window, so it survives the window's
+  // close and later runs against a torn-down DOM. Any other delay -- such as
+  // the harness's own tick(), or app.js's own hashchange debounce -- passes
+  // straight through to the real setTimeout, so this never blocks the test or
+  // waits in real time.
+  //
+  // This interception relies on window.setTimeout going through a reference
+  // to the real setTimeout that happy-dom's BrowserWindow module captures
+  // from globalThis when it's first loaded, before this mock is installed --
+  // an internal detail of the pinned happy-dom version. Re-check this test
+  // against a happy-dom upgrade.
+  const realSetTimeout = globalThis.setTimeout;
+  let bareBadgeCallback;
+  mock.method(globalThis, "setTimeout", (callback, delay, ...args) => {
+    if (delay === SAVED_BADGE_MS) {
+      bareBadgeCallback = callback;
+      return 0;
+    }
+    return realSetTimeout(callback, delay, ...args);
+  });
+
   server.requestFor("PUT", saveUrl).respond(200, {
     week: WEEK,
     day: "mon",
@@ -253,22 +277,15 @@ test("the saved badge's timer is canceled by cleanup, so it never fires against 
   const status = slotButton("mon", "lunch").closest(".slot").querySelector(".status");
   assert.equal(status.dataset.state, "saved");
 
-  // The page closes (as afterEach does for every test) before the badge's
-  // timer would naturally fire. If that timer isn't tied to the page's own
-  // window, it survives the close and later runs against a torn-down DOM.
-  let leaked;
-  const onUncaught = (error) => {
-    leaked = error;
-  };
-  process.on("uncaughtException", onUncaught);
-  try {
-    await page.cleanup();
-    await new Promise((resolve) => setTimeout(resolve, SAVED_BADGE_MS + 200));
-  } finally {
-    process.removeListener("uncaughtException", onUncaught);
-  }
+  await page.cleanup(); // closes the page's window, canceling any timer tied to it
 
-  assert.equal(leaked, undefined, `the saved badge's timer ran after cleanup: ${leaked?.stack}`);
+  assert.equal(
+    bareBadgeCallback,
+    undefined,
+    "setStatus scheduled the saved badge's timer with the bare setTimeout, not " +
+      "window.setTimeout, so it would survive the page's close and later run " +
+      "against a torn-down DOM",
+  );
 });
 
 test("a load failure shows the error, and Retry reloads", async () => {
