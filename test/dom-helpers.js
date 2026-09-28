@@ -28,6 +28,7 @@
 // its "click" event fires. A test of code that depends on that focus move
 // calls `element.focus()` itself right before `element.click()`.
 
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +61,59 @@ export async function waitFor(predicate, { attempts = 50 } = {}) {
     await tick();
   }
   throw new Error(`waitFor: condition not met after ${attempts} ticks`);
+}
+
+// The name a screen reader would announce for `element`, best-effort: an
+// aria-label, the text of the elements aria-labelledby points to, an
+// associated <label for>, the element's own text, or its placeholder.
+function accessibleName(element) {
+  const ariaLabel = element.getAttribute?.("aria-label");
+  if (ariaLabel) return ariaLabel;
+  const labelledBy = element.getAttribute?.("aria-labelledby");
+  if (labelledBy) {
+    const doc = element.ownerDocument;
+    const text = labelledBy
+      .split(/\s+/)
+      .map((id) => doc?.getElementById(id)?.textContent?.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (text) return text;
+  }
+  if (element.id) {
+    const label = element.ownerDocument?.querySelector(`label[for="${element.id}"]`);
+    if (label?.textContent?.trim()) return label.textContent.trim();
+  }
+  const text = element.textContent?.trim();
+  if (text) return text;
+  return element.getAttribute?.("placeholder") ?? undefined;
+}
+
+// A short, readable description of `element` for a failed focus assertion:
+// its tag, ID, classes, and accessible name, such as `<button#save.primary
+// "Save">`. Never handed to node:assert, which would try to diff the whole
+// DOM element and hang.
+function describeElement(element) {
+  if (!element) return "nothing";
+  const tag = element.tagName ? element.tagName.toLowerCase() : String(element);
+  const id = element.id ? `#${element.id}` : "";
+  const classes = element.classList
+    ? [...element.classList].map((name) => `.${name}`).join("")
+    : "";
+  const name = accessibleName(element);
+  return `<${tag}${id}${classes}>${name ? ` "${name}"` : ""}`;
+}
+
+/**
+ * Asserts that `element` has focus in `document`, failing with a short,
+ * readable message (tag, ID, classes, and accessible name of the element
+ * that's actually focused, and of the one expected) instead of handing DOM
+ * elements to `assert.equal`, which hangs trying to diff them.
+ */
+export function assertFocus(document, element, message) {
+  const actual = document.activeElement;
+  if (actual === element) return;
+  const detail = `focus is on ${describeElement(actual)}, expected ${describeElement(element)}`;
+  assert.fail(message ? `${message}: ${detail}` : detail);
 }
 
 const NO_FETCH_STUB = async (url) => {

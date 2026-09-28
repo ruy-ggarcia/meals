@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { formatWeekRange } from "../public/dates.js";
-import { fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -450,7 +450,7 @@ test("a hash change while the shopping list is open is undone, and Close returns
   assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
   shoppingDialog().querySelector(".close-dialog").click();
   assert.equal(shoppingDialog().open, false);
-  assert.equal(page.document.activeElement, shoppingButton());
+  assertFocus(page.document, shoppingButton());
 });
 
 test("a backdrop click closes the shopping list", async () => {
@@ -461,7 +461,7 @@ test("a backdrop click closes the shopping list", async () => {
   shoppingDialog().click();
 
   assert.equal(shoppingDialog().open, false);
-  assert.equal(page.document.activeElement, shoppingButton());
+  assertFocus(page.document, shoppingButton());
 });
 
 test("Shopping list is disabled while no week is shown, and enabled when a week loads", async () => {

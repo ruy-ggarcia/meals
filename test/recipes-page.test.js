@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
 
 const ONION = { id: "onion", name: "Onion", unit: "g", archived: false };
 const WITH_ONION = [{ ingredientId: "onion", quantity: 100 }];
@@ -94,7 +94,7 @@ test("New recipe opens the editor, and the saved recipe appears in its sorted pl
 
   assert.equal(editorDialog().open, false);
   assert.deepEqual(activeNames(), ["Apple pie", "Green salad"]);
-  assert.equal(document.activeElement, buttonLabeled("Edit Apple pie"));
+  assertFocus(document, buttonLabeled("Edit Apple pie"));
 });
 
 test("Cancel in a new recipe returns focus to New recipe and sends nothing", async () => {
@@ -105,7 +105,7 @@ test("Cancel in a new recipe returns focus to New recipe and sends nothing", asy
   editorDialog().querySelector(".cancel").click();
 
   assert.equal(editorDialog().open, false);
-  assert.equal(document.activeElement, newRecipe);
+  assertFocus(document, newRecipe);
   assert.equal(server.requestFor("POST", "/api/recipes"), undefined);
 });
 
@@ -121,7 +121,7 @@ test("Edit opens the recipe with its ingredients, and a save updates its row", a
   await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Onion soup", false, WITH_ONION));
 
   assert.deepEqual(activeNames(), ["Onion soup"]);
-  assert.equal(document.activeElement, buttonLabeled("Edit Onion soup"));
+  assertFocus(document, buttonLabeled("Edit Onion soup"));
 });
 
 test("a save whose recipe the search hides focuses Search", async () => {
@@ -134,7 +134,7 @@ test("a save whose recipe the search hides focuses Search", async () => {
   await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
 
   assert.deepEqual(activeNames(), []);
-  assert.equal(document.activeElement, searchField());
+  assertFocus(document, searchField());
 });
 
 test("Cancel after Edit returns focus to the recipe's Edit button", async () => {
@@ -144,7 +144,7 @@ test("Cancel after Edit returns focus to the recipe's Edit button", async () => 
   editorDialog().querySelector(".cancel").click();
 
   assert.equal(editorDialog().open, false);
-  assert.equal(document.activeElement, buttonLabeled("Edit Soup"));
+  assertFocus(document, buttonLabeled("Edit Soup"));
 });
 
 test("Escape after Edit returns focus to the recipe's Edit button", async () => {
@@ -153,7 +153,7 @@ test("Escape after Edit returns focus to the recipe's Edit button", async () => 
   buttonLabeled("Edit Soup").click();
   editorDialog().close(); // what Escape does to a modal dialog
 
-  assert.equal(document.activeElement, buttonLabeled("Edit Soup"));
+  assertFocus(document, buttonLabeled("Edit Soup"));
 });
 
 test("archived recipes have Edit and Restore", async () => {

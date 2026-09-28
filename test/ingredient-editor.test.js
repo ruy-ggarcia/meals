@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
 
 const MILK = { id: "milk", name: "Milk", unit: "g", archived: false };
 
@@ -78,7 +78,7 @@ test("opens with the name and the unit, focus on the title, and Unit enabled whe
   assert.equal(query(".unit-field").value, "g");
   assert.equal(query(".unit-field").disabled, false);
   assert.equal(query(".unit-hint").hidden, true);
-  assert.equal(document.activeElement, query(".dialog-title"));
+  assertFocus(document, query(".dialog-title"));
 });
 
 test("Unit is disabled, with the reason, while recipes use the ingredient", () => {
@@ -107,7 +107,7 @@ test("Done with no changes closes without a request and returns focus to the ope
 
   assert.equal(dialog.open, false);
   assert.equal(server.requests.length, 0);
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
 });
 
 test("Done sends the changed name and unit in one PATCH, then closes", async () => {
@@ -141,7 +141,7 @@ test("a name conflict (409) shows the message under Name", async () => {
 
   assert.equal(dialog.open, true);
   assert.equal(query(".name-message").textContent, '"Egg" already exists.');
-  assert.equal(document.activeElement, query(".name-field"));
+  assertFocus(document, query(".name-field"));
 });
 
 test("a conflict with an archived ingredient says to restore it from Archived", async () => {
@@ -185,7 +185,7 @@ test("Done with an empty name shows a message under Name and sends nothing", () 
 
   assert.equal(dialog.open, true);
   assert.equal(query(".name-message").textContent, "The name can't be empty.");
-  assert.equal(document.activeElement, query(".name-field"));
+  assertFocus(document, query(".name-field"));
   assert.equal(server.requests.length, 0);
 });
 
@@ -211,7 +211,7 @@ test("a network error keeps the editor open with the changes", async () => {
   assert.equal(dialog.open, true);
   assert.equal(query(".save-message").textContent, "Couldn't save the ingredient. Try again.");
   assert.equal(query(".name-field").value, "Oat milk");
-  assert.equal(document.activeElement, query(".done"));
+  assertFocus(document, query(".done"));
 });
 
 test("Cancel and Escape (the dialog's close event) discard the changes", () => {
@@ -219,7 +219,7 @@ test("Cancel and Escape (the dialog's close event) discard the changes", () => {
   setName("Oat milk");
   query(".cancel").click();
   assert.equal(dialog.open, false);
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
 
   openEditor();
   setName("Oat milk");

@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
 
 function ingredient(id, name, unit = "g", archived = false) {
   return { id, name, unit, archived };
@@ -131,7 +131,7 @@ test("adding an ingredient sends the name and the unit, then clears both fields"
   assert.deepEqual(activeNames(), ["Milk", "Onion"]);
   assert.equal(nameField().value, "");
   assert.equal(unitField().value, "");
-  assert.equal(document.activeElement, nameField());
+  assertFocus(document, nameField());
 });
 
 test("adding without a unit asks for one and sends nothing", async () => {
@@ -142,7 +142,7 @@ test("adding without a unit asks for one and sends nothing", async () => {
   await tick();
 
   assert.equal(formMessage().textContent, "Choose a unit.");
-  assert.equal(document.activeElement, unitField());
+  assertFocus(document, unitField());
   assert.equal(server.requestFor("POST", "/api/ingredients"), undefined);
 });
 
@@ -218,7 +218,7 @@ test("Edit opens the editor, and a saved name updates the row and focuses its Ed
 
   assert.equal(dialog.open, false);
   assert.deepEqual(activeNames(), ["Red onion"]);
-  assert.equal(document.activeElement, buttonLabeled("Edit Red onion"));
+  assertFocus(document, buttonLabeled("Edit Red onion"));
 });
 
 test("Cancel after Edit returns focus to the ingredient's Edit button", async () => {
@@ -229,7 +229,7 @@ test("Cancel after Edit returns focus to the ingredient's Edit button", async ()
   dialog.querySelector(".cancel").click();
 
   assert.equal(dialog.open, false);
-  assert.equal(document.activeElement, buttonLabeled("Edit Onion"));
+  assertFocus(document, buttonLabeled("Edit Onion"));
 });
 
 test("Escape after Edit returns focus to the ingredient's Edit button", async () => {
@@ -238,7 +238,7 @@ test("Escape after Edit returns focus to the ingredient's Edit button", async ()
   buttonLabeled("Edit Onion").click();
   document.getElementById("ingredient-editor").close(); // what Escape does to a modal dialog
 
-  assert.equal(document.activeElement, buttonLabeled("Edit Onion"));
+  assertFocus(document, buttonLabeled("Edit Onion"));
 });
 
 test("Edit disables Unit for an ingredient that recipes use, counting archived recipes", async () => {

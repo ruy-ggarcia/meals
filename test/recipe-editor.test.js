@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
 
 const EGG = { id: "egg", name: "Egg", unit: "pcs", archived: false };
 const MILK = { id: "milk", name: "Milk", unit: "ml", archived: false };
@@ -116,7 +116,7 @@ test("a new recipe opens empty, titled New recipe, with focus in Name", () => {
   assert.equal(dialog.open, true);
   assert.equal(query(".dialog-title").textContent, "New recipe");
   assert.equal(nameField().value, "");
-  assert.equal(document.activeElement, nameField());
+  assertFocus(document, nameField());
   assert.equal(query(".no-ingredients").hidden, false);
   assert.deepEqual(rowNames(), []);
 });
@@ -126,7 +126,7 @@ test("an existing recipe opens with its name and ingredients, and focus on the t
 
   assert.equal(query(".dialog-title").textContent, "Edit recipe");
   assert.equal(nameField().value, "Onion soup");
-  assert.equal(document.activeElement, query(".dialog-title"));
+  assertFocus(document, query(".dialog-title"));
   assert.equal(query(".no-ingredients").hidden, true);
   assert.deepEqual(rowNames(), ["Onion", "Salt (archived)"]);
   assert.deepEqual(
@@ -159,7 +159,7 @@ test("Enter in Add ingredient adds the highlighted ingredient with an empty quan
   assert.equal(dialog.open, true);
   assert.deepEqual(rowNames(), ["Egg"]);
   assert.equal(quantityFields()[0].value, "");
-  assert.equal(document.activeElement, quantityFields()[0]);
+  assertFocus(document, quantityFields()[0]);
   assert.equal(search().value, "");
   assert.equal(query(".no-ingredients").hidden, true);
 });
@@ -191,7 +191,7 @@ test("Done with an invalid quantity shows a message under its row, focuses it, a
     "Enter a quantity from 0.01 to 10000, with up to two decimals.",
   );
   assert.equal(quantityFields()[1].value, "1.255");
-  assert.equal(document.activeElement, quantityFields()[1]);
+  assertFocus(document, quantityFields()[1]);
   assert.equal(server.requests.length, 0);
 });
 
@@ -202,7 +202,7 @@ test("Done with an empty name shows a message under Name and sends nothing", () 
   query(".done").click();
 
   assert.equal(query(".name-message").textContent, "The name can't be empty.");
-  assert.equal(document.activeElement, nameField());
+  assertFocus(document, nameField());
   assert.equal(server.requests.length, 0);
 });
 
@@ -289,7 +289,7 @@ test("Done with no changes closes without a request and returns focus to the ope
   assert.equal(dialog.open, false);
   assert.equal(server.requests.length, 0);
   assert.deepEqual(saved, []);
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
 });
 
 test("a name conflict (409) shows the message under Name and keeps the editor open", async () => {
@@ -305,7 +305,7 @@ test("a name conflict (409) shows the message under Name and keeps the editor op
   assert.equal(dialog.open, true);
   assert.equal(query(".name-message").textContent, '"Soup" already exists.');
   assert.equal(nameField().value, "soup");
-  assert.equal(document.activeElement, nameField());
+  assertFocus(document, nameField());
   assert.equal(query(".done").disabled, false);
 });
 
@@ -350,7 +350,7 @@ test("a network error keeps the editor open with the changes", async () => {
   assert.equal(dialog.open, true);
   assert.equal(query(".save-message").textContent, "Couldn't save the recipe. Try again.");
   assert.equal(nameField().value, "Stew");
-  assert.equal(document.activeElement, query(".done"));
+  assertFocus(document, query(".done"));
 });
 
 test("Remove takes the row out and moves focus to the next Remove, then the title", () => {
@@ -359,12 +359,12 @@ test("Remove takes the row out and moves focus to the next Remove, then the titl
   query('[aria-label="Remove Onion"]').click();
 
   assert.deepEqual(rowNames(), ["Salt (archived)"]);
-  assert.equal(document.activeElement, query('[aria-label="Remove Salt"]'));
+  assertFocus(document, query('[aria-label="Remove Salt"]'));
   assert.deepEqual(optionTexts(), ["Egg (pcs)", "Milk (ml)", "Onion (g)"]);
 
   query('[aria-label="Remove Salt"]').click();
 
-  assert.equal(document.activeElement, query(".dialog-title"));
+  assertFocus(document, query(".dialog-title"));
   assert.equal(query(".no-ingredients").hidden, false);
 });
 
@@ -377,7 +377,7 @@ test("Cancel discards the changes and returns focus to the opener", () => {
   assert.equal(dialog.open, false);
   assert.equal(editor.isOpen(), false);
   assert.deepEqual(saved, []);
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
   assert.equal(server.requests.length, 0);
 });
 
@@ -390,7 +390,7 @@ test("Escape (the dialog's close event) discards the changes", () => {
   dialog.close();
 
   assert.equal(editor.isOpen(), false);
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
   assert.equal(server.requests.length, 0);
 });
 
