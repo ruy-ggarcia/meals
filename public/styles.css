@@ -53,6 +53,11 @@ button {
   font-weight: 600;
 }
 
+.page-links {
+  display: flex;
+  gap: 1rem;
+}
+
 .week-bar {
   display: flex;
   align-items: center;
@@ -358,6 +363,14 @@ button {
   padding: 0.4rem;
   border: 1px solid var(--border);
   border-radius: 0.3rem;
+  font: inherit;
+}
+
+.catalog select {
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  background: #fff;
   font: inherit;
 }
 
@@ -671,7 +684,8 @@ button {
   }
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .catalog input {
+  .catalog input,
+  .catalog select {
     font-size: 16px;
   }
 }
