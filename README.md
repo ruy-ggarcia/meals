@@ -5,6 +5,9 @@ week at a time as a grid of 7 days by 5 meals (breakfast, morning snack,
 lunch, afternoon snack, and dinner). Each slot of the grid holds a menu: a
 list of recipes from the recipe book, each with a number of servings.
 
+Each recipe lists its ingredients, with the quantity that one serving
+needs, and the app adds them up into a shopping list for the week.
+
 The app runs on a computer at home. Any device on the same network, desktop or
 mobile, can use it from a browser.
 
@@ -135,21 +138,44 @@ save, click **Cancel**. To discard the unsaved menu and change weeks, click
 Changes from other devices don't appear in real time. To see them, reload the
 page. If two people edit the same slot, the last save wins.
 
+## View the shopping list
+
+To see what to buy for the displayed week, click **Shopping list** in the
+week bar. For each ingredient, the list shows the sum of its quantity ×
+the servings of every menu item of the week, rounded up to a whole
+number, from A to Z. The list counts the menus that the grid shows,
+including slots that are still saving and slots whose save failed.
+
+Recipes without ingredients can't add to the list. The dialog names them
+under **Not included**, with the slots where they appear.
+
+To close the list, click **Close**, press `Escape`, or click outside it.
+
 ## Manage recipes
 
-The recipe book holds the recipes that you can add to menus. To open it, click
-**Recipes** at the top of the meal plan. To go back, click **Meal plan**.
+The recipe book holds the recipes that you can add to menus. To open it,
+click **Recipes** at the top of any page.
 
-A recipe is a name of up to 100 characters. Names are unique, ignoring case
-and accents, so `Café` and `cafe` are the same name.
+A recipe has a name of up to 100 characters and a list of ingredients,
+each with the quantity that one serving needs. Names are unique, ignoring
+case and accents, so `Café` and `cafe` are the same name.
 
-- To add a recipe, type its name in **New recipe**, and then press `Enter` or
-  click **Add**. To clear the field, press `Escape`. If an archived recipe has
-  the name, click **Restore it** to bring that recipe back.
-- To rename a recipe, click **Rename**, type the new name, and then press
-  `Enter` or click **Save**. To keep the old name, press `Escape` or click
-  **Cancel**. The new name appears in every menu that uses the recipe, in
-  every week.
+- To add a recipe, click **New recipe**. To change a recipe, click its
+  **Edit** button. Both open the recipe editor:
+  - Type the name in **Name**.
+  - To add an ingredient, type part of its name in **Add ingredient**, and
+    then click it, or select it with the arrow keys and press `Enter`. A
+    recipe holds up to 50 ingredients, and the list offers only active
+    ingredients that aren't in the recipe. To add ingredients to the
+    catalog, use the **Ingredients** page.
+  - Type each quantity in the ingredient's unit, from `0.01` to `10000`
+    with at most two decimals, such as `0.25`. You can type `.` or `,` as
+    the decimal separator.
+  - To remove an ingredient, click **Remove**.
+  - To save, click **Done** or press `Enter`. To close the editor without
+    saving, click **Cancel** or press `Escape`.
+- A recipe without ingredients shows a warning icon. You can save a
+  recipe without ingredients, but the shopping list can't count it.
 - To find a recipe, type part of its name in **Search**.
 - To archive a recipe that you no longer use, click **Archive**. The slot
   editor stops offering it, and menus that already use it keep showing it.
@@ -157,6 +183,30 @@ and accents, so `Café` and `cafe` are the same name.
   **Restore**.
 
 You can't delete recipes.
+
+## Manage ingredients
+
+The ingredient catalog holds the ingredients that recipes use. To open
+it, click **Ingredients** at the top of any page.
+
+An ingredient has a name of up to 100 characters and a unit: `g`, `ml`,
+or `pcs`. Every recipe measures an ingredient in its unit, so the
+shopping list can add the quantities up. Names are unique, ignoring case
+and accents.
+
+- To add an ingredient, type its name in **New ingredient**, choose its
+  unit, and then press `Enter` or click **Add**. If an archived
+  ingredient has the name, click **Restore it** to bring that ingredient
+  back.
+- To rename an ingredient or change its unit, click **Edit**. You can
+  change the unit only while no recipe, active or archived, uses the
+  ingredient.
+- To find an ingredient, type part of its name in **Search**.
+- To archive an ingredient, click **Archive**. The recipe editor stops
+  offering it, and recipes that already use it keep it. To bring one
+  back, click **Restore** under **Archived**.
+
+You can't delete ingredients.
 
 ## Configure the server
 
@@ -176,9 +226,11 @@ DATA_DIR=/srv/meals PORT=8080 npm start
 
 ## Back up and restore data
 
-The meal plan and the recipe book live in the `v2/` directory inside the
-data directory, which is `data/` unless you set `DATA_DIR`:
+The meal plan, the recipe book, and the ingredient catalog live in the
+`v2/` directory inside the data directory, which is `data/` unless you set
+`DATA_DIR`:
 
+- `v2/ingredients.json` holds the ingredient catalog.
 - `v2/recipes.json` holds the recipe book.
 - `v2/weeks/` holds one file per week, named after the week's Monday, for
   example `v2/weeks/2026-09-21.json`. The server creates a week's file on
@@ -192,9 +244,9 @@ To back up your data, copy the directory:
 cp -r data/v2 "meals-backup-$(date +%F)"
 ```
 
-If a week file or `recipes.json` contains invalid JSON, the app shows an
-error, such as `Couldn't load the meal plan.`, and doesn't overwrite the file.
-To recover, do the following:
+If a week file, `recipes.json`, or `ingredients.json` contains invalid JSON,
+the app shows an error, such as `Couldn't load the meal plan.`, and doesn't
+overwrite the file. To recover, do the following:
 
 1. Restore a backup copy of the file, or fix the JSON by hand.
 1. In the app, click **Retry**.
@@ -202,6 +254,10 @@ To recover, do the following:
 If you restore an older `recipes.json`, menu items whose recipe it doesn't
 have disappear from the grid. They come back when you restore a recipe book
 that has them.
+
+If you restore an older `ingredients.json`, recipe ingredients that it
+doesn't have disappear from the recipes and the shopping list. They come
+back when you restore a catalog that has them.
 
 ### Plans from earlier versions
 
@@ -258,26 +314,38 @@ docs/
   glossary.md           # The terms the app uses.
   manual-test-plan.md   # Checks that need a person with a browser.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
-  app.js           # Meal plan page: grid, week changes, and saves.
-  dates.js         # Date helpers.*
-  dom.js           # DOM helpers shared by both pages.
-  http.js          # Requests with a timeout.*
-  index.html       # Meal plan page.
-  menus.js         # Menu functions.*
-  messages.js      # Recipe book message text.*
-  recipe-search.js # Recipe name matching and sorting.*
-  recipes.html     # Recipe book page.
-  recipes.js       # Recipe book page logic.
-  saves.js         # Save logic.*
-  slot-editor.js   # The slot editor dialog.
+  app.js               # Meal plan page: grid, week changes, and saves.
+  catalog-list.js      # List logic shared by the Recipes and Ingredients pages.
+  combobox.js          # The filter-and-pick field of the editors.
+  dates.js             # Date helpers.*
+  dom.js               # DOM helpers shared by the pages.
+  http.js              # Requests with a timeout.*
+  index.html           # Meal plan page.
+  ingredient-editor.js # The ingredient editor dialog.
+  ingredients.html     # Ingredients page.
+  ingredients.js       # Ingredients page logic.
+  menus.js             # Menu functions.*
+  messages.js          # Recipe book message text.*
+  name-search.js       # Name matching and sorting.*
+  quantities.js        # Quantity parsing and shopping list arithmetic.*
+  recipe-editor.js     # The recipe editor dialog.
+  recipes.html         # Recipe book page.
+  recipes.js           # Recipe book page logic.
+  saves.js             # Save logic.*
+  shopping-dialog.js   # The shopping list dialog.
+  shopping-list.js     # Computes the shopping list.*
+  slot-editor.js       # The slot editor dialog.
   styles.css
 server/
-  app.js           # HTTP API (Express) and static files.
-  errors.js        # Errors for bad input, which app.js maps to HTTP statuses.
-  files.js         # JSON files and the write queue. The only module that touches disk.
-  index.js         # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
-  recipes.js       # The recipe book: unique names, renaming, and archiving.
-  weeks.js         # Weeks and the menu of each slot.
+  app.js         # HTTP API (Express) and static files.
+  errors.js      # Errors for bad input, which app.js maps to HTTP statuses.
+  files.js       # JSON files and the write queue. The only module that touches disk.
+  index.js       # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
+  ingredients.js # The ingredient catalog: unique names, units, and archiving.
+  names.js       # Name rules shared by recipes and ingredients.
+  recipes.js     # The recipe book: unique names, ingredients, and archiving.
+  stores.js      # Wires the stores to one write queue and to each other.
+  weeks.js       # Weeks and the menu of each slot.
 test/              # Tests: node:test, with supertest for the API and happy-dom for the pages.
 biome.json         # Lint and format settings.
 ```
@@ -291,7 +359,9 @@ have the shape `{ "error": "MESSAGE" }`. Any other path under `/api` returns
 `404`. If a data file contains invalid JSON, the requests that read it return
 `500`.
 
-A recipe has the shape `{ "id", "name", "archived" }`.
+A recipe has the shape `{ "id", "name", "archived", "ingredients" }`,
+where `ingredients` is a list of `{ "ingredientId", "quantity" }`. An
+ingredient has the shape `{ "id", "name", "unit", "archived" }`.
 
 A week is identified by the date of its Monday, formatted as `YYYY-MM-DD`, for
 example `2026-09-21`. Each slot of a week holds a menu:
@@ -312,27 +382,76 @@ example `2026-09-21`. Each slot of a week holds a menu:
 
 `POST /api/recipes`
 
-Request body: `{ "name": "NAME" }`
+Request body:
+`{ "name": "NAME", "ingredients": [{ "ingredientId": "ID", "quantity": 1.5 }] }`,
+where `ingredients` is optional and defaults to `[]`.
 
 | Status | Meaning |
 |--------|---------|
 | `201`  | The body is the new recipe. The server trims the name and collapses runs of whitespace. |
-| `400`  | `name` is missing, isn't a string, is empty, or is longer than 100 characters. |
+| `400`  | `name` is missing, isn't a string, is empty, or is longer than 100 characters, the body has other fields, or `ingredients` breaks the rules below. |
 | `409`  | Another recipe, active or archived, has the same name, ignoring case and accents. The body is `{ "error", "recipe" }`, where `recipe` is that recipe. |
 
 ### Change a recipe
 
 `PATCH /api/recipes/ID`
 
-Request body: `{ "name": "NAME" }` to rename the recipe, or
-`{ "archived": true }` or `{ "archived": false }` to archive or restore it.
+Request body: `{ "name" }`, `{ "ingredients" }`, or both, to change the
+recipe, or `{ "archived": true }` or `{ "archived": false }`, alone, to
+archive or restore it.
 
 | Status | Meaning |
 |--------|---------|
 | `200`  | The body is the updated recipe. |
-| `400`  | The body doesn't have exactly one of the two fields, or the value is invalid. |
+| `400`  | The body mixes `archived` with other fields, has no known field, has other fields, or has an invalid value. |
 | `404`  | No recipe has that ID. |
 | `409`  | Another recipe, active or archived, has the same name, ignoring case and accents. The body is `{ "error", "recipe" }`. |
+
+`ingredients` is valid when all the following are true:
+
+- It's an array of at most 50 entries.
+- Each entry has exactly the keys `ingredientId` and `quantity`.
+- Each `ingredientId` is an existing ingredient, archived or not, and
+  appears once.
+- Each `quantity` is a number from 0.01 to 10000 with at most two
+  decimals.
+
+The server stores each quantity rounded to two decimals.
+
+### List ingredients
+
+`GET /api/ingredients`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "ingredients": [...] }`, with every ingredient, archived ones included, sorted from A to Z ignoring case and accents. |
+
+### Add an ingredient
+
+`POST /api/ingredients`
+
+Request body: `{ "name": "NAME", "unit": "UNIT" }`, where `UNIT` is
+`g`, `ml`, or `pcs`.
+
+| Status | Meaning |
+|--------|---------|
+| `201`  | The body is the new ingredient. |
+| `400`  | The body doesn't have exactly `name` and `unit`, the name is invalid, or the unit isn't `g`, `ml`, or `pcs`. |
+| `409`  | Another ingredient, active or archived, has the same name, ignoring case and accents. The body is `{ "error", "ingredient" }`. |
+
+### Change an ingredient
+
+`PATCH /api/ingredients/ID`
+
+Request body: `{ "name" }`, `{ "unit" }`, or both, or
+`{ "archived": true }` or `{ "archived": false }`, alone.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is the updated ingredient. |
+| `400`  | The body mixes `archived` with other fields, has no known field, has other fields, or has an invalid value. |
+| `404`  | No ingredient has that ID. |
+| `409`  | Another ingredient has the same name, and the body is `{ "error", "ingredient" }`. Or the unit changes while a recipe uses the ingredient, and the body is `{ "error" }`. |
 
 ### Get a week
 

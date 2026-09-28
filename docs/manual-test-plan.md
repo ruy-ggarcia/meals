@@ -27,7 +27,7 @@ Monday of the following week. Tests that say "desktop" use a window that is
 slot* means to click it, add a recipe or change servings in the editor, and
 click **Done**.
 
-Tests marked *Optional*, and all of sections 9 and 10, are optional. Run
+Tests marked *Optional*, and all of sections 11 and 12, are optional. Run
 every other test.
 
 ## Set up a test server
@@ -59,6 +59,16 @@ following:
      "<b>Bold</b> soup" "Supercalifragilisticexpialidocious-casserole-with-a-very-long-name"; do
      curl -s -X POST -H 'Content-Type: application/json' -d "{\"name\":\"$name\"}" \
        http://localhost:3000/api/recipes; echo
+   done
+   ```
+
+1. Add the test ingredients:
+
+   ```bash
+   for entry in Egg:pcs Milk:ml Onion:g Rice:g; do
+     curl -s -X POST -H 'Content-Type: application/json' \
+       -d "{\"name\":\"${entry%%:*}\",\"unit\":\"${entry##*:}\"}" \
+       http://localhost:3000/api/ingredients; echo
    done
    ```
 
@@ -183,46 +193,77 @@ Run these tests on desktop unless a test says otherwise.
 
 | ID  | Step | Expected result |
 |-----|------|-----------------|
-| 8.1 | On the meal plan, click **Recipes**. | The recipe book opens with the test recipes from A to Z, and no **Archived** section. |
-| 8.2 | Click **Rename** on `Lentil soup`, type `Red lentil soup`, and press `Enter`. | The row shows `Red lentil soup` in its sorted place, and its **Rename** button has focus. |
-| 8.3 | Go to the meal plan, show the next week, and look at the slot from `1.3`. | It shows `Red lentil soup × 1`. |
-| 8.4 | Click **Rename** on `Omelette`, type `x`, and click in **Search**. | The rename field stays open with `x`. |
-| 8.5 | Click **Cancel** in the row from `8.4`. | The field closes, the name stays `Omelette`, and nothing is saved. |
-| 8.6 | Click **Rename** on `Omelette`, type `y`, press `Tab` to move focus to **Save**, and press `Escape`. | The field closes, the name stays `Omelette`, and nothing is saved. |
-| 8.7 | Click **Rename** on `Omelette`, type `Green salad`, and click **Save**. | The field stays open, with `"Green salad" already exists.` below the row. Press `Escape`: the field closes. |
-| 8.8 | Click **Rename** on one recipe, don't type, and press `Tab`. | The rename field closes, and focus moves to the next control, not to the top of the page. |
-| 8.9 | Optional. Pause the server with `Control+Z`, click **Archive** on a recipe, and start typing in **Search**. Run `fg` in the server's terminal. | The recipe is archived, and focus stays in **Search** with your text. |
-| 8.10 | Archive `Green salad`, which the slot from `5.7` uses. Go to the meal plan. | The slot still shows `Green salad × 2`. In its editor, `+` on `Green salad` followed by **Done** saves without a red cross. |
-| 8.11 | Stop the server. Rename a recipe, and archive a recipe. | Each shows its `Couldn't … Try again.` message, and nothing changes. |
-| 8.12 | Start the server. In **New recipe**, add a recipe with a new name. | The recipe is added, and the archive error from `8.11` disappears. The rename field from `8.11` stays open with its message. Press `Escape` to close it. |
-| 8.13 | Archive `Omelette`. In **New recipe**, type `Omelette`, and press `Enter`. | `Omelette` moves under **Archived**. Adding shows `"Omelette" is archived.` with **Restore it**. |
-| 8.14 | Stop the server, and click **Restore it**. | After a moment, `Couldn't restore the recipe. Try again.` appears, followed by **Restore it**, which is still there. |
-| 8.15 | Start the server, and click **Restore it** again. | `Omelette` is restored, the message disappears, and the field is empty. |
-| 8.16 | Stop the server again, and reload the recipe book. Start the server and click **Retry**. | The page shows `Couldn't load the recipes.`, and **Retry** loads the recipe book. |
-| 8.17 | On mobile, open the recipe book, and tap **New recipe**. | The keyboard opens, the page doesn't zoom, and the page doesn't scroll sideways. |
+| 8.1 | On the meal plan, click **Recipes**. | The recipe book opens with the test recipes from A to Z, each with a warning icon, and no **Archived** section. The title bar links to **Meal plan** and **Ingredients**. |
+| 8.2 | Look at the row for `Omelette`, then hover over its warning icon. | The icon sits at the right end of the row, next to **Edit**. The tooltip reads `No ingredients`. |
+| 8.3 | Click **New recipe**. | The editor opens, titled `New recipe`, with focus in **Name** and the text `No ingredients yet.` |
+| 8.4 | Type `Tortilla`. In **Add ingredient**, type `eg`, and press `Enter`. | `Egg` appears with `pcs` and an empty quantity field, which has focus. |
+| 8.5 | Type `1,25` in the quantity, and press `Enter`. | The editor closes. `Tortilla` appears in its sorted place without a warning icon, and its **Edit** button has focus. |
+| 8.6 | Click **Edit** on `Tortilla`. | The quantity reads `1.25`, and focus is on the title. |
+| 8.7 | Replace the quantity with `1.255`, and click **Done**. | `Enter a quantity from 0.01 to 10000, with up to two decimals.` appears below the row, focus moves to the field, and the editor stays open. |
+| 8.8 | Click the dark area outside the editor. | The editor stays open. Click **Cancel**: the editor closes, nothing is saved, and focus is on the **Edit** button of `Tortilla`. |
+| 8.9 | Click **Edit** on `Lentil soup`, change the name to `Red lentil soup`, and press `Enter`. | The row shows `Red lentil soup` in its sorted place. |
+| 8.10 | Go to the meal plan, show the next week, and look at the slot from `1.3`. | It shows `Red lentil soup × 1`. |
+| 8.11 | On the recipe book, click **Edit** on `Omelette`, change the name to `Green salad`, and click **Done**. | The editor stays open with `"Green salad" already exists.` below **Name**. Press `Escape`: the editor closes. |
+| 8.12 | Archive `Omelette`. Click **New recipe**, type `Omelette`, and click **Done**. | `Omelette` moves under **Archived**, and the editor reads `"Omelette" is archived. To use it, restore it from Archived.` Click **Cancel**. |
+| 8.13 | Click **New recipe**, type a name, and reload the page. | The browser asks whether to leave. Click **Cancel** or **Stay**: the editor keeps the name. Click **Cancel** in the editor. |
+| 8.14 | Archive `Green salad`, which the slot from `5.7` uses. Go to the meal plan. | The slot still shows `Green salad × 2`. In its editor, `+` on `Green salad` followed by **Done** saves without a red cross. |
+| 8.15 | Stop the server. Click **Edit** on a recipe, change its name, and click **Done**. Then archive a recipe. | The editor shows `Couldn't save the recipe. Try again.` and keeps your change. Archiving shows `Couldn't archive the recipe. Try again.` below the row. |
+| 8.16 | Start the server, and click **Done** in the editor from `8.15`. | The recipe is saved, and the editor closes. |
+| 8.17 | Stop the server again, and reload the recipe book. Start the server and click **Retry**. | The page shows `Couldn't load the recipes.`, and **Retry** loads the recipe book. |
+| 8.18 | On mobile, open the recipe book, and tap **New recipe**. | The editor fills the screen, the keyboard opens for **Name**, and the page doesn't zoom or scroll sideways. |
+| 8.19 | On mobile, add an ingredient to the recipe, and tap its quantity field. | The keyboard offers digits and a decimal separator. `0,25` is accepted when you tap **Done**. |
 
-## 9. Keyboard and screen readers (optional)
+## 9. Ingredients
+
+Run these tests on desktop unless a test says otherwise.
 
 | ID  | Step | Expected result |
 |-----|------|-----------------|
-| 9.1 | On desktop, press `Tab` until `›` has focus, and press `Enter` several times. | Each press shows the next week, and focus stays on `›`. |
-| 9.2 | Stop the server, press `Tab` until `›` has focus, and press `Enter`. Press `Tab` until **Retry** has focus, and press `Enter`. | **Retry** keeps focus when the load fails again. Start the server afterward. |
-| 9.3 | With a screen reader, such as VoiceOver or NVDA, change weeks. | The screen reader announces the new range. The buttons read `Previous week`, `Next week`, and `Today`. |
-| 9.4 | On mobile, with VoiceOver or TalkBack, move through the day bar. | The day buttons read like `Monday, September 21`. |
-| 9.5 | With a screen reader, move to a slot and open it. | The slot reads like `Monday, Lunch: Green salad × 2`, or `Monday, Lunch: empty`. The editor announces its title. The stepper buttons read like `Increase servings of Green salad`, and the servings are announced when they change. |
-| 9.6 | In the editor, type in **Add recipe** and press `↓`. | The screen reader announces the highlighted recipe. |
+| 9.1 | Click **Ingredients** in the title bar. | The page lists `Egg pcs`, `Milk ml`, `Onion g`, and `Rice g`, with each unit next to its **Edit** button. The title bar links to **Meal plan** and **Recipes**. |
+| 9.2 | In **New ingredient**, type `Flour`, and press `Enter`. | `Choose a unit.` appears, focus moves to the unit, and nothing is added. |
+| 9.3 | Choose `g`, and click **Add**. | `Flour g` appears in its sorted place. The name clears, the unit goes back to `Choose a unit`, and focus returns to the name. |
+| 9.4 | Type `ONION`, choose `pcs`, and click **Add**. | `"Onion" already exists.` appears. |
+| 9.5 | Archive `Flour`. Type `flour`, choose `g`, and click **Add**. | `"Flour" is archived.` appears with **Restore it**. Click it: `Flour` is back in the list, and the field is empty. |
+| 9.6 | Click **Edit** on `Egg`. | The editor shows `Egg` and `pcs`. **Unit** is disabled, with `Used in 1 recipe. To change the unit, remove the ingredient from that recipe first.` |
+| 9.7 | Click **Cancel**. Click **Edit** on `Milk`, choose `g`, and click **Done**. Then change it back to `ml`. | `Milk` shows `g`, and then `ml` again. |
+| 9.8 | Open the recipe book in a second tab, and add `Milk` to a recipe. In the first tab, click **Edit** on `Milk`, choose `g`, and click **Done**. | The editor stays open with `"Milk" is used in recipes. To change its unit, remove it from those recipes first.` Click **Cancel**. |
+| 9.9 | Stop the server. Type a name, choose a unit, and click **Add**. | `Couldn't add the ingredient. Try again.` appears, and the name and the unit stay. |
+| 9.10 | Reload the page. Start the server, and click **Retry**. | The page shows `Couldn't load the ingredients.`, and **Retry** loads the catalog. |
+| 9.11 | On mobile, open the Ingredients page, and tap **Edit** on an ingredient. | The editor fills the screen, and no keyboard opens until you tap **Name**. |
 
-## 10. Day and week changes (optional)
+## 10. Shopping list
+
+| ID  | Step | Expected result |
+|-----|------|-----------------|
+| 10.1 | In the next week, add `Tortilla` to Tuesday's lunch with 2 servings. Click **Shopping list**. | The dialog is titled `Shopping list ·` and the week's range, and lists `Egg 3 pcs`. Below, a warning icon and `Not included: these recipes have no ingredients.` list the week's other recipes with their slots, such as `Red lentil soup`. |
+| 10.2 | Press `Escape`. | The dialog closes, and **Shopping list** has focus. |
+| 10.3 | Show a week with no menus, and click **Shopping list**. | The dialog reads `This week has no menus yet.` Click outside the dialog: it closes. |
+| 10.4 | Stop the server. In the week from `10.1`, change `Tortilla` to 3 servings, and click **Done**. When the red cross appears, click **Shopping list**. | The list shows `Egg 4 pcs`: 1.25 × 3 = 3.75, rounded up. Close it, start the server, and retry the save. |
+| 10.5 | With the shopping list open, change the week in the address bar, and press `Enter`. | The address goes back, and the dialog stays open on the same week. |
+| 10.6 | On mobile, tap **Shopping list** in a week with many ingredients. | The dialog fills the screen, the list scrolls inside it, and the page doesn't scroll sideways. The week bar shows **Shopping list** on its own row. |
+
+## 11. Keyboard and screen readers (optional)
+
+| ID  | Step | Expected result |
+|-----|------|-----------------|
+| 11.1 | On desktop, press `Tab` until `›` has focus, and press `Enter` several times. | Each press shows the next week, and focus stays on `›`. |
+| 11.2 | Stop the server, press `Tab` until `›` has focus, and press `Enter`. Press `Tab` until **Retry** has focus, and press `Enter`. | **Retry** keeps focus when the load fails again. Start the server afterward. |
+| 11.3 | With a screen reader, such as VoiceOver or NVDA, change weeks. | The screen reader announces the new range. The buttons read `Previous week`, `Next week`, and `Today`. |
+| 11.4 | On mobile, with VoiceOver or TalkBack, move through the day bar. | The day buttons read like `Monday, September 21`. |
+| 11.5 | With a screen reader, move to a slot and open it. | The slot reads like `Monday, Lunch: Green salad × 2`, or `Monday, Lunch: empty`. The editor announces its title. The stepper buttons read like `Increase servings of Green salad`, and the servings are announced when they change. |
+| 11.6 | In the editor, type in **Add recipe** and press `↓`. | The screen reader announces the highlighted recipe. |
+
+## 12. Day and week changes (optional)
 
 These tests change the computer's clock. Set the clock back when you finish.
-Don't run `10.1` and `10.2` on a Sunday: the next day starts a new week, so
+Don't run `12.1` and `12.2` on a Sunday: the next day starts a new week, so
 the marker leaves the displayed week instead of moving.
 
 | ID  | Step | Expected result |
 |-----|------|-----------------|
-| 10.1 | With the page open on the current week, set the clock to the next day. Switch to another tab and back. | The today marker moves to the new day. |
-| 10.2 | Make the browser window narrower than 768 px. With the clock still set to the next day and the page visible, click **Today**. | The new day is selected in the day bar, and the marker is on the new day. |
-| 10.3 | Set the clock to the next Monday, and click **Today**. | The page shows the week of `NEXT_MONDAY`. |
+| 12.1 | With the page open on the current week, set the clock to the next day. Switch to another tab and back. | The today marker moves to the new day. |
+| 12.2 | Make the browser window narrower than 768 px. With the clock still set to the next day and the page visible, click **Today**. | The new day is selected in the day bar, and the marker is on the new day. |
+| 12.3 | Set the clock to the next Monday, and click **Today**. | The page shows the week of `NEXT_MONDAY`. |
 
 ## Clean up
 
