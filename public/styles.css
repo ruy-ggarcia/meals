@@ -60,6 +60,7 @@ button {
 
 .week-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
@@ -343,6 +344,48 @@ button {
   background: #fff;
 }
 
+/* ---------- Shopping list ---------- */
+
+.shopping-lines,
+.not-included-recipes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shopping-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.line-name,
+.not-included-recipes li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.line-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.not-included {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.not-included-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-weight: 600;
+}
+
 /* ---------- Recipe book and ingredient catalog ---------- */
 
 .catalog {
@@ -569,6 +612,10 @@ button {
   .week-bar button {
     min-width: 2rem;
     padding: 0.35rem 0.5rem;
+  }
+
+  .shopping-list-button {
+    flex: 1 0 100%;
   }
 
   .week-range {

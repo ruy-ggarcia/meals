@@ -1,5 +1,5 @@
-// Meal plan page. Depends ONLY on the HTTP API (/api/weeks and /api/recipes);
-// never import from server/.
+// Meal plan page. Depends ONLY on the HTTP API (/api/weeks, /api/recipes, and
+// /api/ingredients); never import from server/.
 
 import {
   addDays,
@@ -15,6 +15,8 @@ import { createElement, withLoadState } from "./dom.js";
 import { getJson, REQUEST_TIMEOUT_MS } from "./http.js";
 import { describeItem } from "./menus.js";
 import { createSaves } from "./saves.js";
+import { createShoppingDialog } from "./shopping-dialog.js";
+import { shoppingList } from "./shopping-list.js";
 import { createSlotEditor } from "./slot-editor.js";
 
 const DAYS = [
@@ -63,6 +65,8 @@ const retryLoadButton = document.getElementById("retry-load");
 const weekBar = document.getElementById("week-bar");
 const weekRange = document.getElementById("week-range");
 const editor = createSlotEditor(document.getElementById("slot-editor"));
+const shopping = createShoppingDialog(document.getElementById("shopping-dialog"));
+const shoppingButton = document.getElementById("shopping-list");
 
 /** Timer that hides the "✓" badge, per slot element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
@@ -70,6 +74,8 @@ const savedTimers = new Map();
 const menus = new Map();
 /** The recipe book as last loaded, by recipe ID. */
 let recipesById = new Map();
+/** The ingredient catalog as last loaded. */
+let ingredients = [];
 
 /** The week in the URL hash and the range label. Retry loads it again. */
 let requestedWeek;
@@ -203,6 +209,33 @@ function openEditor(slot) {
   });
 }
 
+// For example, "Mon dinner".
+function slotLabel({ day, meal }) {
+  const dayLabel = DAYS.find((entry) => entry.id === day).label.slice(0, 3);
+  return `${dayLabel} ${MEALS.find((entry) => entry.id === meal).label.toLowerCase()}`;
+}
+
+// Opens the shopping list of the week on screen. It counts the menus that
+// the grid shows, including slots that are saving or whose save failed.
+function openShoppingList() {
+  const { week } = grid.dataset;
+  if (grid.hidden || week === undefined) return;
+  const slots = DAYS.flatMap((day) =>
+    MEALS.map((meal) => ({
+      day: day.id,
+      meal: meal.id,
+      menu: menus.get(slotKey(week, day.id, meal.id)),
+    })),
+  );
+  shopping.open({
+    title: `Shopping list · ${formatWeekRange(week)}`,
+    list: shoppingList(slots, [...recipesById.values()], ingredients),
+    isEmpty: slots.every((slot) => slot.menu.items.length === 0),
+    slotLabel,
+    opener: shoppingButton,
+  });
+}
+
 function selectDay(dayId) {
   grid.dataset.selectedDay = dayId;
   for (const button of dayBar.querySelectorAll("button")) {
@@ -291,13 +324,15 @@ async function loadWeek(week) {
     content: [dayBar, grid],
     errorMessage: "Couldn't load the meal plan:",
     run: async () => {
-      // The recipe book loads with every week, so recipes added on the
-      // Recipes page show up without a reload.
-      const [weekData, recipeBook] = await Promise.all([
+      // The recipe book and the ingredient catalog load with every week, so
+      // what the other pages add shows up without a reload.
+      const [weekData, recipeBook, catalog] = await Promise.all([
         getJson(`/api/weeks/${week}`),
         getJson("/api/recipes"),
+        getJson("/api/ingredients"),
       ]);
       recipesById = new Map(recipeBook.recipes.map((recipe) => [recipe.id, recipe]));
+      ingredients = catalog.ingredients;
       fillWeek(week, weekData);
       showDayDates(week);
       markToday();
@@ -313,6 +348,8 @@ function syncHash() {
 function setChangingWeek(changing) {
   changingWeek = changing;
   for (const button of weekBar.querySelectorAll("button")) button.disabled = changing;
+  // After a failed load, no week is shown, so there's no shopping list.
+  shoppingButton.disabled = changing || grid.hidden;
   grid.inert = changing; // no editing a week that is being left
 }
 
@@ -338,7 +375,7 @@ async function leaveLoadedWeek() {
 // Shows `week` without ever dropping an unsaved menu silently. On mobile, the
 // selected day stays the same unless `selectToday` is set.
 async function goToWeek(week, { selectToday = false } = {}) {
-  if (changingWeek || editor.isOpen()) return;
+  if (changingWeek || editor.isOpen() || shopping.isOpen()) return;
   // Disabling the clicked button (a week bar button or Retry) moves focus to
   // <body>; remember it so it can be refocused afterward.
   const focused = document.activeElement;
@@ -378,10 +415,11 @@ document
 document
   .getElementById("today")
   .addEventListener("click", () => goToWeek(weekIdOf(new Date()), { selectToday: true }));
+shoppingButton.addEventListener("click", openShoppingList);
 window.addEventListener("hashchange", () => {
   const week = location.hash.slice(1);
-  // The week never changes behind an open editor.
-  if (isWeekId(week) && !editor.isOpen()) goToWeek(week);
+  // The week never changes behind an open dialog.
+  if (isWeekId(week) && !editor.isOpen() && !shopping.isOpen()) goToWeek(week);
   else syncHash();
 });
 window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));

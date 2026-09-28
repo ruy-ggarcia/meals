@@ -21,6 +21,7 @@
         <span id="week-range" class="week-range" aria-live="polite"></span>
         <button type="button" id="next-week" aria-label="Next week">›</button>
         <button type="button" id="today">Today</button>
+        <button type="button" id="shopping-list" class="shopping-list-button">Shopping list</button>
       </nav>
     </header>
 
@@ -58,6 +59,23 @@
         <div class="dialog-actions">
           <button type="button" class="cancel">Cancel</button>
           <button type="button" class="done">Done</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Shopping list. Filled and opened by shopping-dialog.js. -->
+    <dialog id="shopping-dialog" class="dialog" aria-labelledby="shopping-dialog-title">
+      <div class="dialog-body">
+        <!-- biome-ignore lint/a11y/useHeadingContent: shopping-dialog.js sets the text when it opens. -->
+        <h2 id="shopping-dialog-title" class="dialog-title" tabindex="-1"></h2>
+        <p class="hint empty-week" hidden>This week has no menus yet.</p>
+        <ul class="shopping-lines" aria-label="Ingredients to buy"></ul>
+        <section class="not-included" aria-labelledby="not-included-title" hidden>
+          <p id="not-included-title" class="not-included-title">Not included: these recipes have no ingredients.</p>
+          <ul class="not-included-recipes"></ul>
+        </section>
+        <div class="dialog-actions">
+          <button type="button" class="close-dialog">Close</button>
         </div>
       </div>
     </dialog>
