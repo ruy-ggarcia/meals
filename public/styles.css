@@ -334,6 +334,10 @@ button {
   min-width: 2rem;
 }
 
+.unit-field {
+  background: #fff;
+}
+
 /* ---------- Recipe book and ingredient catalog ---------- */
 
 .catalog {

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ingredients</title>
+    <link rel="stylesheet" href="styles.css">
+    <script type="module" src="ingredients.js"></script>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="title-bar">
+        <h1>Ingredients</h1>
+        <nav class="page-links" aria-label="Pages">
+          <a class="page-link" href="/">Meal plan</a>
+          <a class="page-link" href="/recipes.html">Recipes</a>
+        </nav>
+      </div>
+    </header>
+
+    <div id="load-error" class="load-error" role="alert" hidden>
+      <span>Couldn't load the ingredients.</span>
+      <button type="button" id="retry-load">Retry</button>
+    </div>
+
+    <main id="ingredient-catalog" class="catalog" hidden>
+      <form id="new-ingredient" class="new-entry">
+        <label for="new-ingredient-name">New ingredient</label>
+        <div class="field-row">
+          <input id="new-ingredient-name" type="text" autocomplete="off">
+          <select id="new-ingredient-unit" aria-label="Unit">
+            <option value="">Choose a unit</option>
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="pcs">pcs</option>
+          </select>
+          <button type="submit" class="primary">Add</button>
+        </div>
+        <p id="new-ingredient-message" class="field-message" role="status"></p>
+      </form>
+
+      <label for="search">Search</label>
+      <input id="search" type="search" autocomplete="off">
+
+      <p id="empty-catalog" class="hint" hidden>No ingredients yet. Add your first one above.</p>
+      <p id="no-matches" class="hint" hidden></p>
+      <ul id="active-ingredients" class="catalog-list" aria-label="Ingredients"></ul>
+
+      <details id="archived" class="archived" hidden>
+        <summary>Archived (<span id="archived-count">0</span>)</summary>
+        <ul id="archived-ingredients" class="catalog-list" aria-label="Archived ingredients"></ul>
+      </details>
+    </main>
+
+    <!-- Ingredient editor. Filled and opened by ingredient-editor.js. -->
+    <dialog id="ingredient-editor" class="dialog" aria-labelledby="ingredient-editor-title">
+      <div class="dialog-body">
+        <h2 id="ingredient-editor-title" class="dialog-title" tabindex="-1">Edit ingredient</h2>
+        <label class="field-label" for="ingredient-name">Name</label>
+        <input id="ingredient-name" class="name-field" type="text" autocomplete="off">
+        <p class="field-message name-message" role="status"></p>
+        <label class="field-label" for="ingredient-unit">Unit</label>
+        <select id="ingredient-unit" class="unit-field">
+          <option value="g">g</option>
+          <option value="ml">ml</option>
+          <option value="pcs">pcs</option>
+        </select>
+        <p class="hint unit-hint" hidden></p>
+        <p class="field-message save-message" role="status"></p>
+        <div class="dialog-actions">
+          <button type="button" class="cancel">Cancel</button>
+          <button type="button" class="done">Done</button>
+        </div>
+      </div>
+    </dialog>
+  </body>
+</html>
