@@ -60,6 +60,10 @@ function setValue(element, value) {
   element.dispatchEvent(new window.Event("input", { bubbles: true }));
 }
 
+function pointerdownOn(element) {
+  element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
+}
+
 function chooseUnit(unit) {
   unitField().value = unit;
   unitField().dispatchEvent(new window.Event("change", { bubbles: true }));
@@ -238,6 +242,18 @@ test("Escape after Edit returns focus to the ingredient's Edit button", async ()
   buttonLabeled("Edit Onion").click();
   document.getElementById("ingredient-editor").close(); // what Escape does to a modal dialog
 
+  assertFocus(document, buttonLabeled("Edit Onion"));
+});
+
+test("a backdrop click with no changes after Edit returns focus to the ingredient's Edit button", async () => {
+  await openIngredientsPage([ingredient("1", "Onion")]);
+
+  buttonLabeled("Edit Onion").click();
+  const dialog = document.getElementById("ingredient-editor");
+  pointerdownOn(dialog);
+  dialog.click();
+
+  assert.equal(dialog.open, false);
   assertFocus(document, buttonLabeled("Edit Onion"));
 });
 

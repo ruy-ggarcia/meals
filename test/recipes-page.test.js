@@ -40,6 +40,10 @@ function keydownOn(element, key) {
   return event;
 }
 
+function pointerdownOn(element) {
+  element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
+}
+
 function searchField() {
   return document.getElementById("search");
 }
@@ -153,6 +157,17 @@ test("Escape after Edit returns focus to the recipe's Edit button", async () => 
   buttonLabeled("Edit Soup").click();
   editorDialog().close(); // what Escape does to a modal dialog
 
+  assertFocus(document, buttonLabeled("Edit Soup"));
+});
+
+test("a backdrop click with no changes after Edit returns focus to the recipe's Edit button", async () => {
+  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+
+  buttonLabeled("Edit Soup").click();
+  pointerdownOn(editorDialog());
+  editorDialog().click();
+
+  assert.equal(editorDialog().open, false);
   assertFocus(document, buttonLabeled("Edit Soup"));
 });
 
