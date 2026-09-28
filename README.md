@@ -106,9 +106,8 @@ menu:
 
 - To add a recipe, type part of its name in **Add recipe**. Then click the
   recipe, or select it with the arrow keys and press `Enter`. A menu holds up
-  to 20 recipes, and the list offers only recipes that aren't archived or
-  already in the menu. To add recipes to the recipe book, use the **Recipes**
-  page.
+  to 20 recipes, and the list offers only active recipes that aren't already
+  in the menu. To add recipes to the recipe book, use the **Recipes** page.
 - To change the servings of a recipe, click `−` or `+`. Servings go from 0.5
   to 99 in steps of 0.5. A recipe that you add starts at 1.
 - To remove a recipe from the menu, click **Remove**.
@@ -140,11 +139,10 @@ page. If two people edit the same slot, the last save wins.
 
 ## View the shopping list
 
-To see what to buy for the displayed week, click **Shopping list** in the
-week bar. For each ingredient, the list shows the sum of its quantity ×
-the servings of every menu item of the week, rounded up to a whole
-number, from A to Z. The list counts the menus that the grid shows,
-including slots that are still saving and slots whose save failed.
+To see the shopping list for the displayed week, click **Shopping list** in
+the week bar. It lists ingredients from A to Z, and it counts the menus
+that the grid shows, including slots that are still saving and slots whose
+save failed.
 
 Recipes without ingredients can't add to the list. The dialog names them
 under **Not included**, with the slots where they appear.
@@ -177,9 +175,8 @@ case and accents, so `Café` and `cafe` are the same name.
 - A recipe without ingredients shows a warning icon. You can save a
   recipe without ingredients, but the shopping list can't count it.
 - To find a recipe, type part of its name in **Search**.
-- To archive a recipe that you no longer use, click **Archive**. The slot
-  editor stops offering it, and menus that already use it keep showing it.
-  Archived recipes are listed under **Archived**. To bring one back, click
+- To archive a recipe that you no longer use, click **Archive**. Archived
+  recipes are listed under **Archived**. To bring one back, click
   **Restore**.
 
 You can't delete recipes.
@@ -202,9 +199,8 @@ and accents.
   change the unit only while no recipe, active or archived, uses the
   ingredient.
 - To find an ingredient, type part of its name in **Search**.
-- To archive an ingredient, click **Archive**. The recipe editor stops
-  offering it, and recipes that already use it keep it. To bring one
-  back, click **Restore** under **Archived**.
+- To archive an ingredient, click **Archive**. To bring one back, click
+  **Restore** under **Archived**.
 
 You can't delete ingredients.
 
@@ -257,7 +253,7 @@ that has them.
 
 If you restore an older `ingredients.json`, recipe ingredients that it
 doesn't have disappear from the recipes and the shopping list. They come
-back when you restore a catalog that has them.
+back when you restore an ingredient catalog that has them.
 
 ### Plans from earlier versions
 
