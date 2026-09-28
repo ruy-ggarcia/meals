@@ -148,10 +148,10 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
     };
   }
 
-  // Called inside the queue, so no catalog write runs between this check and
-  // the save.
-  async function checkIngredientsExist(entries) {
-    const known = await knownIngredientIds();
+  // Throws if any entry's ingredientId isn't in `known`. Called inside the
+  // queue, with `known` read there, so no catalog write runs between this
+  // check and the save.
+  function checkIngredientsExist(known, entries) {
     const unknown = entries.find((entry) => !known.has(entry.ingredientId));
     if (unknown) throw new ValidationError(`Unknown ingredient: ${unknown.ingredientId}`);
   }
@@ -190,7 +190,7 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
       const all = await readAll();
       const holder = holderOf(all, valid.name);
       if (holder) throw conflict(holder);
-      await checkIngredientsExist(valid.ingredients);
+      checkIngredientsExist(await knownIngredientIds(), valid.ingredients);
       const recipe = {
         id: randomUUID(),
         name: valid.name,
@@ -212,8 +212,8 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
         const holder = holderOf(all, valid.name, id);
         if (holder) throw conflict(holder);
       }
-      if (valid.ingredients !== undefined) await checkIngredientsExist(valid.ingredients);
       const known = await knownIngredientIds();
+      if (valid.ingredients !== undefined) checkIngredientsExist(known, valid.ingredients);
       Object.assign(recipe, valid);
       await writeJson(file, { recipes: all });
       // The file keeps what the catalog doesn't have, but the reply matches list().
