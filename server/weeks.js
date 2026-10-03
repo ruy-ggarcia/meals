@@ -138,7 +138,7 @@ export function createWeeks({ dataDir, enqueue, recipes }) {
   }
 
   async function knownRecipeIds() {
-    return new Set((await recipes.list()).map((recipe) => recipe.id));
+    return new Set(await recipes.ids());
   }
 
   async function readWeek(week) {

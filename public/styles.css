@@ -3,6 +3,7 @@
   --border: #ccc;
   --border-light: #ddd;
   --error: #8a1c14;
+  --warning: #8a5a00;
   --bg: #f6f6f6;
 }
 
@@ -52,16 +53,22 @@ button {
   font-weight: 600;
 }
 
+.page-links {
+  display: flex;
+  gap: 1rem;
+}
+
 .week-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
 
 .week-bar button,
-.recipe-book button,
-.slot-editor button {
+.catalog button,
+.dialog button {
   padding: 0.4rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
@@ -164,11 +171,12 @@ button {
   stroke-linejoin: round;
 }
 
-/* ---------- Slot editor ---------- */
+/* ---------- Dialogs ---------- */
 
-/* No padding: slot-editor.js treats a click whose target is the dialog itself
-   as a click on the backdrop. The body inside carries the padding. */
-.slot-editor {
+/* No padding: onBackdropClick in dom.js treats a click whose target is the
+   dialog itself as a click on the backdrop. The body inside carries the
+   padding. */
+.dialog {
   width: min(32rem, calc(100% - 2rem));
   padding: 0;
   border: 0;
@@ -176,18 +184,18 @@ button {
   box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 25%);
 }
 
-.slot-editor::backdrop {
+.dialog::backdrop {
   background: rgb(0 0 0 / 40%);
 }
 
-.slot-editor-body {
+.dialog-body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   padding: 1rem;
 }
 
-.slot-editor-title {
+.dialog-title {
   margin: 0;
   font-size: 1.1rem;
 }
@@ -195,12 +203,12 @@ button {
 /* The title takes focus when the dialog opens, only so a phone doesn't open
    its keyboard: that programmatic focus shows no ring. A keyboard user who
    tabs back to the title still sees the browser's own focus ring. */
-.slot-editor-title:focus:not(:focus-visible) {
+.dialog-title:focus:not(:focus-visible) {
   outline: none;
 }
 
 .menu-items,
-.recipe-options {
+.options {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -226,18 +234,18 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.slot-editor .step {
+.dialog .step {
   min-width: 2.25rem;
   padding: 0.4rem 0;
 }
 
-.slot-editor .done {
+.dialog .done {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
 }
 
-.recipe-search {
+.option-search {
   width: 100%;
   padding: 0.4rem;
   border: 1px solid var(--border);
@@ -245,24 +253,24 @@ button {
   font: inherit;
 }
 
-.recipe-options {
+.options {
   max-height: 12rem;
   overflow-y: auto;
   border: 1px solid #eee;
   border-radius: 0.3rem;
 }
 
-.recipe-option {
+.option {
   padding: 0.4rem;
   cursor: pointer;
   overflow-wrap: anywhere;
 }
 
-.recipe-option:hover {
+.option:hover {
   background: #f3f3f3;
 }
 
-.recipe-option[aria-selected="true"] {
+.option[aria-selected="true"] {
   background: #eef6ee;
 }
 
@@ -277,9 +285,110 @@ button {
   gap: 0.5rem;
 }
 
-/* ---------- Recipe book ---------- */
+/* ---------- Recipe and ingredient editors ---------- */
 
-.recipe-book {
+.field-label {
+  font-weight: 600;
+}
+
+.dialog-subtitle {
+  margin: 0.5rem 0 0;
+  font-size: 1rem;
+}
+
+.name-field,
+.quantity-field,
+.unit-field {
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  font: inherit;
+}
+
+.name-field {
+  width: 100%;
+}
+
+.ingredient-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ingredient-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.ingredient-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quantity-field {
+  width: 5.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit {
+  min-width: 2rem;
+}
+
+.unit-field {
+  background: #fff;
+}
+
+/* ---------- Shopping list ---------- */
+
+.shopping-lines,
+.not-included-recipes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shopping-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.line-name,
+.not-included-recipes li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.line-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.not-included {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.not-included-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* ---------- Recipe book and ingredient catalog ---------- */
+
+.catalog {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -287,11 +396,11 @@ button {
   padding: 0 1rem 1rem;
 }
 
-.recipe-book label {
+.catalog label {
   font-weight: 600;
 }
 
-.recipe-book input {
+.catalog input {
   width: 100%;
   min-width: 0;
   padding: 0.4rem;
@@ -300,13 +409,21 @@ button {
   font: inherit;
 }
 
-.recipe-book .primary {
+.catalog select {
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  background: #fff;
+  font: inherit;
+}
+
+.catalog .primary {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
 }
 
-.new-recipe {
+.new-entry {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -333,13 +450,13 @@ button {
   color: #666;
 }
 
-.recipe-list {
+.catalog-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.recipe-row {
+.catalog-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -348,15 +465,43 @@ button {
   border-bottom: 1px solid var(--border-light);
 }
 
-.recipe-row .recipe-name {
+.entry {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.entry-name {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.recipe-row .rename-field {
-  flex: 1;
-  width: auto;
+.entry-unit {
+  color: #666;
+}
+
+.new-entry-button {
+  align-self: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.warning-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--warning);
+}
+
+.warning-icon svg {
+  width: 1.1em;
+  height: 1.1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .row-actions {
@@ -385,7 +530,7 @@ button {
   }
 
   /* The body is a fixed-height column on desktop, so the recipe book scrolls. */
-  .recipe-book {
+  .catalog {
     flex: 1;
     min-height: 0;
     overflow: auto;
@@ -467,6 +612,10 @@ button {
   .week-bar button {
     min-width: 2rem;
     padding: 0.35rem 0.5rem;
+  }
+
+  .shopping-list-button {
+    flex: 1 0 100%;
   }
 
   .week-range {
@@ -553,8 +702,8 @@ button {
     min-height: 3rem;
   }
 
-  /* The slot editor fills the screen on phones. */
-  .slot-editor {
+  /* Dialogs fill the screen on phones. */
+  .dialog {
     width: 100%;
     max-width: none;
     height: 100%;
@@ -565,17 +714,25 @@ button {
 
   /* Fills the dialog, so a tap below the actions still lands inside it
      instead of on the dialog's own (backdrop) box. */
-  .slot-editor-body {
+  .dialog-body {
     min-height: 100%;
   }
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .recipe-search {
+  .option-search {
     font-size: 16px;
   }
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .recipe-book input {
+  .name-field,
+  .quantity-field,
+  .unit-field {
+    font-size: 16px;
+  }
+
+  /* >= 16px prevents iOS Safari from zooming in on focus. */
+  .catalog input,
+  .catalog select {
     font-size: 16px;
   }
 }

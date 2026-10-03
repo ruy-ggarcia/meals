@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { loadSlotEditorDialog } from "./dom-helpers.js";
+import { assertFocus, loadSlotEditorDialog } from "./dom-helpers.js";
 
 function recipe(id, name, archived = false) {
   return { id, name, archived };
@@ -36,11 +36,11 @@ afterEach(async () => {
 });
 
 function search() {
-  return document.querySelector(".recipe-search");
+  return document.querySelector(".option-search");
 }
 
 function title() {
-  return document.querySelector(".slot-editor-title");
+  return document.querySelector(".dialog-title");
 }
 
 function itemRows() {
@@ -48,7 +48,7 @@ function itemRows() {
 }
 
 function optionEls() {
-  return [...document.querySelectorAll(".recipe-option")];
+  return [...document.querySelectorAll(".option")];
 }
 
 function openEditor({ menu: initialMenu = menu(), recipes = RECIPES } = {}) {
@@ -91,7 +91,7 @@ test("Done saves the copy, closes the dialog, and returns focus to the opener", 
 
   assert.equal(dialog.open, false);
   assert.deepEqual(savedMenu(), menu(["salad", 1]));
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
 });
 
 test("Cancel discards the copy and closes the dialog", () => {
@@ -103,7 +103,7 @@ test("Cancel discards the copy and closes the dialog", () => {
 
   assert.equal(dialog.open, false);
   assert.equal(savedMenu(), "not called");
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
 });
 
 test("Escape (the dialog's close event) discards the copy", () => {
@@ -118,7 +118,7 @@ test("Escape (the dialog's close event) discards the copy", () => {
 
   assert.equal(dialog.open, false);
   assert.equal(savedMenu(), "not called");
-  assert.equal(document.activeElement, opener);
+  assertFocus(document, opener);
 });
 
 test("Escape in Add recipe with text clears it and keeps the editor open", () => {
@@ -226,7 +226,7 @@ test("the + stepper stops at 99 and moves focus to −", () => {
 
   assert.equal(document.querySelector(".servings").textContent, "99");
   assert.equal(increase.disabled, true);
-  assert.equal(document.activeElement, decrease);
+  assertFocus(document, decrease);
 });
 
 test("the − stepper stops at 0.5 and moves focus to +", () => {
@@ -237,7 +237,7 @@ test("the − stepper stops at 0.5 and moves focus to +", () => {
 
   assert.equal(document.querySelector(".servings").textContent, "0.5");
   assert.equal(decrease.disabled, true);
-  assert.equal(document.activeElement, increase);
+  assertFocus(document, increase);
 });
 
 test("Remove moves focus to the next Remove, then the previous, then the title", () => {
@@ -248,18 +248,18 @@ test("Remove moves focus to the next Remove, then the previous, then the title",
     itemRows().map((row) => row.querySelector(".recipe-name").textContent),
     ["Lentil soup", "Omelette"],
   );
-  assert.equal(document.activeElement, itemRows()[1].querySelector(".remove")); // now Omelette
+  assertFocus(document, itemRows()[1].querySelector(".remove")); // now Omelette
 
   itemRows()[1].querySelector(".remove").click(); // remove Omelette (now the last row)
   assert.deepEqual(
     itemRows().map((row) => row.querySelector(".recipe-name").textContent),
     ["Lentil soup"],
   );
-  assert.equal(document.activeElement, itemRows()[0].querySelector(".remove")); // the previous row
+  assertFocus(document, itemRows()[0].querySelector(".remove")); // the previous row
 
   itemRows()[0].querySelector(".remove").click(); // remove the last remaining item
   assert.equal(itemRows().length, 0);
-  assert.equal(document.activeElement, title());
+  assertFocus(document, title());
 });
 
 test("at 20 items, Add recipe is disabled with the limit's placeholder", () => {
