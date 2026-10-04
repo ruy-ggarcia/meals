@@ -13,7 +13,8 @@
     "start": "node server/index.js",
     "test": "node --test --disable-warning=ExperimentalWarning --test-timeout=10000 test/*.test.js",
     "test:host": "scripts/host-smoke.sh meals:test",
-    "test:image": "docker build --tag meals:test . && scripts/image-smoke.sh meals:test"
+    "test:image": "docker build --tag meals:test . && scripts/image-smoke.sh meals:test",
+    "test:units": "scripts/units-check.sh"
   },
   "dependencies": {
     "express": "^5.2.1"

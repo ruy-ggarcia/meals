@@ -1,0 +1,13 @@
+[Unit]
+Description=Check that the latest Meals backup restores
+After=docker.service
+
+[Service]
+Type=oneshot
+User=deployer
+Group=docker
+UMask=0002
+ExecStart=/opt/server/meals/scripts/meals-restore-check
+# A oneshot service has no start timeout by default, so a hung step would
+# hold the scripts' lock forever.
+TimeoutStartSec=15min
