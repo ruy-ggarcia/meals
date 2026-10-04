@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up the Meals data
+
+[Service]
+Type=oneshot
+User=deployer
+Group=docker
+UMask=0002
+ExecStart=/opt/server/meals/scripts/meals-backup daily
+# A oneshot service has no start timeout by default, so a hung step would
+# hold the scripts' lock forever.
+TimeoutStartSec=30min
