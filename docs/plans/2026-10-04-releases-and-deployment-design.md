@@ -103,21 +103,25 @@ The API reference in `README.md` documents the endpoint.
 ### Graceful shutdown
 
 `server/index.js` calls a new `start({ dataDir, logger, port, version })`
-function, which listens and returns `{ port, stop }`. On `SIGTERM` or
-`SIGINT`, `index.js` logs the signal and calls `stop()`, which does the
-following:
+function, in `server/start.js`, which listens and returns `{ port, stop }`.
+On `SIGTERM` or `SIGINT`, `index.js` logs the signal and calls `stop()`,
+which does the following:
 
 1. Stops accepting connections with `server.close()`, and closes idle
    keep-alive connections.
-1. Waits for the requests in progress to finish.
+1. Waits for the requests in progress to finish. When each one finishes, it
+   closes the connection, which is idle by then. Otherwise a browser's
+   keep-alive connection would delay the stop until its timeout.
 1. Waits for the write queue to drain. `createStores` returns an `idle()`
    function that enqueues an empty task and resolves when it runs, which is
    after every write before it.
 1. Resolves, and `index.js` logs the stop and exits with code `0`.
 
 If `stop()` hasn't resolved after 10 seconds, `index.js` logs a timeout and
-exits with code `1`. The deadline is below the 15-second grace period of the
-container, so Docker never needs `SIGKILL`.
+exits with code `1`, and if `stop()` fails, it logs the error and exits with
+code `1`. The deadline is below the 15-second grace period of the
+container, so Docker never needs `SIGKILL`. `server/shutdown.js` holds this
+logic, so tests can drive it with mock timers.
 
 ### Logs
 
@@ -134,10 +138,11 @@ logs the following:
 | `msg` | Level | Fields |
 |-------|-------|--------|
 | `server started` | `info` | `version`, `port`, `dataDir` |
-| `request` | `info` | `method`, `path`, `status`, `ms`. Only for paths under `/api`. |
+| `request` | `info` | `method`, `path`, `status`, `ms`. Only for paths under `/api`, and not for health checks that return `200`, which Docker runs every 30 seconds. |
 | `request failed` | `error` | `method`, `path`, `error` (the stack). For every `500`. It replaces `console.error`. |
 | `server stopping` | `info` | `signal` |
 | `server stopped` | `info` | |
+| `shutdown failed` | `error` | `error` (the stack) |
 | `shutdown timed out` | `error` | |
 
 `createApp` and `start` take the logger as a parameter. Tests pass a logger
@@ -169,9 +174,9 @@ stage does the following:
   seconds, every second during the first 10 seconds, with a 3-second
   timeout. The script requests `/api/health` on `127.0.0.1` and exits with
   `0` only for `200`, so the image needs no `curl` or `wget`.
-- Carries the OCI labels for the version, the revision, and the source,
-  which `docker/metadata-action` generates. The source label links the GHCR
-  package to the repository.
+- Carries the OCI labels for the version, the revision, and the source. The
+  version and the revision come from the build arguments `VERSION` and
+  `REVISION`. The source label links the GHCR package to the repository.
 
 `.dockerignore` keeps everything else out of the build context. In
 particular, it excludes `data/`, so real data never ends up in an image.
@@ -180,9 +185,10 @@ particular, it excludes `data/`, so real data never ends up in an image.
 
 `scripts/image-smoke.sh IMAGE` checks an image as production would run it:
 
-1. Starts `IMAGE` with the options of `deploy/compose.yaml`, such as
-   `init`, `read_only`, and `cap_drop`, a temporary data directory, the UID
-   and GID of the current user, and the port published on `127.0.0.1`.
+1. Starts `IMAGE` through `deploy/compose.yaml` itself, as the Compose
+   project `meals-smoke`, so it checks the production options, such as
+   `init`, `read_only`, and `cap_drop`. It uses a temporary data directory,
+   the UID and GID of the current user, and a free port of `127.0.0.1`.
 1. Waits for Docker to report the container as `healthy`.
 1. Checks that `/api/health` returns the `version` of `package.json`.
 1. Adds an ingredient, restarts the container, and checks that the
@@ -201,9 +207,13 @@ test. It needs Docker, so it isn't part of `npm test`.
 - Every action is referenced by its full commit SHA, followed by a comment
   with its version, such as `# v7.0.1`.
 - Every job has `timeout-minutes: 10`.
+- The `ci` job installs ShellCheck if the runner lacks it, because
+  `npm run lint` runs it.
 - A new job, `image`, runs next to `ci` on every pull request and every push
-  to `main`. It builds the image with Docker Buildx and the GitHub Actions
-  cache, and runs `scripts/image-smoke.sh` on it.
+  to `main`. It runs `npm run test:image`, which builds the image with
+  `docker build` and runs `scripts/image-smoke.sh` on it. The image is small,
+  so the workflows use no build cache and no Docker actions: the fewer
+  third-party actions, the fewer to trust and update.
 
 `image` joins `ci` as a required status check of `main`.
 
@@ -251,8 +261,8 @@ time, without canceling a run in progress. It has two jobs, each with
 
 1. `release-please`:
    1. Creates a token for the GitHub App with
-      `actions/create-github-app-token`, from the `RELEASE_APP_ID` variable
-      and the `RELEASE_APP_PRIVATE_KEY` secret.
+      `actions/create-github-app-token`, from the `RELEASE_APP_CLIENT_ID`
+      variable and the `RELEASE_APP_PRIVATE_KEY` secret.
    1. Runs `googleapis/release-please-action` with that token. It creates
       or updates the release pull request. When that pull request has just
       been merged, it creates the tag `vX.Y.Z` and the GitHub Release.
@@ -261,11 +271,14 @@ time, without canceling a run in progress. It has two jobs, each with
    permissions `contents: write` and `packages: write`:
    1. Checks out the tag, and fails if the tag isn't `v` followed by the
       `version` of `package.json`.
-   1. Builds the image and runs `scripts/image-smoke.sh` on it.
-   1. Pushes it to GHCR as `ghcr.io/ruy-ggarcia/meals:X.Y.Z`. It pushes no
-      other tag.
+   1. Builds the image with `docker build`, and runs
+      `scripts/image-smoke.sh` on it.
+   1. Tags **that same image** as `ghcr.io/ruy-ggarcia/meals:X.Y.Z` and
+      pushes it with `docker push`, so the image in GHCR is the one that
+      passed the smoke test. It pushes no other tag.
    1. Uploads `image.txt` to the GitHub Release. The file holds one line, the
-      image reference by digest: `ghcr.io/ruy-ggarcia/meals@sha256:DIGEST`.
+      image reference by digest, taken from the pushed image:
+      `ghcr.io/ruy-ggarcia/meals@sha256:DIGEST`.
 
 A release is deployable only once it has `image.txt`, and `image.txt` exists
 only for an image that passed the smoke test.
@@ -297,10 +310,10 @@ The host has the following directories and files:
 ```none
 /opt/server/                 # root:docker, 2775
   meals/                     # deployer:docker, 2775
+    .docker/                 # DOCKER_CONFIG of the scripts, because deployer has no home
     backups/                 # Backups
-    bin/                     # meals-backup, meals-deploy, meals-restore, meals-restore-check
     data/                    # The data directory, mounted at /data
-    lib/                     # Shell functions shared by the scripts
+    scripts/                 # lib/ and the meals-* scripts, as in the repository
     .env                     # The deployed version and its settings
     .env.previous            # The previous .env, for the rollback
     .lock                    # The lock that the scripts share
@@ -320,7 +333,9 @@ The host has the following directories and files:
 | `MEALS_VERSION` | The deployed version, such as `0.2.0`. Empty before the first deployment. |
 
 The scripts read the root from `MEALS_ROOT`, which defaults to
-`/opt/server/meals`. Tests point it at a temporary directory.
+`/opt/server/meals`. Tests point it at a temporary directory. Each script
+finds `lib/` next to itself, so `scripts/` has the same layout in the
+repository and on the host.
 
 ### Compose file
 
@@ -349,21 +364,21 @@ following:
 1. Creates `/opt/server` with owner `root:docker` and mode `2775`, and
    `/opt/server/meals` and its directories with owner `deployer:docker` and
    mode `2775`.
-1. Copies `deploy/compose.yaml` to `compose.yaml`, the `meals-*` scripts
-   to `bin/`, and `scripts/lib/` to `lib/`, replacing the old copies.
+1. Copies `deploy/compose.yaml` to `compose.yaml`, and the `meals-*`
+   scripts and `scripts/lib/` to `scripts/`, replacing the old copies.
 1. Creates `.env` with empty `MEALS_IMAGE` and `MEALS_VERSION` when it
    doesn't exist. **When it creates `.env`, it also creates `hold`**, so the
    timer doesn't deploy into an empty data directory before you move your
    data in.
-1. Links each script in `bin/` from `/usr/local/bin`.
+1. Links each `meals-*` script from `/usr/local/bin`.
 1. Copies the units in `deploy/systemd/` to `/etc/systemd/system`, reloads
-   systemd, and enables
-   and starts the three timers.
+   systemd, and enables and starts the three timers.
 
 ### Units
 
-Each timer starts a `Type=oneshot` service with `User=deployer` and
-`Group=docker`. The services write to the journal.
+Each timer starts a `Type=oneshot` service with `User=deployer`,
+`Group=docker`, and `UMask=0002`, so the files that the scripts create stay
+writable by the `docker` group. The services write to the journal.
 
 | Timer | Schedule | Service runs |
 |-------|----------|--------------|
@@ -378,6 +393,10 @@ anything, and waits for it. A script that another script calls, such as
 `meals-restore` during a rollback, inherits the lock instead of waiting for
 it.
 
+Every script also changes its working directory to `MEALS_ROOT` first.
+`sudo -u deployer` keeps your working directory, which `deployer` might not
+be able to read, and `find` and `docker compose` fail there.
+
 ## Deployment
 
 ### Automatic deployment
@@ -388,26 +407,36 @@ it.
 1. Exits with `0` if `hold` exists.
 1. Requests `https://api.github.com/repos/ruy-ggarcia/meals/releases/latest`
    without a token. The latest release excludes drafts and prereleases.
-1. Exits with `0`, and logs why, if any of the following is true:
-   - The release is the deployed version.
-   - The release is older than the deployed version, compared with
-     `sort -V`. The host never downgrades on its own.
-   - The release is in `failed`.
-   - The release has no `image.txt` yet.
+1. If the release is the deployed version, starts the app if it isn't
+   running, for example after an interrupted deployment, and exits with
+   `0`. To keep the app stopped on purpose, you put the host on hold.
+1. Exits with `0`, and logs why, if the release is older than the deployed
+   version, compared with `sort -V`. The host never downgrades on its own.
+1. Fails if the release is in `failed`, without deploying it. The service
+   then stays in `systemctl --failed` until a newer release or a hold,
+   instead of only until the next run.
+1. Exits with `0`, and logs why, if the release has no `image.txt` yet.
 1. Downloads `image.txt`, and fails unless it's exactly
    `ghcr.io/ruy-ggarcia/meals@sha256:` followed by 64 lowercase hexadecimal
    digits.
+1. Pulls the image. If the pull fails, it fails without changing anything,
+   including the hold of a manual deployment, and without adding the
+   version to `failed`, so the next run tries again.
 1. Deploys that version, as the following section describes.
 
 ### Deploying a version
 
-To deploy version `V` with image `I`, `meals-deploy` does the following:
+To deploy version `V` with image `I`, which is pulled already,
+`meals-deploy` does the following:
 
-1. Pulls `I`. If the pull fails, it fails without changing anything and
-   without adding `V` to `failed`, so the next run tries again.
-1. Stops the container, if one runs, with `docker compose stop`.
+1. Stops the container, if a version is deployed, with
+   `docker compose stop`.
 1. Takes a `pre-deploy` backup, if a version is deployed. The first
-   deployment takes none, because no version has written the data yet.
+   deployment takes none, because no version has written the data yet. If
+   the backup fails, for example because a data file has invalid JSON, it
+   starts the previous version again and fails without changing anything.
+   It finds the new backup by comparing the list of backups before and
+   after, not by the clock.
 1. Copies `.env` to `.env.previous`, and writes a new `.env` with
    `MEALS_IMAGE=I` and `MEALS_VERSION=V`, atomically.
 1. Runs `docker compose up -d`.
@@ -418,13 +447,14 @@ To deploy version `V` with image `I`, `meals-deploy` does the following:
    images other than the ones in `.env` and `.env.previous`, and exits with
    `0`. It doesn't touch images of other projects.
 1. If the verification fails, rolls back:
-   1. Logs the container's last log lines.
+   1. Logs the container's last log lines, and stops the container.
    1. Moves `.env.previous` back to `.env`.
-   1. If a version was deployed before, runs `meals-restore` with the
-      `pre-deploy` backup, which stops the new container, restores the data,
-      and starts and verifies the previous version. After a failed first
-      deployment, it stops the new container, leaves the data as it is, and
-      starts nothing.
+   1. If a version was deployed before, replaces the data directory with the
+      data of the `pre-deploy` backup, with the same validation and swap as
+      `meals-restore`, and then starts and verifies the previous version. It
+      takes no `pre-restore` backup: that backup would hold data written by
+      the failed version under the previous version's name. After a failed
+      first deployment, it leaves the data as it is and starts nothing.
    1. Adds `V` to `failed`, and exits with `1`, so the service shows in
       `systemctl --failed`.
 
@@ -461,7 +491,10 @@ and fails if the release doesn't exist or has no `image.txt`.
    writes the archive as `.partial`, and renames it when it's complete.
 1. Validates the archive: `gzip -t` passes, and every `.json` file in it
    parses with `jq`. If the validation fails, it deletes the archive and
-   fails, so you learn about a damaged data file when it happens.
+   fails, so you learn about a damaged data file when it happens. A
+   `pre-restore` backup only checks `gzip -t`: it keeps the data as it is,
+   even damaged, so you can restore over damaged data and still undo the
+   restore.
 1. Deletes the oldest backups of kind `KIND` beyond the retention:
 
    | Kind | Backups kept |
@@ -478,8 +511,8 @@ missing.
 
 ### Restoring a backup
 
-`meals-restore BACKUP` restores a backup, given as a path or as a file name
-in `backups/`:
+`meals-restore BACKUP` restores a backup, given as an absolute path or as a
+file name in `backups/`:
 
 1. Takes the lock.
 1. Fails without changing anything if no version is deployed. To restore a
@@ -493,7 +526,8 @@ in `backups/`:
    deployed version doesn't read. The message tells you to deploy that
    version first.
 1. Stops the container.
-1. Takes a `pre-restore` backup.
+1. Takes a `pre-restore` backup. If the backup fails, it starts the
+   container again and fails without changing anything.
 1. Renames `data/` to `data.old/`, renames the temporary directory to
    `data/`, and deletes `data.old/`.
 1. Starts the container and verifies it as a deployment does.
@@ -507,9 +541,10 @@ app:
 1. Exits with `0`, and logs why, if no version is deployed or there's no
    backup.
 1. Extracts the latest backup into a temporary directory.
-1. Starts `MEALS_IMAGE` as a separate container, `meals-restore-check`, with
-   the temporary directory as its data directory and port `3000` published
-   on a random port of `127.0.0.1`.
+1. Starts `MEALS_IMAGE` through `compose.yaml` as a separate Compose
+   project, `meals-restore-check`, with the temporary directory as its
+   project directory, so the copy is its data directory, and a free port of
+   `127.0.0.1`.
 1. Waits up to 60 seconds for the container to be `healthy`.
 1. Requests `/api/health`, `/api/recipes`, `/api/ingredients`, and
    `/api/weeks/WEEK` for each week file in the backup, and fails unless each
@@ -573,8 +608,8 @@ development server next to production, run `PORT=3001 npm start`.
 1. Create a GitHub App with no webhook, with read and write access to
    contents, issues, and pull requests, and install it on this repository
    only.
-1. Save its ID as the repository variable `RELEASE_APP_ID`, and a private
-   key as the repository secret `RELEASE_APP_PRIVATE_KEY`.
+1. Save its client ID as the repository variable `RELEASE_APP_CLIENT_ID`,
+   and a private key as the repository secret `RELEASE_APP_PRIVATE_KEY`.
 1. After the first `publish` run, make the `meals` package on GHCR public.
 1. Add `image` to the required status checks of `main`.
 
@@ -608,14 +643,23 @@ they record their calls and return prepared responses. `flock`, `gzip`,
 - `meals-backup`:
   - Names the archive after the time, the kind, and the deployed version.
   - Takes no backup when no version is deployed.
-  - Fails on invalid JSON, and leaves no archive or `.partial` file.
-  - Keeps the retention of each kind without touching the other kinds.
+  - Fails on invalid JSON, and leaves no archive or `.partial` file, except
+    for a `pre-restore` backup, which keeps invalid JSON.
+  - Keeps the retention of each kind without touching the other kinds or
+    `.partial` files.
+  - Waits for the lock, and works from a working directory that it can't
+    read.
 - `meals-deploy`:
-  - Does nothing on hold, when the latest release is the deployed version,
-    is older, is a failed version, or has no `image.txt`.
+  - Does nothing on hold, when the latest release is older, or has no
+    `image.txt`. When it's the deployed version, only starts the app if it
+    isn't running.
+  - Fails without deploying while the latest release is a failed version.
+  - Fails without changing anything when GitHub doesn't answer, and rejects
+    extra arguments.
   - Fails on an `image.txt` that isn't a digest reference.
-  - Changes nothing, and doesn't add the version to `failed`, when the pull
-    fails.
+  - Changes nothing, doesn't hold, and doesn't add the version to `failed`,
+    when the pull fails.
+  - Starts the previous version again when the `pre-deploy` backup fails.
   - On success, writes `.env` and `.env.previous`, and takes a `pre-deploy`
     backup before it starts the new version.
   - The first deployment takes no backup. When it fails, it leaves the data
@@ -625,10 +669,13 @@ they record their calls and return prepared responses. `flock`, `gzip`,
   - `meals-deploy VERSION` deploys an older version and creates `hold`, and
     `--resume` deletes `hold`.
 - `meals-restore`:
-  - A backup and a restore give back identical data.
+  - A backup by `meals-backup` and a restore give back identical data, also
+    over data with invalid JSON.
   - Fails without changing anything when no version is deployed, on a
     damaged archive, on invalid JSON, and on a backup from a newer version.
-  - Takes a `pre-restore` backup.
+  - Takes a `pre-restore` backup, and starts the app again when that backup
+    fails.
+  - Works from a working directory that it can't read.
 - `meals-restore-check`:
   - Checks the latest backup and requests each week in it.
   - Removes the container and the temporary directory when a request fails.
@@ -645,12 +692,14 @@ with `npm run test:image`.
 `docs/manual-test-plan.md` adds the checks that need a real host:
 
 - `install.sh` creates the user, the directories with their owners, modes,
-  and SGID bit, and the timers, and a second run changes nothing.
+  and SGID bit, and the timers, and a second run keeps `.env` and `hold`.
 - Meals and the timers come back after a reboot.
-- The timer deploys a new release within 5 minutes.
-- A deployment that can't pull its image changes nothing, and a manual
-  deployment of an older version followed by `--resume` returns to the
-  latest release.
+- The timer deploys a new release within 5 minutes after it has
+  `image.txt`.
+- A deployment that can't pull its image changes nothing.
+- A manual deployment of an older version followed by `--resume` returns
+  to the latest release.
+- A restore brings back the data, and the restore check passes.
 - Moving an existing installation keeps every week, recipe, and
   ingredient.
 
