@@ -1,12 +1,35 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { ConflictError, NameConflictError, NotFoundError, ValidationError } from "./errors.js";
+import { silentLogger } from "./logger.js";
 import { DAYS, isWeekId, MEALS } from "./weeks.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
-export function createApp({ ingredients, recipes, weeks }) {
+/** The path of a request, without its query string. */
+function pathOf(req) {
+  return req.originalUrl.split("?")[0];
+}
+
+/** Logs each request when its response finishes. */
+function logRequests(logger) {
+  return (req, res, next) => {
+    const started = performance.now();
+    res.on("finish", () => {
+      logger.info("request", {
+        method: req.method,
+        path: pathOf(req),
+        status: res.statusCode,
+        ms: Math.round(performance.now() - started),
+      });
+    });
+    next();
+  };
+}
+
+export function createApp({ ingredients, recipes, weeks }, { logger = silentLogger } = {}) {
   const app = express();
+  app.use("/api", logRequests(logger));
   app.use(express.json());
 
   app.get("/api/recipes", async (_req, res) => {
@@ -64,7 +87,7 @@ export function createApp({ ingredients, recipes, weeks }) {
   // Final error handler (Express 5 forwards rejected async handlers here).
   // 4xx errors from body parsing (for example, malformed JSON -> 400) keep their status.
   // Keep all four parameters: Express identifies error handlers by arity.
-  app.use((err, _req, res, _next) => {
+  app.use((err, req, res, _next) => {
     if (err instanceof ValidationError) {
       res.status(400).json({ error: err.message });
       return;
@@ -83,7 +106,13 @@ export function createApp({ ingredients, recipes, weeks }) {
     }
     const status =
       Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
-    if (status === 500) console.error(err);
+    if (status === 500) {
+      logger.error("request failed", {
+        method: req.method,
+        path: pathOf(req),
+        error: err?.stack ?? String(err),
+      });
+    }
     res.status(status).json({ error: status === 500 ? "Internal server error" : err.message });
   });
 

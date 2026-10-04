@@ -6,7 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import request from "supertest";
 import { createApp } from "../server/app.js";
 import { createStores } from "../server/stores.js";
-import { blankWeek } from "./helpers.js";
+import { blankWeek, collectingLogger } from "./helpers.js";
 
 const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
@@ -39,6 +39,58 @@ function assertJsonError(res, status, label) {
   assert.match(res.headers["content-type"], /application\/json/, label);
   assert.equal(typeof res.body.error, "string", label);
 }
+
+// ---------- Logs ----------
+
+test("each /api request is logged with its method, path, status, and duration", async () => {
+  const { entries, logger } = collectingLogger();
+  const loggedApp = createApp(createStores({ dataDir }), { logger });
+
+  await request(loggedApp).get("/api/recipes?ignored=1");
+  await request(loggedApp).put(`/api/weeks/${WEEK}/mon/lunch`).send({ items: [] });
+  await request(loggedApp).get("/api/nope");
+
+  assert.deepEqual(
+    entries.map((entry) => ({ ...entry, ms: typeof entry.ms })),
+    [
+      {
+        level: "info",
+        msg: "request",
+        method: "GET",
+        path: "/api/recipes",
+        status: 200,
+        ms: "number",
+      },
+      {
+        level: "info",
+        msg: "request",
+        method: "PUT",
+        path: `/api/weeks/${WEEK}/mon/lunch`,
+        status: 200,
+        ms: "number",
+      },
+      {
+        level: "info",
+        msg: "request",
+        method: "GET",
+        path: "/api/nope",
+        status: 404,
+        ms: "number",
+      },
+    ],
+  );
+  assert.ok(entries.every(({ ms }) => Number.isInteger(ms) && ms >= 0));
+});
+
+test("static files aren't logged", async () => {
+  const { entries, logger } = collectingLogger();
+  const loggedApp = createApp(createStores({ dataDir }), { logger });
+
+  assert.equal((await request(loggedApp).get("/")).status, 200);
+  assert.equal((await request(loggedApp).get("/styles.css")).status, 200);
+
+  assert.deepEqual(entries, []);
+});
 
 // ---------- Recipes ----------
 
@@ -180,20 +232,43 @@ test("PATCH /api/recipes/ID with an unknown ID returns 404 JSON", async () => {
   assertJsonError(res, 404, "unknown ID");
 });
 
-test("GET /api/recipes returns 500 JSON when the recipes file is corrupt", async (t) => {
-  const error = t.mock.method(console, "error", () => {});
+test("a thrown string is logged as the error of a failed request", async () => {
+  const { entries, logger } = collectingLogger();
+  const throwing = {
+    recipes: {
+      list: async () => {
+        throw "disk on fire";
+      },
+    },
+  };
+
+  const res = await request(createApp(throwing, { logger })).get("/api/recipes");
+
+  assert.equal(res.status, 500);
+  const failures = entries.filter((entry) => entry.msg === "request failed");
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].error, "disk on fire");
+});
+
+test("GET /api/recipes returns 500 JSON when the recipes file is corrupt, and logs the error", async () => {
+  const { entries, logger } = collectingLogger();
+  const loggedApp = createApp(createStores({ dataDir }), { logger });
   await mkdir(path.join(dataDir, "v2"), { recursive: true });
   await writeFile(path.join(dataDir, "v2", "recipes.json"), "{ not json");
 
-  const res = await request(app).get("/api/recipes");
+  const res = await request(loggedApp).get("/api/recipes");
 
   assert.equal(res.status, 500);
   assert.deepEqual(res.body, { error: "Internal server error" });
-  assert.equal(error.mock.callCount(), 1);
+  const failures = entries.filter((entry) => entry.msg === "request failed");
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].level, "error");
+  assert.equal(failures[0].method, "GET");
+  assert.equal(failures[0].path, "/api/recipes");
+  assert.match(failures[0].error, /^SyntaxError/);
 });
 
-test("an error with a status outside 400-499 maps to 500", async (t) => {
-  t.mock.method(console, "error", () => {});
+test("an error with a status outside 400-499 maps to 500", async () => {
   const boomApp = createApp({
     recipes: {
       list: async () => {
@@ -363,8 +438,7 @@ test("POST /api/recipes with invalid or unknown ingredients returns 400 JSON", a
   }
 });
 
-test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes return 500", async (t) => {
-  t.mock.method(console, "error", () => {});
+test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes return 500", async () => {
   await mkdir(path.join(dataDir, "v2"), { recursive: true });
   await writeFile(path.join(dataDir, "v2", "ingredients.json"), "{ not json");
 
@@ -510,16 +584,17 @@ test("PUT with a malformed JSON body returns 400 JSON", async () => {
   assertJsonError(res, 400, "malformed JSON");
 });
 
-test("GET returns 500 JSON when the week file is corrupt", async (t) => {
-  const error = t.mock.method(console, "error", () => {});
+test("GET returns 500 JSON when the week file is corrupt, and logs the error", async () => {
+  const { entries, logger } = collectingLogger();
+  const loggedApp = createApp(createStores({ dataDir }), { logger });
   await mkdir(path.join(dataDir, "v2", "weeks"), { recursive: true });
   await writeFile(path.join(dataDir, "v2", "weeks", `${WEEK}.json`), "{ not json");
 
-  const res = await request(app).get(`/api/weeks/${WEEK}`);
+  const res = await request(loggedApp).get(`/api/weeks/${WEEK}`);
 
   assert.equal(res.status, 500);
   assert.deepEqual(res.body, { error: "Internal server error" });
-  assert.equal(error.mock.callCount(), 1);
+  assert.equal(entries.filter((entry) => entry.msg === "request failed").length, 1);
 });
 
 // ---------- Other routes ----------
