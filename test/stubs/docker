@@ -26,7 +26,8 @@ case $args in
     if grep -qxF "$version" "$STUB_DIR/broken" 2>/dev/null; then exit 1; fi
     ;;
   *" compose "*" stop "* | *" compose "*" down "*)
-    rm -f "$STUB_DIR/running"
+    if [[ -e $STUB_DIR/stop-fails ]]; then exit 1; fi
+    rm -f "$running"
     ;;
   *" compose "*" logs "*) ;;
   " image rm "*)
