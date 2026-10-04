@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { once } from "node:events";
+import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
+import { setImmediate } from "node:timers/promises";
 import request from "supertest";
 import { createApp } from "../server/app.js";
+import {
+  ConflictError,
+  NameConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../server/errors.js";
 import { createStores } from "../server/stores.js";
-import { blankWeek, collectingLogger } from "./helpers.js";
+import { blankWeek, collectingLogger, within } from "./helpers.js";
 
 const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
@@ -82,6 +91,101 @@ test("each /api request is logged with its method, path, status, and duration", 
   assert.ok(entries.every(({ ms }) => Number.isInteger(ms) && ms >= 0));
 });
 
+test("errors that map to a 4xx status are logged as requests, and not as failures", async () => {
+  const { entries, logger } = collectingLogger();
+  let thrown;
+  const throwing = {
+    recipes: {
+      list: async () => {
+        throw thrown;
+      },
+    },
+    weeks: {},
+  };
+  const loggedApp = createApp(throwing, { logger });
+  const cases = [
+    [new ValidationError("Invalid"), 400],
+    [new NotFoundError("Missing"), 404],
+    [new NameConflictError("Taken", "recipe", { id: "r1" }), 409],
+    [new ConflictError("In use"), 409],
+    [Object.assign(new Error("Gone"), { status: 404 }), 404],
+  ];
+
+  for (const [error, status] of cases) {
+    thrown = error;
+    assert.equal((await request(loggedApp).get("/api/recipes")).status, status, error.name);
+  }
+  const malformed = await request(loggedApp)
+    .post("/api/recipes")
+    .set("Content-Type", "application/json")
+    .send('{"name":');
+  assert.equal(malformed.status, 400);
+
+  assert.deepEqual(
+    entries.map(({ level, msg, status }) => ({ level, msg, status })),
+    [...cases.map(([, status]) => status), 400].map((status) => ({
+      level: "info",
+      msg: "request",
+      status,
+    })),
+  );
+});
+
+test("a request that the client aborts is logged once", async () => {
+  const { entries, logger } = collectingLogger();
+  const logged = Promise.withResolvers();
+  const handlerStarted = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const handlerDone = Promise.withResolvers();
+  const loggingInfo = logger.info;
+  logger.info = (msg, fields) => {
+    loggingInfo(msg, fields);
+    logged.resolve();
+  };
+  const slow = {
+    recipes: {
+      list: async () => {
+        handlerStarted.resolve();
+        await release.promise;
+        handlerDone.resolve();
+        return [];
+      },
+    },
+  };
+  const server = createApp(slow, { logger }).listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  try {
+    const socket = net.connect(server.address().port, "127.0.0.1");
+    socket.write("GET /api/recipes HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    await handlerStarted.promise;
+    socket.destroy();
+    await within(logged.promise, "The request wasn't logged after the client aborted it");
+    // Let the handler finish after the abort, to catch a second entry for the same request.
+    release.resolve();
+    await handlerDone.promise;
+    await setImmediate();
+    await setImmediate();
+  } finally {
+    server.close();
+  }
+
+  assert.deepEqual(
+    entries.map((entry) => ({ ...entry, ms: typeof entry.ms })),
+    [
+      {
+        level: "info",
+        msg: "request",
+        method: "GET",
+        path: "/api/recipes",
+        aborted: true,
+        ms: "number",
+      },
+    ],
+  );
+  assert.equal("status" in entries[0], false);
+});
+
 test("static files aren't logged", async () => {
   const { entries, logger } = collectingLogger();
   const loggedApp = createApp(createStores({ dataDir }), { logger });
@@ -90,6 +194,91 @@ test("static files aren't logged", async () => {
   assert.equal((await request(loggedApp).get("/styles.css")).status, 200);
 
   assert.deepEqual(entries, []);
+});
+
+// ---------- Health ----------
+
+test("GET /api/health returns 200 with the version when the data directory is writable", async () => {
+  const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });
+
+  const res = await request(healthApp).get("/api/health");
+
+  assert.equal(res.status, 200);
+  assert.match(res.headers["content-type"], /application\/json/);
+  assert.deepEqual(res.body, { status: "ok", version: "1.2.3" });
+});
+
+test("GET /api/health returns 503 when the data directory isn't writable", async (t) => {
+  if (process.getuid?.() === 0) {
+    t.skip("root can write to any directory");
+    return;
+  }
+  // afterEach removes the directory, which is empty, so the mode can stay.
+  await chmod(dataDir, 0o500);
+  const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });
+
+  const res = await request(healthApp).get("/api/health");
+
+  assert.equal(res.status, 503);
+  assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
+});
+
+test("GET /api/health returns 503 when the data directory can't be entered", async (t) => {
+  if (process.getuid?.() === 0) {
+    t.skip("root can enter any directory");
+    return;
+  }
+  // afterEach removes the directory, which is empty, so the mode can stay.
+  await chmod(dataDir, 0o600);
+  const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });
+
+  const res = await request(healthApp).get("/api/health");
+
+  assert.equal(res.status, 503);
+  assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
+});
+
+test("GET /api/health returns 503 when the data directory doesn't exist", async () => {
+  const missing = path.join(dataDir, "missing");
+  const healthApp = createApp(createStores({ dataDir: missing }), {
+    dataDir: missing,
+    version: "1.2.3",
+  });
+
+  const res = await request(healthApp).get("/api/health");
+
+  assert.equal(res.status, 503);
+  assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
+});
+
+test("successful health checks aren't logged, and failed ones are, with the error code", async () => {
+  const { entries, logger } = collectingLogger();
+  const missing = path.join(dataDir, "missing");
+
+  await request(createApp(createStores({ dataDir }), { dataDir, logger })).get("/api/health");
+  await request(createApp(createStores({ dataDir: missing }), { dataDir: missing, logger })).get(
+    "/api/health",
+  );
+
+  assert.deepEqual(
+    entries.map((entry) => ({
+      level: entry.level,
+      msg: entry.msg,
+      path: entry.path,
+      status: entry.status,
+      error: entry.error,
+    })),
+    [
+      {
+        level: "error",
+        msg: "health check failed",
+        path: undefined,
+        status: undefined,
+        error: "ENOENT",
+      },
+      { level: "info", msg: "request", path: "/api/health", status: 503, error: undefined },
+    ],
+  );
 });
 
 // ---------- Recipes ----------

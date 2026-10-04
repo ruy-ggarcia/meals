@@ -367,6 +367,15 @@ example `2026-09-21`. Each slot of a week holds a menu:
 { "items": [{ "recipeId": "RECIPE_ID", "servings": 1.5 }] }
 ```
 
+### Check the health
+
+`GET /api/health`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "status": "ok", "version": "VERSION" }`, where `VERSION` is the version of the server, such as `0.1.0`. The server can read, write, and enter the data directory. |
+| `503`  | The body is `{ "status": "error", "version": "VERSION" }`. The server can't read, write, or enter the data directory, and it logs `health check failed` with the error code. |
+
 ### List recipes
 
 `GET /api/recipes`
