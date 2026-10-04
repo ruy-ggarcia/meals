@@ -43,3 +43,4 @@ jobs:
         with:
           node-version: 22
       - run: npm run test:image
+      - run: npm run test:host

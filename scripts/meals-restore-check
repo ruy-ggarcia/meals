@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Usage: meals-restore-check
+#
+# Checks that the latest backup restores into a working app. It runs the
+# deployed image on a copy of the backup, as the separate Compose project
+# meals-restore-check, and requests the health check, the recipe book, the
+# ingredient catalog, and each week in the backup.
+set -euo pipefail
+# shellcheck source=lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/lib/common.sh"
+
+take_lock
+
+work=$(mktemp -d "$MEALS_ROOT/.restore-check.XXXXXX") ||
+  die "Couldn't create a directory for the copy of the backup in $MEALS_ROOT."
+export MEALS_GID MEALS_IMAGE MEALS_PORT=127.0.0.1:0 MEALS_UID
+MEALS_GID=$(env_get "$MEALS_ROOT/.env" MEALS_GID)
+MEALS_IMAGE=$(env_get "$MEALS_ROOT/.env" MEALS_IMAGE)
+MEALS_UID=$(env_get "$MEALS_ROOT/.env" MEALS_UID)
+
+# Runs docker compose on the check's project, whose directory holds the copy.
+# Compose can't read compose.yaml without an image, so callers check that
+# MEALS_IMAGE isn't empty, as before the first deployment.
+check_compose() {
+  docker compose --project-name meals-restore-check --project-directory "$work" \
+    --file "$MEALS_ROOT/compose.yaml" "$@"
+}
+
+cleanup() {
+  if [[ -n $MEALS_IMAGE ]]; then
+    check_compose down >/dev/null 2>&1 || true
+  fi
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+# A check killed before its cleanup leaves its containers and its copy of the
+# backup. The lock keeps any other check from running now, so they're stale.
+# They go first, even when there's nothing to check. The containers go before
+# the copies, because they use them. A copy that can't go, for example
+# because the backup had a read-only directory, only takes space: the new one
+# has another name.
+if [[ -n $MEALS_IMAGE ]] && ! output=$(check_compose down 2>&1); then
+  printf '%s\n' "$output" >&2
+  die "Couldn't remove the containers that an interrupted check left."
+fi
+remove_stale "$MEALS_ROOT/.restore-check." check "$work"
+
+version=$(deployed_version)
+if [[ -z $version ]]; then
+  log "No version is deployed, so there's nothing to check the backups with."
+  exit 0
+fi
+backup=$(list_backups "" | tail -n 1) || die "Couldn't list the backups in $MEALS_ROOT/backups."
+if [[ -z $backup ]]; then
+  log "There are no backups to check."
+  exit 0
+fi
+
+extract_valid "$MEALS_ROOT/backups/$backup" "$work" || die "The backup $backup failed validation."
+check_compose up --detach --wait --wait-timeout "${MEALS_VERIFY_TIMEOUT:-60}" ||
+  die "Version $version didn't become healthy on the backup $backup."
+address=$(check_compose port app 3000) ||
+  die "Couldn't get the address of version $version on the backup $backup."
+[[ -n $address ]] || die "Couldn't get the address of version $version on the backup $backup."
+
+paths=(/api/health /api/recipes /api/ingredients)
+shopt -s nullglob
+for week in "$work"/data/v2/weeks/*.json; do
+  paths+=("/api/weeks/$(basename "$week" .json)")
+done
+for path in "${paths[@]}"; do
+  curl -fsS --max-time 10 -o /dev/null "http://$address$path" ||
+    die "GET $path failed on the backup $backup."
+done
+log "The backup $backup restores into version $version: ${#paths[@]} requests succeeded."
