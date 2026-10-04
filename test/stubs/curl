@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Stub curl for the host script tests. It logs each call to $STUB_DIR/calls
+# and answers from the files that the test writes in $STUB_DIR. The URL is
+# the last argument.
+set -euo pipefail
+printf 'curl %s\n' "$*" >>"$STUB_DIR/calls"
+url=${*: -1}
+api=https://api.github.com/repos/ruy-ggarcia/meals/
+downloads=https://github.com/ruy-ggarcia/meals/releases/download/
+case $url in
+  "$api"*)
+    file=$STUB_DIR/github/${url#"$api"}
+    ;;
+  "$downloads"*)
+    file=$STUB_DIR/downloads/${url#"$downloads"}
+    ;;
+  http://127.0.0.1:*/api/health)
+    # The app reports the version in .env, unless the test overrides it.
+    version=$(cat "$STUB_DIR/health-version" 2>/dev/null ||
+      sed -n 's/^MEALS_VERSION=//p' "$MEALS_ROOT/.env")
+    printf '{"status":"ok","version":"%s"}\n' "$version"
+    exit 0
+    ;;
+  http://127.0.0.1:*)
+    path=/${url#http://127.0.0.1:*/}
+    if grep -qxF "$path" "$STUB_DIR/failing-paths" 2>/dev/null; then exit 22; fi
+    echo '{}'
+    exit 0
+    ;;
+  *)
+    echo "curl stub: unexpected URL: $url" >&2
+    exit 64
+    ;;
+esac
+[[ -f $file ]] || exit 22
+cat "$file"

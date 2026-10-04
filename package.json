@@ -9,7 +9,7 @@
   },
   "scripts": {
     "format": "biome check --write .",
-    "lint": "biome ci . && shellcheck scripts/*.sh",
+    "lint": "biome ci . && shellcheck scripts/*.sh scripts/lib/*.sh scripts/meals-* test/stubs/*",
     "start": "node server/index.js",
     "test": "node --test --disable-warning=ExperimentalWarning --test-timeout=10000 test/*.test.js",
     "test:image": "docker build --tag meals:test . && scripts/image-smoke.sh meals:test"
