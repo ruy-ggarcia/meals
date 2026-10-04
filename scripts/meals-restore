@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Usage: meals-restore BACKUP
+#
+# Restores BACKUP into the data directory. BACKUP is an absolute path or a
+# file name in backups/. Before it changes anything, it validates the backup
+# and refuses one from a version newer than the deployed one. It takes a
+# pre-restore backup first, so you can undo a restore.
+set -euo pipefail
+# shellcheck source=lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/lib/common.sh"
+
+[[ $# == 1 ]] || die "Usage: meals-restore BACKUP"
+# common.sh changed to MEALS_ROOT, so a relative path would be ambiguous.
+if [[ $1 == /* ]]; then
+  archive=$1
+else
+  archive=$MEALS_ROOT/backups/$1
+fi
+[[ -f $archive ]] || die "No backup named $1. Give an absolute path or a file name in backups/."
+name=$(basename "$archive")
+
+take_lock
+
+# A restore or a rollback killed before its cleanup leaves its staging
+# directory. The lock keeps any other one from running now, so every staging
+# directory is stale. One that can't go, for example because the archive had
+# a read-only directory, only takes space: the new one has another name.
+remove_stale "$MEALS_ROOT/.restore." restore
+
+deployed=$(deployed_version)
+[[ -n $deployed ]] ||
+  die "No version is deployed. To restore a backup on a new host, first deploy the backup's version with meals-deploy VERSION."
+version=$(backup_version "$archive") || die "The name of $name has no version."
+if version_lt "$deployed" "$version"; then
+  die "The backup is from version $version, which is newer than the deployed version, $deployed. Deploy that version first with meals-deploy $version."
+fi
+
+staging=$(mktemp -d "$MEALS_ROOT/.restore.XXXXXX") ||
+  die "Couldn't create a staging directory in $MEALS_ROOT, so nothing changed."
+trap 'rm -rf "$staging"' EXIT
+extract_valid "$archive" "$staging" || die "The backup $name failed validation. Nothing changed."
+
+before=$(list_backups pre-restore) ||
+  die "Couldn't list the backups in $MEALS_ROOT/backups, so nothing changed."
+compose stop || die "Couldn't stop version $deployed, so nothing changed."
+started="nothing changed, and version $deployed runs again."
+"$MEALS_SCRIPTS/meals-backup" pre-restore ||
+  start_again_and_die "$deployed" "The pre-restore backup failed" "$started"
+# Without the new backup, there's nothing to undo the restore with.
+pre_restore=$(new_backup pre-restore "$before") ||
+  start_again_and_die "$deployed" "Couldn't find the new pre-restore backup" "$started"
+swapped=0
+swap_data "$staging" || swapped=$?
+# With the data in data.old, data/ is missing, so the app can't start.
+[[ $swapped != 2 ]] ||
+  die "The restore failed, so the data is in $MEALS_ROOT/data.old, and the app is stopped. Move it back to $MEALS_ROOT/data before you start the app."
+# The command that starts the deployed version, as compose runs it, from a
+# directory that deployer can read. meals-deploy might not start it, for
+# example on hold or while GitHub is down.
+[[ $swapped == 0 ]] ||
+  die "The restore failed, so data/ wasn't replaced, and the app is stopped. To start it again, run cd $MEALS_ROOT && sudo -u deployer docker compose --project-directory $MEALS_ROOT --file $MEALS_ROOT/compose.yaml up --detach."
+start_and_verify "$deployed" ||
+  die "Version $deployed didn't come back healthy after the restore. See docker compose logs in $MEALS_ROOT. To undo the restore, run meals-restore $pre_restore."
+log "Restored $name, and version $deployed is running."

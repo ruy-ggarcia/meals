@@ -252,10 +252,15 @@ class Host {
     return writeFile(path.join(this.root, relPath), content);
   }
 
-  /** Writes backups/NAME as a real archive of FILES under data/. */
-  async makeBackup(name, files = DATA) {
+  /**
+   * Writes backups/NAME as a real archive of FILES under data/, with
+   * DATAMODE as the mode of data/ if given.
+   */
+  async makeBackup(name, files = DATA, { dataMode } = {}) {
     const dir = await mkdtemp(path.join(os.tmpdir(), "meals-archive-"));
+    await mkdir(path.join(dir, "data"));
     await writeFiles(path.join(dir, "data"), files);
+    if (dataMode !== undefined) await chmod(path.join(dir, "data"), dataMode);
     try {
       tar(["-C", dir, "-czf", path.join(this.root, "backups", name), "data"]);
     } finally {
