@@ -35,10 +35,11 @@ Install the following:
    npm start
    ```
 
-   The server prints a line similar to the following:
+   The server logs one JSON object per line. The first one is similar to
+   the following:
 
-   ```none
-   Meals listening on http://0.0.0.0:3000 (data: /path/to/meals/data)
+   ```json
+   {"time":"2026-10-04T10:00:00.000Z","level":"info","msg":"server started","version":"0.1.0","port":3000,"dataDir":"/path/to/meals/data"}
    ```
 
 To stop the server, press `Control+C`.
