@@ -19,5 +19,8 @@ export function createStores({ dataDir }) {
   });
   const recipes = createRecipes({ dataDir, enqueue, ingredients });
   const weeks = createWeeks({ dataDir, enqueue, recipes });
-  return { ingredients, recipes, weeks };
+  // An empty task runs after every write queued before it, so idle()
+  // resolves once those writes are on disk.
+  const idle = () => enqueue(() => {});
+  return { idle, ingredients, recipes, weeks };
 }

@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Usage: meals-backup daily|pre-deploy|pre-restore
+#
+# Archives the data directory into backups/, named after the time, the
+# kind, and the deployed version, validates the archive, and deletes the
+# oldest backups of the same kind beyond its retention and the interrupted
+# backups older than one day.
+set -euo pipefail
+# shellcheck source=lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/lib/common.sh"
+
+# Deletes the backups in LIST, one file name per line, and logs each one as an
+# ADJECTIVE backup.
+delete_backups() {
+  local list=$1 adjective=$2 name
+  while IFS= read -r name; do
+    [[ -n $name ]] || continue
+    rm -f "$MEALS_ROOT/backups/$name" || die "Couldn't delete the $adjective backup backups/$name."
+    log "Deleted the $adjective backup backups/$name."
+  done <<<"$list"
+}
+
+kind=${1:-}
+case $kind in
+  daily) keep=14 ;;
+  pre-deploy | pre-restore) keep=10 ;;
+  *) die "Usage: meals-backup daily|pre-deploy|pre-restore" ;;
+esac
+
+take_lock
+
+version=$(deployed_version)
+if [[ -z $version ]]; then
+  log "No version is deployed, so no version has written the data yet. Skipped the backup."
+  exit 0
+fi
+
+name="$(date -u +%Y-%m-%dT%H%M%SZ)-$kind-v$version.tar.gz"
+partial=$MEALS_ROOT/backups/$name.partial
+check=$(mktemp -d) || die "Couldn't create a temporary directory for the validation, so no backup was kept."
+trap 'rm -rf "$partial" "$check"' EXIT
+
+tar -C "$MEALS_ROOT" -czf "$partial" data ||
+  die "Couldn't archive the data, so no backup was kept. Check that deployer can read every file in $MEALS_ROOT/data."
+# A pre-restore backup keeps the data as it is, even with invalid JSON, so
+# you can restore over damaged data and still undo the restore.
+if [[ $kind == pre-restore ]]; then
+  gzip -t "$partial" || die "The backup archive is damaged, so it wasn't kept."
+else
+  extract_valid "$partial" "$check" ||
+    die "The backup failed validation, so it wasn't kept. Check the data files in $MEALS_ROOT/data."
+fi
+mv "$partial" "$MEALS_ROOT/backups/$name" || die "Couldn't move the backup to backups/$name, so it wasn't kept."
+log "Backed up the data to backups/$name."
+
+old_backups=$(list_backups "$kind" | head -n "-$keep") ||
+  die "Couldn't list the old $kind backups in $MEALS_ROOT/backups, so none were deleted."
+delete_backups "$old_backups" old
+
+# A backup killed before its trap ran, by SIGKILL or a power loss, leaves its
+# .partial file. The lock keeps any other backup from running now, so every
+# .partial file is stale. Keeping one for a day leaves time to look into what
+# interrupted it, and the next daily backup deletes it.
+stale=$(find "$MEALS_ROOT/backups" -maxdepth 1 -type f -name '*.partial' -mmin +1440 -printf '%f\n') ||
+  die "Couldn't list the interrupted backups in $MEALS_ROOT/backups."
+delete_backups "$stale" interrupted

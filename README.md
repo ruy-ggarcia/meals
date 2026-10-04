@@ -20,13 +20,23 @@ Install the following:
 
 - Node.js 22 or later. To check your version, run `node --version`.
 - npm. To check that it's installed, run `npm --version`.
+- ShellCheck, which `npm run lint` runs on the shell scripts. On Ubuntu,
+  run `sudo apt install shellcheck`.
+- Optional: Docker with the Compose plugin, to build and test the image
+  with `npm run test:image` and `npm run test:host`.
+- Optional: `systemd-analyze`, which systemd provides, to check the systemd
+  units with `npm run test:units`.
 
 ## Start the server
 
-1. Install the dependencies:
+This section starts a server from your checkout, for development. To run
+Meals on the home server, see [Deploy Meals](docs/deployment.md).
+
+1. Install the dependencies. Run this command again after you pull
+   changes, so `node_modules` matches `package-lock.json`:
 
    ```bash
-   npm install
+   npm ci
    ```
 
 1. Start the server:
@@ -35,13 +45,20 @@ Install the following:
    npm start
    ```
 
-   The server prints a line similar to the following:
+   The server logs one JSON object per line. The first one is similar to
+   the following:
 
-   ```none
-   Meals listening on http://0.0.0.0:3000 (data: /path/to/meals/data)
+   ```json
+   {"time":"2026-10-04T10:00:00.000Z","level":"info","msg":"server started","version":"0.1.0","port":3000,"dataDir":"/path/to/meals/data"}
    ```
 
 To stop the server, press `Control+C`.
+
+If the server can't start, for example because the port is in use, it logs
+`server failed to start` with the error and exits with status 1.
+
+If the computer also runs the deployed Meals, it uses port `3000`. To
+start a development server next to it, run `PORT=3001 npm start`.
 
 ## Open the app
 
@@ -220,7 +237,10 @@ following command:
 DATA_DIR=/srv/meals PORT=8080 npm start
 ```
 
-## Back up and restore data
+The image sets `DATA_DIR` to `/data` and `PORT` to `3000`. See
+[Deploy Meals](docs/deployment.md).
+
+## Data files
 
 The meal plan, the recipe book, and the ingredient catalog live in the
 `v2/` directory inside the data directory, which is `data/` unless you set
@@ -234,11 +254,8 @@ The meal plan, the recipe book, and the ingredient catalog live in the
 
 Git ignores the `data/` directory.
 
-To back up your data, copy the directory:
-
-```bash
-cp -r data/v2 "meals-backup-$(date +%F)"
-```
+On the host, backups are automatic. See
+[Backups](docs/deployment.md#backups).
 
 If a week file, `recipes.json`, or `ingredients.json` contains invalid JSON,
 the app shows an error, such as `Couldn't load the meal plan.`, and doesn't
@@ -287,28 +304,62 @@ Before you commit, check your changes:
 
 [Biome](https://biomejs.dev) checks the style of JavaScript, CSS, and JSON
 files. The settings are in `biome.json`.
+[ShellCheck](https://www.shellcheck.net) checks the shell scripts. The
+settings are in `.shellcheckrc`.
 
-Before you merge a change to the user interface, also run the
-[manual test plan](docs/manual-test-plan.md).
+If you change `Dockerfile`, `deploy/compose.yaml`, `scripts/`, or `server/`,
+also build and test the image, and then run the host scripts on it:
+
+```bash
+npm run test:image
+npm run test:host
+```
+
+If you change `deploy/systemd/`, also verify the units with
+`systemd-analyze`:
+
+```bash
+npm run test:units
+```
+
+Before you merge a change to the user interface, `deploy/`, or `scripts/`,
+also run the [manual test plan](docs/manual-test-plan.md).
 
 ## Continuous integration
 
-GitHub Actions runs `npm run lint` and `npm test` with Node.js 22 on every pull
-request and on every push to `main`. The workflow is in
-`.github/workflows/ci.yml`.
+GitHub Actions runs two checks on every pull request and on every push to
+`main`. The workflow is in `.github/workflows/ci.yml`:
 
-Changes reach `main` only through pull requests that pass the `ci` check.
+- `ci` runs `npm run lint`, `npm test`, and `npm run test:units` with
+  Node.js 22.
+- `image` runs `npm run test:image` and `npm run test:host`.
+
+Changes reach `main` only through pull requests that pass both checks.
 Each pull request merges with a merge commit.
+
+On every push to `main`, `.github/workflows/release.yml` keeps a release
+pull request up to date, and publishes a release when you merge it. See
+[Release a version](docs/deployment.md#release-a-version).
+
+Every week, Dependabot opens pull requests that update the npm
+dependencies, the GitHub Actions, and the base image. The settings are in
+`.github/dependabot.yml`.
 
 ## Project structure
 
 ```none
 .github/
   workflows/
-    ci.yml              # Continuous integration: lint and tests.
+    ci.yml              # Continuous integration: lint, tests, and the image.
+    release.yml         # Releases: release-please, and the image in GHCR.
+  dependabot.yml        # Weekly dependency updates.
+deploy/
+  systemd/              # The host's timers and their services.
+  compose.yaml          # The app service on the host.
 docs/
+  deployment.md         # Releases, deployments, and backups.
   glossary.md           # The terms the app uses.
-  manual-test-plan.md   # Checks that need a person with a browser.
+  manual-test-plan.md   # Checks that need a person with a browser or a host.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js               # Meal plan page: grid, week changes, and saves.
   catalog-list.js      # List logic shared by the Recipes and Ingredients pages.
@@ -333,18 +384,40 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   shopping-list.js     # Computes the shopping list.*
   slot-editor.js       # The slot editor dialog.
   styles.css
+scripts/
+  lib/
+    common.sh           # Functions shared by the meals-* scripts.
+  host-smoke.sh         # Runs the meals-* scripts on an image and checks them.
+  image-smoke.sh        # Runs an image as the host does and checks it.
+  install.sh            # Installs the host tools.
+  meals-backup          # Backs up the data.
+  meals-deploy          # Deploys a release, with a rollback.
+  meals-restore         # Restores a backup.
+  meals-restore-check   # Checks that the latest backup restores.
+  units-check.sh        # Verifies the systemd units with systemd-analyze.
 server/
-  app.js         # HTTP API (Express) and static files.
+  app.js         # HTTP API (Express), static files, and the health check.
   errors.js      # Errors for bad input, which app.js maps to HTTP statuses.
   files.js       # JSON files and the write queue. The only module that touches disk.
-  index.js       # Startup: reads DATA_DIR and PORT and listens on 0.0.0.0.
+  healthcheck.js # The image's health check.
+  index.js       # Startup: reads DATA_DIR and PORT, and stops on SIGINT and SIGTERM.
   ingredients.js # The ingredient catalog: unique names, units, and archiving.
+  logger.js      # Logs one JSON object per line.
   names.js       # Name rules shared by recipes and ingredients.
   recipes.js     # The recipe book: unique names, ingredients, and archiving.
+  shutdown.js    # Stops the server once, within a deadline.
+  start.js       # Listens, and stops without cutting a request or a write.
   stores.js      # Wires the stores to one write queue and to each other.
   weeks.js       # Weeks and the menu of each slot.
 test/              # Tests: node:test, with supertest for the API and happy-dom for the pages.
+  stubs/           # Stub docker and curl for the host script tests.
+.dockerignore      # What the image build can read.
+.release-please-manifest.json # The current version, for release-please.
+.shellcheckrc      # ShellCheck settings.
 biome.json         # Lint and format settings.
+CHANGELOG.md       # The changes in each release.
+Dockerfile         # The server image.
+release-please-config.json # release-please settings.
 ```
 
 `*` No DOM access, so tests import the module directly in Node.js.
@@ -366,6 +439,15 @@ example `2026-09-21`. Each slot of a week holds a menu:
 ```json
 { "items": [{ "recipeId": "RECIPE_ID", "servings": 1.5 }] }
 ```
+
+### Check the health
+
+`GET /api/health`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "status": "ok", "version": "VERSION" }`, where `VERSION` is the version of the server, such as `0.1.0`. The server can read, write, and enter the data directory. |
+| `503`  | The body is `{ "status": "error", "version": "VERSION" }`. The server can't read, write, or enter the data directory, and it logs `health check failed` with the error code. |
 
 ### List recipes
 

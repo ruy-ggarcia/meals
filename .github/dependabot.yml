@@ -1,0 +1,40 @@
+# The commit prefixes decide what reaches production: release-please turns
+# fix commits into a patch release, and ignores build and ci commits.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      include: scope
+    groups:
+      docker:
+        update-types: [minor, patch]
+    ignore:
+      # A new major version of Node.js changes the image and the CI workflow
+      # together, by hand.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      github-actions:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      prefix-development: build
+      include: scope
+    groups:
+      npm:
+        update-types: [minor, patch]

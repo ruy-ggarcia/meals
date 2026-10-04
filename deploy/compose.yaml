@@ -1,0 +1,22 @@
+# The Meals app on the host. The meals-* scripts run it with the variables in
+# /opt/server/meals/.env, and scripts/image-smoke.sh runs it with its own.
+name: meals
+services:
+  app:
+    cap_drop: [ALL]
+    image: ${MEALS_IMAGE:?MEALS_IMAGE is empty because no version is deployed}
+    init: true
+    ports: ["${MEALS_PORT:?MEALS_PORT must be set}:3000"]
+    read_only: true
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 15s
+    user: "${MEALS_UID:?MEALS_UID must be set}:${MEALS_GID:?MEALS_GID must be set}"
+    # Without data/, the start fails, instead of Docker creating an empty
+    # data/ owned by root and the app starting with no data.
+    volumes:
+      - bind:
+          create_host_path: false
+        source: ./data
+        target: /data
+        type: bind
