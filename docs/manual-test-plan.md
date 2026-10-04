@@ -4,8 +4,9 @@ This plan checks what only a real browser or device can check: layout and
 scrolling, native browser behavior such as the focus trap in a dialog and
 the leave-page prompt, real network timing, screen readers, and the system
 clock. The automated tests (`npm test`) cover the rest, including the page
-scripts against a simulated DOM. Run this plan before you merge a change to
-the user interface.
+scripts against a simulated DOM. Run sections 1 to 10 before you merge a
+change to the user interface. Run section 13 on the host before you merge a
+change to `deploy/` or `scripts/`, and when you move an installation.
 
 Each test has an ID, such as `6.3`. To report a failure, give the test ID and
 what you saw.
@@ -36,8 +37,9 @@ The test server uses its own empty data directory, so the tests don't change
 your real meal plan or recipe book. To set up the test server, do the
 following:
 
-1. If a server is running on port `3000`, stop it. In its terminal, press
-   `Control+C`.
+1. If a development server is running on port `3001`, stop it. In its
+   terminal, press `Control+C`. A deployed Meals on port `3000` can keep
+   running.
 1. Create an empty test directory. If one is left from an earlier run,
    delete it first, as in [Clean up](#clean-up).
 
@@ -45,11 +47,12 @@ following:
    mkdir ~/meals-test
    ```
 
-1. Start the test server on the default port, `3000`, so that the phone can
-   reach it:
+1. Start the test server on port `3001`. If the phone can't reach it,
+   open the port as in [Open the app](../README.md#open-the-app), with
+   `3001` instead of `3000`.
 
    ```bash
-   DATA_DIR=~/meals-test npm start
+   DATA_DIR=~/meals-test PORT=3001 npm start
    ```
 
 1. In a second terminal, add the test recipes:
@@ -58,7 +61,7 @@ following:
    for name in "Gnocchi carbonara" "Green salad" "Lentil soup" "Omelette" "Russian salad" \
      "<b>Bold</b> soup" "Supercalifragilisticexpialidocious-casserole-with-a-very-long-name"; do
      curl -s -X POST -H 'Content-Type: application/json' -d "{\"name\":\"$name\"}" \
-       http://localhost:3000/api/recipes; echo
+       http://localhost:3001/api/recipes; echo
    done
    ```
 
@@ -68,7 +71,7 @@ following:
    for entry in Egg:pcs Milk:ml Onion:g Rice:g; do
      curl -s -X POST -H 'Content-Type: application/json' \
        -d "{\"name\":\"${entry%%:*}\",\"unit\":\"${entry##*:}\"}" \
-       http://localhost:3000/api/ingredients; echo
+       http://localhost:3001/api/ingredients; echo
    done
    ```
 
@@ -79,21 +82,21 @@ Keep the server's terminal open. Several tests ask you to stop the server with
 
 | ID  | Step | Expected result |
 |-----|------|-----------------|
-| 1.1 | Open `http://localhost:3000` with no hash. | The address ends in `#MONDAY`, and the range shows the current week, for example `Sep 21 – 27, 2026`. |
+| 1.1 | Open `http://localhost:3001` with no hash. | The address ends in `#MONDAY`, and the range shows the current week, for example `Sep 21 – 27, 2026`. |
 | 1.2 | Click `›`, and then click `‹`. | The range and the hash change to the next week, and then back to the current week. |
 | 1.3 | In the next week, edit a slot: add `Lentil soup`. Click `‹`. | The recipe doesn't appear in the current week. When you click `›` again, the slot shows `Lentil soup × 1`. |
 | 1.4 | In the next week, reload the page. | The page still shows the next week. |
 | 1.5 | Click `›` five times as fast as you can. | The range, the hash, and the grid all show the same week. No menu appears in the wrong week. |
-| 1.6 | Go to `http://localhost:3000/#2026-12-28`. | The range shows `Dec 28, 2026 – Jan 3, 2027`. |
+| 1.6 | Go to `http://localhost:3001/#2026-12-28`. | The range shows `Dec 28, 2026 – Jan 3, 2027`. |
 | 1.7 | Click **Today**. | The page shows the current week. |
-| 1.8 | Open a new tab and go to `http://localhost:3000`. Click `›` twice, and then click the browser's **Back** button. | The browser goes back to the new tab page. It doesn't step through weeks. Typing a hash by hand, as in `1.6`, does add a history entry. |
+| 1.8 | Open a new tab and go to `http://localhost:3001`. Click `›` twice, and then click the browser's **Back** button. | The browser goes back to the new tab page. It doesn't step through weeks. Typing a hash by hand, as in `1.6`, does add a history entry. |
 
 ## 2. Week in the URL
 
 | ID  | Step | Expected result |
 |-----|------|-----------------|
 | 2.1 | Change the hash to `#hello`, then to a Tuesday such as `#2026-09-22`, then to `#2026-02-30`. | Each time, the hash changes back to the displayed week, and nothing else changes. |
-| 2.2 | In a new tab, go to `http://localhost:3000/#hello`. | The page shows the current week, and the hash changes to `#MONDAY`. |
+| 2.2 | In a new tab, go to `http://localhost:3001/#hello`. | The page shows the current week, and the hash changes to `#MONDAY`. |
 
 ## 3. Dates and today marker
 
@@ -108,7 +111,7 @@ Keep the server's terminal open. Several tests ask you to stop the server with
 
 | ID  | Step | Expected result |
 |-----|------|-----------------|
-| 4.1 | On the phone, go to `http://IP_ADDRESS:3000`, as in [Open the app](../README.md#open-the-app). | The page shows the current week with today selected. Each slot shows its meal name over its menu or `+ Add`. |
+| 4.1 | On the phone, go to `http://IP_ADDRESS:3001`, as in [Open the app](../README.md#open-the-app). | The page shows the current week with today selected. Each slot shows its meal name over its menu or `+ Add`. |
 | 4.2 | Select Thursday and tap `›`. | Thursday of the next week is selected. |
 | 4.3 | Tap **Today**. | The page shows the current week with today selected. |
 | 4.4 | Go to the week of December 28, 2026. | The range `Dec 28, 2026 – Jan 3, 2027` fits on one line, and the page doesn't scroll sideways. |
@@ -150,7 +153,7 @@ The command for `5.17`:
 ```bash
 for index in $(seq 1 20); do
   curl -s -X POST -H 'Content-Type: application/json' -d "{\"name\":\"Filler $index\"}" \
-    http://localhost:3000/api/recipes > /dev/null
+    http://localhost:3001/api/recipes > /dev/null
 done
 ```
 
@@ -264,6 +267,30 @@ the marker leaves the displayed week instead of moving.
 | 12.1 | With the page open on the current week, set the clock to the next day. Switch to another tab and back. | The today marker moves to the new day. |
 | 12.2 | Make the browser window narrower than 768 px. With the clock still set to the next day and the page visible, click **Today**. | The new day is selected in the day bar, and the marker is on the new day. |
 | 12.3 | Set the clock to the next Monday, and click **Today**. | The page shows the week of `NEXT_MONDAY`. |
+
+## 13. Host
+
+Run these tests on the host, from a checkout of the branch or release
+that you test. Tests `13.4`, `13.5`, `13.9`, and `13.10` need published
+releases.
+
+CI already checks the units with `npm run test:units` and `npm test`, and
+runs `meals-backup`, `meals-restore`, and `meals-restore-check` against
+Docker with `npm run test:host`. These tests check only what needs the real
+host: systemd, the `deployer` user, the real data, GitHub, and GHCR.
+
+| ID   | Step | Expected result |
+|------|------|-----------------|
+| 13.1 | On a host with no earlier installation, run `sudo scripts/install.sh`. Then run `id deployer` and `stat -c '%A %U:%G %n' /opt/server /opt/server/meals /opt/server/meals/data`. | `id` shows the group `docker`. The output reads `drwxrwsr-x root:docker /opt/server`, and `drwxrwsr-x deployer:docker` for the other two. `/opt/server/meals/hold` exists. |
+| 13.2 | Run `systemctl list-timers 'meals-*'`. | The list shows `meals-backup.timer`, `meals-deploy.timer`, and `meals-restore-check.timer`, each with a next run. |
+| 13.3 | Run `sudo scripts/install.sh` again, and compare `/opt/server/meals/.env` with its content before. | The file is unchanged, and `hold` still exists. |
+| 13.4 | Move the data in, as in [Move an existing installation](deployment.md#move-an-existing-installation). | `curl http://localhost:3000/api/health` returns `ok` and the release's version, every week, recipe, and ingredient is there, and `stat -c '%A' /opt/server/meals/data` reads `drwxrwsr-x`. |
+| 13.5 | Run `sudo -u deployer meals-deploy` with an older release's version, such as `0.2.0`. Then run `sudo -u deployer meals-deploy --resume` and `sudo systemctl start meals-deploy`. | The health check reports the older version and `hold` exists. After the resume, it reports the latest version again. |
+| 13.6 | Rename a recipe in the app. Run `sudo systemctl start meals-backup`, rename the recipe again, and restore the new `daily` backup with `sudo -u deployer meals-restore`. | The recipe has the first new name, and `backups/` has a new `pre-restore` backup. |
+| 13.7 | Run `sudo systemctl start meals-restore-check`, and then `journalctl -u meals-restore-check -n 5`. | The journal reads `The backup ... restores into version ...`. `docker ps -a` lists no `meals-restore-check` container. |
+| 13.8 | Reboot the host. | Within 2 minutes after boot, `curl http://localhost:3000/api/health` returns `ok`, and `systemctl list-timers 'meals-*'` lists the three timers. |
+| 13.9 | Remove the image of an older release with `docker image rm`, and block GHCR with `echo '127.0.0.1 ghcr.io' \| sudo tee -a /etc/hosts`. Run `sudo -u deployer meals-deploy` with that release's version. Then delete the line from `/etc/hosts`. | The command fails with `Couldn't pull`. The health check still reports the same version, `hold` doesn't exist, and `failed` doesn't list the release. |
+| 13.10 | Merge a release pull request. When `gh release view` lists `image.txt`, wait 5 minutes without running any command on the host. | `curl http://localhost:3000/api/health` reports the new version, and `journalctl -u meals-deploy` shows `Deployed version`. |
 
 ## Clean up
 
