@@ -42,6 +42,7 @@ case $args in
     if [[ -e $STUB_DIR/pull-fails ]]; then exit 1; fi
     ;;
   " image ls "*)
+    if [[ -e $STUB_DIR/image-ls-fails ]]; then exit 1; fi
     cat "$STUB_DIR/images" 2>/dev/null || true
     ;;
   *)
