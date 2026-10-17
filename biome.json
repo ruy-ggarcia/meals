@@ -9,7 +9,7 @@
     }
   },
   "files": {
-    "includes": ["**", "!package-lock.json"]
+    "includes": ["**", "!.release-please-manifest.json", "!package-lock.json"]
   },
   "formatter": {
     "enabled": true,
