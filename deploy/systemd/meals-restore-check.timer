@@ -1,0 +1,9 @@
+[Unit]
+Description=Check the latest Meals backup every week
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

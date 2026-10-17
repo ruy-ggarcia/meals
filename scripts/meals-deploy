@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# Usage: meals-deploy [VERSION | --resume]
+#
+# Without arguments, deploys the latest release, unless the host is on hold,
+# or the release is deployed, older, or has no image.txt yet. It starts the
+# deployed version if it isn't running, and fails if the latest release is a
+# failed version. With VERSION, such as 1.2.3 or v1.2.3, deploys that
+# release, whatever its version, and puts the host on hold. With --resume,
+# ends the hold.
+#
+# A deployment pulls the image, checks the data, stops the app, takes a
+# pre-deploy backup, and starts and verifies the new version. If a step
+# before the start fails, nothing changes. If the verification fails, it
+# rolls back to the previous version and its data, and records the version
+# in failed. docs/deployment.md describes each failure.
+set -euo pipefail
+# shellcheck source=lib/common.sh
+source "$(dirname "$(readlink -f "$0")")/lib/common.sh"
+
+readonly IMAGE_PATTERN='^ghcr\.io/ruy-ggarcia/meals@sha256:[0-9a-f]{64}$'
+
+# Prints the GitHub API response for PATH in the repository.
+github_api() {
+  curl -fsSL --max-time 20 -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/ruy-ggarcia/meals/$1"
+}
+
+# Writes .env atomically with IMAGE and VERSION, and keeps the other values.
+# .env changes only in the last step, so on failure it stays as it was.
+write_env() {
+  local env=$MEALS_ROOT/.env
+  {
+    printf 'MEALS_GID=%s\n' "$(env_get "$env" MEALS_GID)"
+    printf 'MEALS_IMAGE=%s\n' "$1"
+    printf 'MEALS_PORT=%s\n' "$(env_get "$env" MEALS_PORT)"
+    printf 'MEALS_UID=%s\n' "$(env_get "$env" MEALS_UID)"
+    printf 'MEALS_VERSION=%s\n' "$2"
+  } >"$env.tmp" || return 1
+  mv "$env.tmp" "$env"
+}
+
+# Removes the meals images other than the ones in .env and .env.previous.
+prune_images() {
+  local keep ref
+  keep=" $(env_get "$MEALS_ROOT/.env" MEALS_IMAGE) $(env_get "$MEALS_ROOT/.env.previous" MEALS_IMAGE) "
+  docker image ls --digests --format '{{.Repository}}@{{.Digest}}' ghcr.io/ruy-ggarcia/meals |
+    while IFS= read -r ref; do
+      if [[ -n $ref && $keep != *" $ref "* ]]; then
+        docker image rm "$ref" >/dev/null || log "Couldn't remove the image $ref."
+      fi
+    done
+}
+
+# Prepares the switch to VERSION from IMAGE, with the app stopped: takes a
+# pre-deploy backup if PREVIOUS is deployed, puts the host on hold if HOLD is
+# 1, and points .env to VERSION. Sets backup to the new backup's file name,
+# and hold_created to 1 if it created hold. On failure, failure says which
+# step failed. Each step returns on failure, because the caller runs this
+# before `||`, where set -e is off.
+prepare() {
+  local version=$1 image=$2 hold=$3 previous=$4 before
+  if [[ -n $previous ]]; then
+    failure="Couldn't list the backups"
+    before=$(list_backups pre-deploy) || return 1
+    failure="The pre-deploy backup failed"
+    "$MEALS_SCRIPTS/meals-backup" pre-deploy || return 1
+    # Without the new backup, there's nothing to roll back to.
+    failure="Couldn't find the new pre-deploy backup"
+    backup=$(new_backup pre-deploy "$before") || return 1
+  fi
+  # Only now, so that a deployment that changed nothing leaves no hold.
+  if [[ $hold == 1 ]]; then
+    failure="Couldn't put the host on hold"
+    if [[ ! -e $MEALS_ROOT/hold ]]; then
+      touch "$MEALS_ROOT/hold" || return 1
+      hold_created=1
+    fi
+    log "Put the host on hold, so the timer keeps version $version. To resume, run meals-deploy --resume."
+  fi
+  failure="Couldn't write .env"
+  cp "$MEALS_ROOT/.env" "$MEALS_ROOT/.env.previous" || return 1
+  write_env "$image" "$version"
+}
+
+# Undoes a prepare for VERSION that failed with FAILURE, with the app stopped:
+# ends the hold if HOLD_CREATED is 1, starts PREVIOUS again if it's deployed,
+# and dies. .env is as it was, because write_env changes it last.
+undo_prepare() {
+  local version=$1 previous=$2 failure=$3 hold_created=$4
+  if [[ $hold_created == 1 ]]; then
+    if rm -f "$MEALS_ROOT/hold"; then
+      log "Ended the hold, because version $version wasn't deployed."
+    else
+      log "Couldn't end the hold. To end it, run meals-deploy --resume."
+    fi
+  fi
+  [[ -n $previous ]] || die "$failure, so version $version wasn't deployed. Nothing changed."
+  start_again_and_die "$previous" "$failure" "version $previous runs again. Nothing changed."
+}
+
+# Goes back from a version that failed the verification to PREVIOUS and its
+# data in the pre-deploy backup BACKUP. After a first deployment, without
+# PREVIOUS, it only stops the app. .env goes back even if the app doesn't
+# stop, so the timer doesn't take the failed version for the deployed one,
+# but the data stays as it is, because the failed version might still write
+# to it. Each step returns on failure, because the caller runs this in an
+# `if`, where set -e is off.
+roll_back() {
+  local previous=$1 backup=$2 staging stopped=1
+  # Before .env goes back, because Compose can't read the .env of a first
+  # deployment, which has no image.
+  compose stop || stopped=0
+  mv "$MEALS_ROOT/.env.previous" "$MEALS_ROOT/.env" || return 1
+  [[ $stopped == 1 ]] || return 1
+  [[ -n $previous ]] || return 0
+  # Restores the data like meals-restore, but without a pre-restore backup:
+  # that backup would hold data that the failed version wrote, under the
+  # previous version's name.
+  staging=$(mktemp -d "$MEALS_ROOT/.restore.XXXXXX") || return 1
+  if ! extract_valid "$MEALS_ROOT/backups/$backup" "$staging" || ! swap_data "$staging"; then
+    rm -rf "$staging"
+    return 1
+  fi
+  rm -rf "$staging"
+  start_and_verify "$previous"
+}
+
+# Rolls back from VERSION, which failed the verification, to PREVIOUS and its
+# data in the pre-deploy backup BACKUP, records VERSION in failed, and dies.
+fail_verification() {
+  local version=$1 previous=$2 backup=$3
+  log "Version $version failed the verification. Rolling back."
+  compose logs --tail 50 app || true
+  if roll_back "$previous" "$backup"; then
+    if [[ -n $previous ]]; then
+      log "Rolled back to version $previous and its data."
+    fi
+  else
+    log "The rollback failed too. See docker compose logs in $MEALS_ROOT."
+  fi
+  # The timer doesn't deploy a version in failed, also after a hold ends.
+  if ! echo "$version" >>"$MEALS_ROOT/failed"; then
+    die "Version $version failed, but $MEALS_ROOT/failed couldn't record it, so the timer might deploy it again."
+  fi
+  die "Version $version failed. $MEALS_ROOT/failed records it, so the timer won't deploy it."
+}
+
+# Deploys VERSION from IMAGE, which is pulled already, and puts the host on
+# hold if HOLD is 1. Rolls back if the verification fails.
+deploy() {
+  local version=$1 image=$2 hold=$3 previous backup="" failure="" hold_created=0
+  previous=$(deployed_version)
+  if [[ -n $previous ]]; then
+    # The pre-deploy backup would fail on invalid JSON or an unreadable
+    # directory. Checking first keeps the timer from stopping and starting
+    # the app on every run.
+    validate_data "$MEALS_ROOT/data" ||
+      die "The data failed validation, so version $version wasn't deployed. Nothing changed. Check the data files in $MEALS_ROOT/data."
+    compose stop || die "Couldn't stop version $previous, so nothing changed."
+  fi
+  prepare "$version" "$image" "$hold" "$previous" ||
+    undo_prepare "$version" "$previous" "$failure" "$hold_created"
+  start_and_verify "$version" || fail_verification "$version" "$previous" "$backup"
+  prune_images || log "Couldn't remove the old images."
+  log "Deployed version $version."
+}
+
+readonly USAGE="Usage: meals-deploy [VERSION | --resume]"
+[[ $# -le 1 ]] || die "$USAGE"
+case ${1:-} in
+  --resume)
+    take_lock
+    rm -f "$MEALS_ROOT/hold"
+    log "Resumed the automatic deployments."
+    exit 0
+    ;;
+  -*)
+    die "$USAGE"
+    ;;
+esac
+
+take_lock
+
+# With VERSION, the deployment is manual: it deploys that release, whatever
+# its version, and puts the host on hold once the pre-deploy backup is taken.
+manual=0
+[[ $# == 0 ]] || manual=1
+
+if [[ $manual == 0 ]]; then
+  if [[ -e $MEALS_ROOT/hold ]]; then
+    log "The host is on hold, so the timer deploys nothing. To resume, run meals-deploy --resume."
+    exit 0
+  fi
+  release=$(github_api releases/latest) || die "Couldn't get the latest release from GitHub."
+else
+  release=$(github_api "releases/tags/v${1#v}") || die "Couldn't get release v${1#v} from GitHub."
+fi
+
+tag=$(jq -er .tag_name <<<"$release") || die "Couldn't read the tag of the release from GitHub."
+version=${tag#v}
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+  die "The release from GitHub has the tag $tag, which isn't a version like v1.2.3."
+deployed=$(deployed_version)
+
+if [[ $manual == 0 ]]; then
+  if [[ $version == "$deployed" ]]; then
+    log "Version $version is deployed already."
+    # Starts it if it stopped, for example after an interrupted deployment.
+    # To keep it stopped on purpose, put the host on hold.
+    if [[ -z $(compose ps --quiet app) ]]; then
+      log "Version $version wasn't running. Starting it."
+      start_and_verify "$version" ||
+        die "Version $version didn't start healthy. See docker compose logs in $MEALS_ROOT."
+    fi
+    exit 0
+  fi
+  if [[ -n $deployed ]] && version_lt "$version" "$deployed"; then
+    log "The latest release, $version, is older than the deployed version, $deployed. Skipped it."
+    exit 0
+  fi
+  if grep -qxF "$version" "$MEALS_ROOT/failed" 2>/dev/null; then
+    # Fails on every run, so the service stays in systemctl --failed until a
+    # newer release or a hold.
+    die "The latest release, $version, failed before, so the timer skips it until a newer release."
+  fi
+fi
+
+url=$(jq -r '.assets[] | select(.name == "image.txt") | .browser_download_url' <<<"$release") ||
+  die "Couldn't read the assets of release $version from GitHub."
+if [[ -z $url ]]; then
+  [[ $manual == 1 ]] && die "Version $version has no image.txt."
+  log "Version $version has no image.txt yet."
+  exit 0
+fi
+image=$(curl -fsSL --max-time 20 "$url") || die "Couldn't download the image.txt of version $version."
+[[ $image =~ $IMAGE_PATTERN ]] ||
+  die "The image.txt of version $version isn't an image reference by digest: $image"
+# Pulls before anything changes, including the hold.
+docker pull --quiet "$image" >/dev/null || die "Couldn't pull $image. Nothing changed."
+
+deploy "$version" "$image" "$manual"

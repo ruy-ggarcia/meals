@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Stub docker for the host script tests. It logs each call to
+# $STUB_DIR/calls, keeps whether the app of each Compose project runs, and
+# answers from the files that the test writes in $STUB_DIR.
+set -euo pipefail
+printf 'docker %s\n' "$*" >>"$STUB_DIR/calls"
+args=" $* "
+# Whether the app runs: $STUB_DIR/running for the deployed app, and
+# $STUB_DIR/running-NAME for the project NAME, such as the restore check.
+running=$STUB_DIR/running
+if [[ $args =~ " --project-name "([^ ]+)" " ]]; then
+  running=$STUB_DIR/running-${BASH_REMATCH[1]}
+fi
+case $args in
+  *" compose "*" ps "*)
+    if [[ -e $running ]]; then echo app-container; fi
+    ;;
+  *" compose "*" up "*)
+    # Compose takes these variables from the environment before .env.
+    printf 'MEALS_GID=%s MEALS_IMAGE=%s MEALS_PORT=%s MEALS_UID=%s\n' "${MEALS_GID-}" \
+      "${MEALS_IMAGE-}" "${MEALS_PORT-}" "${MEALS_UID-}" >>"$STUB_DIR/up-env"
+    touch "$running"
+    if [[ -x $STUB_DIR/on-up ]]; then "$STUB_DIR/on-up"; fi
+    # A version listed in $STUB_DIR/broken never becomes healthy.
+    version=$(sed -n 's/^MEALS_VERSION=//p' "$MEALS_ROOT/.env")
+    if grep -qxF "$version" "$STUB_DIR/broken" 2>/dev/null; then exit 1; fi
+    ;;
+  *" compose "*" stop "* | *" compose "*" down "*)
+    if [[ -e $STUB_DIR/stop-fails ]]; then exit 1; fi
+    rm -f "$running"
+    ;;
+  *" compose "*" logs "*) ;;
+  " image rm "*)
+    if [[ -e $STUB_DIR/image-rm-fails ]]; then exit 1; fi
+    ;;
+  *" compose "*" port app 3000 "*)
+    if [[ -e $STUB_DIR/port-fails ]]; then exit 1; fi
+    # The address in $STUB_DIR/port if the test gives one.
+    if [[ -f $STUB_DIR/port ]]; then cat "$STUB_DIR/port"; else echo 127.0.0.1:49153; fi
+    ;;
+  " pull "*)
+    if [[ -e $STUB_DIR/pull-fails ]]; then exit 1; fi
+    ;;
+  " image ls "*)
+    if [[ -e $STUB_DIR/image-ls-fails ]]; then exit 1; fi
+    cat "$STUB_DIR/images" 2>/dev/null || true
+    ;;
+  *)
+    echo "docker stub: unexpected call: $*" >&2
+    exit 64
+    ;;
+esac

@@ -1,0 +1,14 @@
+[Unit]
+Description=Deploy the latest Meals release
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=deployer
+Group=docker
+UMask=0002
+ExecStart=/opt/server/meals/scripts/meals-deploy
+# A oneshot service has no start timeout by default, so a hung step would
+# hold the scripts' lock forever.
+TimeoutStartSec=15min
