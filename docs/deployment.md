@@ -86,7 +86,7 @@ of the GitHub Actions as `ci(deps)`, which release nothing.
 
 To release a version, do the following:
 
-1. Open the pull request titled `chore(main): release X.Y.Z`, and check the
+1. Open the pull request titled `Chore: Release X.Y.Z`, and check the
    version and the changelog.
 1. When its checks pass, merge it.
 1. A few minutes later, check that the `publish` job attached `image.txt`

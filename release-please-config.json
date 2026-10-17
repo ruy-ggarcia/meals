@@ -7,5 +7,6 @@
       "include-component-in-tag": false,
       "release-type": "node"
     }
-  }
+  },
+  "pull-request-title-pattern": "Chore: Release ${version}"
 }
