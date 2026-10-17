@@ -1,0 +1,37 @@
+name: Pull request titles
+
+# Renames Dependabot pull requests to the title style of this repository,
+# such as "Fix: Bump the npm group with 3 updates". The commits keep their
+# Conventional Commits type, which decides releases.
+#
+# pull_request_target runs with the code of main, never of the pull request,
+# and gets a token that can edit the pull request.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  dependabot:
+    name: dependabot
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rename the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          new=$(scripts/pr-title.sh "$TITLE")
+          if [[ $new != "$TITLE" ]]; then
+            gh pr edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --title "$new"
+          fi

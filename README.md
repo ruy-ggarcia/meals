@@ -343,7 +343,10 @@ pull request up to date, and publishes a release when you merge it. See
 
 Every week, Dependabot opens pull requests that update the npm
 dependencies, the GitHub Actions, and the base image. The settings are in
-`.github/dependabot.yml`.
+`.github/dependabot.yml`. `.github/workflows/pr-titles.yml` renames those
+pull requests to the title style of this repository, such as
+`Fix: Bump the npm group with 3 updates`. Their commits keep the
+Conventional Commits type, which decides releases.
 
 ## Project structure
 
@@ -351,6 +354,7 @@ dependencies, the GitHub Actions, and the base image. The settings are in
 .github/
   workflows/
     ci.yml              # Continuous integration: lint, tests, and the image.
+    pr-titles.yml       # Renames Dependabot pull requests.
     release.yml         # Releases: release-please, and the image in GHCR.
   dependabot.yml        # Weekly dependency updates.
 deploy/
@@ -394,6 +398,7 @@ scripts/
   meals-deploy          # Deploys a release, with a rollback.
   meals-restore         # Restores a backup.
   meals-restore-check   # Checks that the latest backup restores.
+  pr-title.sh           # Turns a commit subject into a pull request title.
   units-check.sh        # Verifies the systemd units with systemd-analyze.
 server/
   app.js         # HTTP API (Express), static files, and the health check.
