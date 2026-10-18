@@ -51,12 +51,21 @@ To set up GitHub, do the following once, before the first release:
 
    Replace `CLIENT_ID` with the client ID and `PEM_FILE` with the path of the
    `.pem` file. Then delete the `.pem` file.
-1. Require the `image` check before a pull request can merge into `main`:
+1. Turn on the default setup of CodeQL code scanning, which runs the
+   `CodeQL` check on pull requests:
+
+   ```bash
+   gh api --method PATCH repos/ruy-ggarcia/meals/code-scanning/default-setup \
+     -f query_suite=default -f state=configured
+   ```
+1. Require the `ci`, `CodeQL`, `conventional`, `e2e`, and `image` checks
+   before a pull request can merge into `main`:
 
    ```bash
    gh api --method POST \
      repos/ruy-ggarcia/meals/branches/main/protection/required_status_checks/contexts \
-     -f 'contexts[]=image'
+     -f 'contexts[]=ci' -f 'contexts[]=CodeQL' -f 'contexts[]=conventional' \
+     -f 'contexts[]=e2e' -f 'contexts[]=image'
    ```
 
 After the first release, make the image public, so the host can pull it
