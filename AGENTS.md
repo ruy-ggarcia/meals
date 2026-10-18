@@ -57,6 +57,16 @@ automatically, such as focus or layout in a real browser, cover it in
 Before every commit, follow [Check your changes](README.md#check-your-changes):
 `npm run lint` and `npm test` must pass.
 
+## Commits and pull requests
+
+Write every commit message and every pull request title in the
+[Conventional Commits](https://www.conventionalcommits.org) format, such as
+`feat(ui): show the shopping list of the week`. The type decides releases:
+`feat` and `fix` release, and `build`, `ci`, `docs`, `refactor`, and `test`
+don't. Only the merge commits that GitHub creates for pull requests use
+another format. The `conventional` check enforces this on every pull
+request.
+
 ## Content boundaries
 
 Artifacts describe the product, not the conversations that produced it. Don't

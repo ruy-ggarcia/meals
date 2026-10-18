@@ -1,0 +1,35 @@
+name: Conventional Commits
+
+# Checks that the pull request title and every commit of the pull request,
+# except merge commits, follow Conventional Commits. It has its own workflow,
+# so editing the title runs only this check.
+on:
+  pull_request:
+    types: [edited, opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conventional-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventional:
+    name: conventional
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the pull request title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | scripts/check-conventional.sh
+      - name: Check the commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: git log --no-merges --format=%s "$BASE..$HEAD" | scripts/check-conventional.sh

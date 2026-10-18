@@ -334,7 +334,13 @@ GitHub Actions runs two checks on every pull request and on every push to
   Node.js 22.
 - `image` runs `npm run test:image` and `npm run test:host`.
 
-Changes reach `main` only through pull requests that pass both checks.
+On every pull request, `.github/workflows/conventional.yml` also runs
+`conventional`. It checks that the pull request title and every commit
+except merge commits follow
+[Conventional Commits](https://www.conventionalcommits.org), because the
+commit type decides releases.
+
+Changes reach `main` only through pull requests that pass the three checks.
 Each pull request merges with a merge commit.
 
 On every push to `main`, `.github/workflows/release.yml` keeps a release
@@ -351,6 +357,7 @@ dependencies, the GitHub Actions, and the base image. The settings are in
 .github/
   workflows/
     ci.yml              # Continuous integration: lint, tests, and the image.
+    conventional.yml    # Checks pull request titles and commit subjects.
     release.yml         # Releases: release-please, and the image in GHCR.
   dependabot.yml        # Weekly dependency updates.
 deploy/
@@ -387,6 +394,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
 scripts/
   lib/
     common.sh           # Functions shared by the meals-* scripts.
+  check-conventional.sh # Checks subjects against Conventional Commits.
   host-smoke.sh         # Runs the meals-* scripts on an image and checks them.
   image-smoke.sh        # Runs an image as the host does and checks it.
   install.sh            # Installs the host tools.
