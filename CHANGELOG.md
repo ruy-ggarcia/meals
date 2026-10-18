@@ -5,7 +5,6 @@
 
 ### Features
 
-* measure ingredients in named measures ([03fc05b](https://github.com/ruy-ggarcia/meals/commit/03fc05b4826b8eb5381ce3cbfacd6817c7a026cf))
 * **server:** add measures to ingredients ([701a8db](https://github.com/ruy-ggarcia/meals/commit/701a8db6230581b6ac01785ea154f5e2422ebe84))
 * **server:** change the unit of an ingredient in use with a conversion ([1e622bf](https://github.com/ruy-ggarcia/meals/commit/1e622bf3b6b8935ffc264292bf110928be27d1b3))
 * **server:** measure recipe ingredients in a measure ([a070b37](https://github.com/ruy-ggarcia/meals/commit/a070b371f191337526016c2ecf7eeb342fa51911))
@@ -19,7 +18,6 @@
 ### Bug Fixes
 
 * **deps:** bump express ([00e0ac0](https://github.com/ruy-ggarcia/meals/commit/00e0ac01f3b5cab24b3cf1bd51c25313cafff324))
-* **deps:** bump express from 5.2.1 to 5.3.0 in the npm-production group across 1 directory ([55bb0aa](https://github.com/ruy-ggarcia/meals/commit/55bb0aa54041abcac98445913078cc76bdf57809))
 * **ui:** clear row errors as you type and keep focus on Done ([45f24df](https://github.com/ruy-ggarcia/meals/commit/45f24df0bf03ae6f6a49d5ef705dc44323acf4f0))
 * **ui:** load the latest recipes and ingredients before editing ([056cf24](https://github.com/ruy-ggarcia/meals/commit/056cf24401a736289f58bef2879e4545147c0e17))
 * **ui:** wrap long amounts in the shopping list ([1d2b6ff](https://github.com/ruy-ggarcia/meals/commit/1d2b6ff394b52b54407ad63b4ad795e19468c70e))
