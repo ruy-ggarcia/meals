@@ -6,7 +6,8 @@ lunch, afternoon snack, and dinner). Each slot of the grid holds a menu: a
 list of recipes from the recipe book, each with a number of servings.
 
 Each recipe lists its ingredients, with the quantity that one serving
-needs, and the app adds them up into a shopping list for the week.
+needs, in the ingredient's unit or in a measure such as `medium`. The app
+adds them up into a shopping list for the week.
 
 Meals is self-hosted: it runs on a server that you manage, and any desktop or
 mobile browser on the same network can use it.
@@ -161,6 +162,20 @@ the week bar. It lists ingredients from A to Z, and it counts the menus
 that the grid shows, including slots that are still saving and slots whose
 save failed.
 
+Each line shows the total in the ingredient's unit, rounded up to a whole
+number so that you never buy too little. From 1000 `g` or `ml` on, the total
+shows in `kg` or `l`, rounded up to tenths: `1320 g` shows as `1.4 kg`.
+
+When a recipe of the week uses a measure of the ingredient, the line also
+breaks the total down in parentheses: first the part in the unit, if any,
+rounded like the total, and then each measure in the ingredient's order,
+rounded to two decimals. For example, the following line means 220 g of
+onion, 4 medium onions, and 1 large onion, 1.1 kg in all:
+
+```none
+Onion    1.1 kg (220 g, 4 medium, 1 large)
+```
+
 Recipes without ingredients can't add to the list. The dialog names them
 under **Not included**, with the slots where they appear.
 
@@ -172,8 +187,9 @@ The recipe book holds the recipes that you can add to menus. To open it,
 click **Recipes** at the top of any page.
 
 A recipe has a name of up to 100 characters and a list of ingredients,
-each with the quantity that one serving needs. Names are unique, ignoring
-case and accents, so `Café` and `cafe` are the same name.
+each with the quantity that one serving needs, in the ingredient's unit or
+in one of its measures. Names are unique, ignoring case and accents, so
+`Café` and `cafe` are the same name.
 
 - To add a recipe, click **New recipe**. To change a recipe, click its
   **Edit** button. Both open the recipe editor:
@@ -183,9 +199,12 @@ case and accents, so `Café` and `cafe` are the same name.
     recipe holds up to 50 ingredients, and the list offers only active
     ingredients that aren't in the recipe. To add ingredients to the
     catalog, use the **Ingredients** page.
-  - Type each quantity in the ingredient's unit, from `0.01` to `10000`
-    with at most two decimals, such as `0.25`. You can type `.` or `,` as
-    the decimal separator.
+  - Type each quantity from `0.01` to `10000` with at most two decimals,
+    such as `0.25`. You can type `.` or `,` as the decimal separator.
+  - To use a measure of the ingredient instead of its unit, choose the
+    measure in the list after the quantity, such as `medium (150 g)`. The
+    list starts on the unit. An ingredient without measures shows only its
+    unit.
   - To remove an ingredient, click **Remove**.
   - To save, click **Done** or press `Enter`. To close the editor without
     saving, click **Cancel** or press `Escape`.
@@ -203,23 +222,66 @@ You can't delete recipes.
 The ingredient catalog holds the ingredients that recipes use. To open
 it, click **Ingredients** at the top of any page.
 
-An ingredient has a name of up to 100 characters and a unit: `g`, `ml`,
-or `pcs`. Every recipe measures an ingredient in its unit, so the
-shopping list can add the quantities up. Names are unique, ignoring case
-and accents.
+An ingredient has a name of up to 100 characters, a unit (`g`, `ml`, or
+`pcs`), and up to 20 measures. Names are unique, ignoring case and accents.
+The shopping list adds up each ingredient in its unit.
 
-- To add an ingredient, type its name in **New ingredient**, choose its
-  unit, and then press `Enter` or click **Add**. If an archived
-  ingredient has the name, click **Restore it** to bring that ingredient
-  back.
-- To rename an ingredient or change its unit, click **Edit**. You can
-  change the unit only while no recipe, active or archived, uses the
-  ingredient.
+A measure is a named amount of the ingredient in its unit, such as `medium`
+for 150 g of onion. Its name has up to 100 characters and is unique within
+the ingredient, ignoring case and accents. Its amount is from `0.01` to
+`10000` with at most two decimals. Each recipe uses an ingredient in its unit
+or in one of its measures, so two recipes can measure the same ingredient
+differently.
+
+- To add an ingredient, click **New ingredient**. To change an ingredient,
+  click its **Edit** button. Both open the ingredient editor:
+  - Type the name in **Name**. If an archived ingredient has the name,
+    restore it from **Archived** instead.
+  - Choose the unit in **Unit**. To change the unit of an existing
+    ingredient, see
+    [Change the unit of an ingredient](#change-the-unit-of-an-ingredient).
+  - To add a measure, click **Add measure**, and type its name and its
+    amount in the unit. You can type `.` or `,` as the decimal separator.
+  - To rename a measure or change its amount, edit its row. The recipes that
+    use the measure follow the change.
+  - To remove a measure, click **Remove**. While a recipe, active or
+    archived, uses the measure, **Remove** is disabled, and the row says how
+    many recipes use it.
+  - To save, click **Done** or press `Enter`. To close the editor without
+    saving, click **Cancel** or press `Escape`.
 - To find an ingredient, type part of its name in **Search**.
 - To archive an ingredient, click **Archive**. To bring one back, click
   **Restore** under **Archived**.
 
+Each row of the list shows the unit and the names of the measures, such as
+`g · medium, large`.
+
 You can't delete ingredients.
+
+### Change the unit of an ingredient
+
+You can change the unit of an ingredient at any time, even while recipes use
+it. If the ingredient has measures, or a recipe uses it in its unit, you also
+tell the app how the two units convert. To change the unit, do the
+following:
+
+1. In the ingredient editor, choose the new unit in **Unit**. If the change
+   needs a conversion, a conversion row appears, such as `1 pcs = [ ] g`.
+1. Complete the conversion. For example, if a piece weighs 120 g, keep `1`
+   and type `120`.
+1. If a recipe uses the ingredient in the old unit, check the name in
+   **Saved as measure**. In those recipes, a measure with this name replaces
+   the old unit. The name starts as the old unit, such as `pcs`.
+1. Click **Done**.
+
+The app converts the amounts of the measures, and the recipes keep their
+meaning. In the example, `2 pcs` in a recipe becomes `2 pcs (120 g)`: 2 of
+the new measure `pcs`, which is 120 g.
+
+While the conversion row shows, the measures are read-only and preview their
+converted amounts. To change both the unit and the measures, save each change
+separately. If any converted amount falls outside `0.01` to `10000`, the app
+rejects the change and changes nothing.
 
 ## Configure the server
 
@@ -409,9 +471,10 @@ server/
   files.js       # JSON files and the write queue. The only module that touches disk.
   healthcheck.js # The image's health check.
   index.js       # Startup: reads DATA_DIR and PORT, and stops on SIGINT and SIGTERM.
-  ingredients.js # The ingredient catalog: unique names, units, and archiving.
+  ingredients.js # The ingredient catalog: unique names, units, measures, and archiving.
   logger.js      # Logs one JSON object per line.
   names.js       # Name rules shared by recipes and ingredients.
+  quantities.js  # Quantity limits shared by recipes and measures.
   recipes.js     # The recipe book: unique names, ingredients, and archiving.
   shutdown.js    # Stops the server once, within a deadline.
   start.js       # Listens, and stops without cutting a request or a write.
@@ -438,8 +501,11 @@ have the shape `{ "error": "MESSAGE" }`. Any other path under `/api` returns
 `500`.
 
 A recipe has the shape `{ "id", "name", "archived", "ingredients" }`,
-where `ingredients` is a list of `{ "ingredientId", "quantity" }`. An
-ingredient has the shape `{ "id", "name", "unit", "archived" }`.
+where `ingredients` is a list of `{ "ingredientId", "quantity" }`, with
+`"measureId"` too for a quantity in a measure. An ingredient has the shape
+`{ "id", "name", "unit", "measures", "archived" }`, where `measures` is an
+ordered list of `{ "id", "name", "amount" }`, with each `amount` in the
+ingredient's unit.
 
 A week is identified by the date of its Monday, formatted as `YYYY-MM-DD`, for
 example `2026-09-21`. Each slot of a week holds a menu:
@@ -471,7 +537,8 @@ example `2026-09-21`. Each slot of a week holds a menu:
 
 Request body:
 `{ "name": "NAME", "ingredients": [{ "ingredientId": "ID", "quantity": 1.5 }] }`,
-where `ingredients` is optional and defaults to `[]`.
+where `ingredients` is optional and defaults to `[]`. A line can also have
+`"measureId": "MEASURE_ID"`.
 
 | Status | Meaning |
 |--------|---------|
@@ -497,13 +564,17 @@ archive or restore it.
 `ingredients` is valid when all the following are true:
 
 - It's an array of at most 50 entries.
-- Each entry has exactly the keys `ingredientId` and `quantity`.
+- Each entry has the keys `ingredientId` and `quantity`, and optionally
+  `measureId`.
 - Each `ingredientId` is an existing ingredient, archived or not, and
   appears once.
+- Each `measureId` is the ID of a measure of that ingredient. A line without
+  `measureId` is in the ingredient's unit.
 - Each `quantity` is a number from 0.01 to 10000 with at most two
   decimals.
 
-The server stores each quantity rounded to two decimals.
+The server stores each quantity rounded to two decimals. Responses leave out
+a line whose ingredient or measure isn't in the catalog.
 
 ### List ingredients
 
@@ -517,28 +588,73 @@ The server stores each quantity rounded to two decimals.
 
 `POST /api/ingredients`
 
-Request body: `{ "name": "NAME", "unit": "UNIT" }`, where `UNIT` is
-`g`, `ml`, or `pcs`.
+Request body:
+`{ "name": "NAME", "unit": "UNIT", "measures": [{ "name": "NAME", "amount": 150 }] }`,
+where `UNIT` is `g`, `ml`, or `pcs`, and `measures` is optional and defaults
+to `[]`. The server gives each measure an ID.
 
 | Status | Meaning |
 |--------|---------|
 | `201`  | The body is the new ingredient. |
-| `400`  | The body doesn't have exactly `name` and `unit`, the name is invalid, or the unit isn't `g`, `ml`, or `pcs`. |
+| `400`  | `name` or `unit` is missing or invalid, the body has other fields, or `measures` breaks the rules below. |
 | `409`  | Another ingredient, active or archived, has the same name, ignoring case and accents. The body is `{ "error", "ingredient" }`. |
 
 ### Change an ingredient
 
 `PATCH /api/ingredients/ID`
 
-Request body: `{ "name" }`, `{ "unit" }`, or both, or
-`{ "archived": true }` or `{ "archived": false }`, alone.
+Request body: any combination of `name`, `unit`, `measures`, and
+`conversion`, to change the ingredient, or `{ "archived": true }` or
+`{ "archived": false }`, alone, to archive or restore it.
 
 | Status | Meaning |
 |--------|---------|
 | `200`  | The body is the updated ingredient. |
-| `400`  | The body mixes `archived` with other fields, has no known field, has other fields, or has an invalid value. |
+| `400`  | The body mixes `archived` with other fields, has no known field, has other fields, or has an invalid value, such as `measures` or `conversion` that break the rules below. |
 | `404`  | No ingredient has that ID. |
-| `409`  | Another ingredient has the same name, and the body is `{ "error", "ingredient" }`. Or the unit changes while a recipe uses the ingredient, and the body is `{ "error" }`. |
+| `409`  | Another ingredient, active or archived, has the same name, ignoring case and accents, and the body is `{ "error", "ingredient" }`. Or `measures` leaves out a measure that a recipe, active or archived, uses, and the body is `{ "error" }`. |
+
+`measures` replaces the whole list, so the server removes a measure that the
+list leaves out. It's valid when all the following are true:
+
+- It's an array of at most 20 entries.
+- Each entry is `{ "name", "amount" }` for a new measure, which the server
+  gives an ID, or `{ "id", "name", "amount" }` for one of the ingredient's
+  measures, which keeps its ID.
+- Each `name` is a valid name, and is unique within the list, ignoring case
+  and accents. It can be the name of a unit, such as `g`.
+- Each `amount` is a number from 0.01 to 10000 with at most two decimals, in
+  the unit that the ingredient has after the save.
+
+A unit change needs `conversion` when the ingredient has measures, or when a
+recipe, active or archived, uses it in its old unit. `conversion` is
+`{ "from", "to", "measureName" }`: `from` of the old unit equal `to` of the
+new unit, and both are numbers from 0.01 to 10000 with at most two decimals.
+`measureName` names the measure that replaces the old unit in recipes, and
+is required only when a recipe uses the old unit.
+
+With a conversion, the server multiplies the amount of every measure by
+`to ÷ from`, and rounds it to two decimals. If a recipe uses the old unit,
+the server also adds the measure `measureName` with an amount of `to ÷ from`,
+and points those recipe lines to it, so they keep their meaning. If the
+ingredient already has a measure with that name, ignoring case and accents,
+and an amount of `1`, the
+server uses that measure instead, so you can retry a unit change that failed
+halfway. For example,
+`{ "unit": "g", "conversion": { "from": 1, "to": 120, "measureName": "piece" } }`
+on an ingredient in `pcs` turns `2` in a recipe into `2 piece`, which is
+240 g.
+
+The server returns `400`, and changes nothing, in the following cases:
+
+- `conversion` is missing when the change needs it, or present when it
+  doesn't.
+- The body has `conversion` without a new `unit`, or with `measures`.
+- A recipe uses the old unit, and `measureName` is missing, is invalid, or
+  matches a measure whose amount isn't `1`, ignoring case and accents.
+- A recipe uses the old unit, `measureName` matches no measure, and the
+  ingredient already has 20 measures.
+- Any converted amount, before rounding, falls outside 0.01 to 10000.
 
 ### Get a week
 
