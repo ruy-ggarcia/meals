@@ -212,23 +212,12 @@ test("a backdrop click with no changes after Edit returns focus to the ingredien
   assertFocus(document, buttonLabeled("Edit Onion"));
 });
 
-test("Edit disables Unit for an ingredient that recipes use, counting archived recipes", async () => {
-  await openIngredientsPage(
-    [ingredient("1", "Onion"), ingredient("2", "Milk", "ml")],
-    [
-      recipe("r1", "Soup", ["1"]),
-      recipe("r2", "Old soup", ["1"], true),
-      recipe("r3", "Latte", ["2"]),
-    ],
-  );
+test("Edit keeps Unit enabled for an ingredient that recipes use", async () => {
+  await openIngredientsPage([ingredient("1", "Onion")], [recipe("r1", "Soup", ["1"])]);
 
   buttonLabeled("Edit Onion").click();
 
-  assert.equal(document.getElementById("ingredient-unit").disabled, true);
-  assert.equal(
-    document.querySelector("#ingredient-editor .unit-hint").textContent,
-    "Used in 2 recipes. To change the unit, remove the ingredient from those recipes first.",
-  );
+  assert.equal(document.getElementById("ingredient-unit").disabled, false);
 });
 
 test("Archive moves an ingredient to Archived", async () => {

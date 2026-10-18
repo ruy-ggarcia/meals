@@ -14,13 +14,7 @@ import { nameKey } from "./name-search.js";
 import { MAX_MEASURES, parseQuantity } from "./quantities.js";
 
 const AMOUNT_MESSAGE = "Enter an amount from 0.01 to 10000, with up to two decimals.";
-
-// Why the unit can't change while `count` recipes use the ingredient.
-function usedInText(count) {
-  return count === 1
-    ? "Used in 1 recipe. To change the unit, remove the ingredient from that recipe first."
-    : `Used in ${count} recipes. To change the unit, remove the ingredient from those recipes first.`;
-}
+const CONVERSION_MESSAGE = "Enter a number from 0.01 to 10000, with up to two decimals.";
 
 // Why a measure can't be removed while `count` recipes use it.
 function measureUsedText(count) {
@@ -60,7 +54,14 @@ export function createIngredientEditor(dialog) {
   const nameMessage = dialog.querySelector(".name-message");
   const unitField = dialog.querySelector(".unit-field");
   const noUnitOption = unitField.querySelector('option[value=""]');
-  const unitHint = dialog.querySelector(".unit-hint");
+  const conversionRow = dialog.querySelector(".conversion");
+  const conversionFrom = conversionRow.querySelector(".conversion-from");
+  const conversionFromUnit = conversionRow.querySelector(".conversion-from-unit");
+  const conversionTo = conversionRow.querySelector(".conversion-to");
+  const conversionToUnit = conversionRow.querySelector(".conversion-to-unit");
+  const conversionMeasure = conversionRow.querySelector(".conversion-measure");
+  const conversionMeasureName = conversionRow.querySelector(".conversion-measure-name");
+  const conversionMessage = conversionRow.querySelector(".conversion-message");
   const measureList = dialog.querySelector(".measure-rows");
   const addMeasureButton = dialog.querySelector(".add-measure");
   const saveMessage = dialog.querySelector(".save-message");
@@ -78,8 +79,9 @@ export function createIngredientEditor(dialog) {
     dialog,
     hasChanges,
     onDone: save,
+    // The dialog disables inputs and buttons, not the select.
     onBusy: (busy) => {
-      unitField.disabled = busy || session.usage.recipes > 0;
+      unitField.disabled = busy;
       syncControls();
     },
     // Enter in a measure field is Done too. Add measure handles its own Enter.
@@ -96,13 +98,40 @@ export function createIngredientEditor(dialog) {
     return (row.id && session.usage.measures.get(row.id)) || 0;
   }
 
+  // True when the selected unit differs from the stored one and something
+  // depends on the old unit, so the change needs a conversion.
+  function needsConversion() {
+    const { ingredient, usage } = session;
+    return (
+      Boolean(ingredient) &&
+      unitField.value !== ingredient.unit &&
+      ((ingredient.measures ?? []).length > 0 || usage.inUnit)
+    );
+  }
+
+  // The amount that a measure row shows: the stored amount, or its preview in
+  // the new unit while the conversion row shows and both numbers parse. The
+  // preview multiplies and rounds as the server does, so it shows the amount
+  // that the server saves.
+  function shownAmount(row) {
+    if (!needsConversion()) return row.amountText;
+    const from = parseQuantity(conversionFrom.value);
+    const to = parseQuantity(conversionTo.value);
+    if (from === null || to === null) return row.amountText;
+    const factor = to / from;
+    return String(Math.round(Number(row.amountText) * factor * 100) / 100);
+  }
+
   // Disables Remove on the measures in use, and Add measure at the limit.
+  // While the conversion row shows, the rows are previews, so both stay off.
   // The dialog enables every button after a save, so this runs again then.
   function syncControls() {
     const busy = lifecycle.isBusy();
-    addMeasureButton.disabled = busy || isFull();
+    const preview = needsConversion();
+    addMeasureButton.disabled = busy || preview || isFull();
     session.rows.forEach((row, index) => {
-      measureList.children[index].querySelector(".remove").disabled = busy || usedBy(row) > 0;
+      measureList.children[index].querySelector(".remove").disabled =
+        busy || preview || usedBy(row) > 0;
     });
   }
 
@@ -119,7 +148,11 @@ export function createIngredientEditor(dialog) {
     nameInput.setAttribute("aria-label", "Measure name");
     const amountInput = createElement("input", "measure-amount quantity-field");
     amountInput.type = "text";
-    amountInput.value = row.amountText;
+    amountInput.value = shownAmount(row);
+    if (needsConversion()) {
+      nameInput.readOnly = true;
+      amountInput.readOnly = true;
+    }
     amountInput.setAttribute("autocomplete", "off");
     amountInput.setAttribute("inputmode", "decimal");
     amountInput.setAttribute("aria-label", amountLabel(row));
@@ -185,9 +218,33 @@ export function createIngredientEditor(dialog) {
     ).focus();
   }
 
+  function clearConversionMessage() {
+    conversionMessage.textContent = "";
+    for (const field of [conversionFrom, conversionTo, conversionMeasureName]) {
+      field.removeAttribute("aria-invalid");
+    }
+  }
+
+  // Shows the conversion row when the unit change needs one, else hides it.
+  // A new row starts at 1 old unit, and names the measure after the old unit.
+  function showConversion() {
+    clearConversionMessage();
+    const needed = needsConversion();
+    if (needed && conversionRow.hidden) {
+      conversionFrom.value = "1";
+      conversionTo.value = "";
+      conversionMeasureName.value = session.ingredient.unit;
+    }
+    conversionRow.hidden = !needed;
+    if (needed) {
+      conversionFromUnit.textContent = session.ingredient.unit;
+      conversionToUnit.textContent = unitField.value;
+    }
+    conversionMeasure.hidden = !(needed && session.usage.inUnit);
+  }
+
   function open({ ingredient, usage, restoreFocus, onSaved }) {
     session = { ingredient, usage, rows: rowsOf(ingredient) };
-    const { recipes } = usage;
     title.textContent = ingredient ? "Edit ingredient" : "New ingredient";
     nameField.value = ingredient?.name ?? "";
     // Choosing a unit applies to a new ingredient only.
@@ -195,8 +252,8 @@ export function createIngredientEditor(dialog) {
     unitField.value = ingredient?.unit ?? "";
     nameMessage.textContent = "";
     saveMessage.textContent = "";
-    unitHint.textContent = recipes > 0 ? usedInText(recipes) : "";
-    unitHint.hidden = recipes === 0;
+    conversionRow.hidden = true;
+    showConversion();
     renderRows();
     // The title of an existing ingredient, not a field: on a phone, focusing a
     // field opens the keyboard.
@@ -285,12 +342,35 @@ export function createIngredientEditor(dialog) {
     }
   }
 
+  // Reads the conversion row. Returns the conversion to send, or null after
+  // showing why it can't be sent.
+  function readConversion() {
+    clearConversionMessage();
+    const from = parseQuantity(conversionFrom.value);
+    const to = parseQuantity(conversionTo.value);
+    const measureName = cleanName(conversionMeasureName.value);
+    const invalid = [
+      [from === null, conversionFrom, CONVERSION_MESSAGE],
+      [to === null, conversionTo, CONVERSION_MESSAGE],
+      [!conversionMeasure.hidden && measureName === "", conversionMeasureName, "Enter a name."],
+    ].find(([failed]) => failed);
+    if (invalid) {
+      const [, field, message] = invalid;
+      conversionMessage.textContent = message;
+      field.setAttribute("aria-invalid", "true");
+      field.focus();
+      return null;
+    }
+    return conversionMeasure.hidden ? { from, to } : { from, to, measureName };
+  }
+
   // Checks the name and the measures, then saves what changed, or closes when
   // nothing did.
   function save() {
     nameMessage.textContent = nameField.value.trim() === "" ? "The name can't be empty." : "";
     saveMessage.textContent = "";
-    const measures = readMeasures();
+    const converting = needsConversion();
+    const measures = converting ? [] : readMeasures();
     if (nameMessage.textContent !== "") {
       nameField.focus();
       return;
@@ -300,6 +380,8 @@ export function createIngredientEditor(dialog) {
       return;
     }
     const { ingredient } = session;
+    const conversion = converting ? readConversion() : undefined;
+    if (conversion === null) return;
     if (!ingredient && unitField.value === "") {
       saveMessage.textContent = "Choose a unit.";
       unitField.focus();
@@ -308,15 +390,33 @@ export function createIngredientEditor(dialog) {
     const body = {};
     if (nameField.value !== (ingredient?.name ?? "")) body.name = nameField.value;
     if (unitField.value !== (ingredient?.unit ?? "")) body.unit = unitField.value;
-    if (ingredient ? !sameMeasures(measures, ingredient.measures ?? []) : measures.length > 0) {
+    if (conversion) body.conversion = conversion;
+    else if (
+      ingredient ? !sameMeasures(measures, ingredient.measures ?? []) : measures.length > 0
+    ) {
+      // The amounts are in the selected unit. If the stored unit changed
+      // since the editor opened, the server sees a unit change and rejects
+      // it, instead of reading the amounts in the wrong unit.
+      body.unit = unitField.value;
       body.measures = measures;
     }
     if (Object.keys(body).length === 0) lifecycle.close();
     else lifecycle.submit(() => send(body));
   }
 
-  // The unit appears after every amount.
-  unitField.addEventListener("change", renderRows);
+  // The unit appears after every amount. A unit change that needs a
+  // conversion needs the measures saved first, since the server converts the
+  // stored ones.
+  unitField.addEventListener("change", () => {
+    saveMessage.textContent = "";
+    if (needsConversion() && measuresChanged()) {
+      unitField.value = session.ingredient.unit;
+      saveMessage.textContent = "Save your changes to the measures before you change the unit.";
+    }
+    showConversion();
+    renderRows();
+  });
+  for (const field of [conversionFrom, conversionTo]) field.addEventListener("input", renderRows);
   addMeasureButton.addEventListener("click", addRow);
 
   return { hasChanges, open };

@@ -47,11 +47,7 @@ function openEditor({ ingredient = MILK, usage = noUsage() } = {}) {
 }
 
 function noUsage() {
-  return { recipes: 0, inUnit: false, measures: new Map() };
-}
-
-function usedBy(recipes) {
-  return { ...noUsage(), recipes };
+  return { inUnit: false, measures: new Map() };
 }
 
 function query(selector) {
@@ -91,27 +87,14 @@ test("opens with the name and the unit, focus on the title, and Unit enabled whe
   assert.equal(query(".name-field").value, "Milk");
   assert.equal(query(".unit-field").value, "g");
   assert.equal(query(".unit-field").disabled, false);
-  assert.equal(query(".unit-hint").hidden, true);
   assertFocus(document, query(".dialog-title"));
 });
 
-test("Unit is disabled, with the reason, while recipes use the ingredient", () => {
-  openEditor({ usage: usedBy(2) });
+test("Unit is enabled even when recipes use the ingredient", () => {
+  openEditor({ usage: { ...noUsage(), inUnit: true } });
 
-  assert.equal(query(".unit-field").disabled, true);
-  assert.equal(query(".unit-hint").hidden, false);
-  assert.equal(
-    query(".unit-hint").textContent,
-    "Used in 2 recipes. To change the unit, remove the ingredient from those recipes first.",
-  );
-
-  query(".cancel").click();
-  openEditor({ usage: usedBy(1) });
-
-  assert.equal(
-    query(".unit-hint").textContent,
-    "Used in 1 recipe. To change the unit, remove the ingredient from that recipe first.",
-  );
+  assert.equal(query(".unit-field").disabled, false);
+  assert.equal(query(".unit-hint"), null);
 });
 
 test("Done with no changes closes without a request and returns focus to the opener", () => {
@@ -591,6 +574,7 @@ test("an amount typed as 1,09 is sent as 1.09", async () => {
   query(".done").click();
 
   assert.deepEqual(await sentBody(), {
+    unit: "g",
     measures: [
       { id: "m1", name: "medium", amount: 1.09 },
       { id: "m2", name: "large", amount: 250 },
@@ -604,7 +588,10 @@ test("renaming a measure sends its id with the new name", async () => {
 
   query(".done").click();
 
-  assert.deepEqual(await sentBody(), { measures: [{ id: "m1", name: "mediana", amount: 150 }] });
+  assert.deepEqual(await sentBody(), {
+    unit: "g",
+    measures: [{ id: "m1", name: "mediana", amount: 150 }],
+  });
 });
 
 test("Done sends measures only when they changed, new ones without id", async () => {
@@ -624,12 +611,26 @@ test("Done sends measures only when they changed, new ones without id", async ()
   query(".done").click();
 
   assert.deepEqual(await sentBody(), {
+    unit: "g",
     measures: [
       { id: "m1", name: "medium", amount: 150 },
       { id: "m2", name: "large", amount: 250 },
       { name: "extra large", amount: 300 },
     ],
   });
+});
+
+test("Done sends the unit with the measures, so the server rejects them if the unit changed since", async () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setField(measureRows()[0].querySelector(".measure-amount"), "160");
+
+  query(".done").click();
+
+  assert.equal((await sentBody()).unit, "g");
+  const error = '"Milk" has measures or recipes in ml. Reload the page to change its unit.';
+  await respondToPatch(400, { error });
+  assert.equal(dialog.open, true);
+  assert.equal(query(".save-message").textContent, error);
 });
 
 test("a new ingredient sends its measures with the POST", async () => {
@@ -687,4 +688,262 @@ test("hasChanges is true after editing, adding, or removing a measure", () => {
 
   measureRows()[0].querySelector(".remove").click();
   assert.equal(editor.hasChanges(), true);
+});
+
+const unitsUsed = { ...noUsage(), inUnit: true };
+
+function conversion() {
+  return query(".conversion");
+}
+
+function setConversion(from, to) {
+  setField(query(".conversion-from"), from);
+  setField(query(".conversion-to"), to);
+}
+
+test("picking another unit shows the conversion row only when there are measures or unit lines", () => {
+  openEditor();
+  setUnit("ml");
+  assert.equal(conversion().hidden, true);
+
+  query(".cancel").click();
+  openEditor({ ingredient: SIZED_MILK });
+  assert.equal(conversion().hidden, true);
+  setUnit("ml");
+  assert.equal(conversion().hidden, false);
+
+  query(".cancel").click();
+  openEditor({ usage: unitsUsed });
+  setUnit("ml");
+  assert.equal(conversion().hidden, false);
+
+  query(".cancel").click();
+  openNewEditor();
+  setUnit("ml");
+  assert.equal(conversion().hidden, true);
+});
+
+test("the conversion row starts at 1 and asks for the measure name only when recipes use the unit", () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setUnit("ml");
+
+  assert.equal(query(".conversion-from").value, "1");
+  assert.equal(query(".conversion-to").value, "");
+  assert.equal(query(".conversion-from").getAttribute("aria-label"), "Amount in the old unit");
+  assert.equal(query(".conversion-to").getAttribute("aria-label"), "Amount in the new unit");
+  assert.equal(query(".conversion-from-unit").textContent, "g");
+  assert.equal(query(".conversion-to-unit").textContent, "ml");
+  assert.equal(query(".conversion-measure").hidden, true);
+
+  query(".cancel").click();
+  openEditor({ usage: unitsUsed });
+  setUnit("ml");
+
+  assert.equal(query(".conversion-measure").hidden, false);
+  assert.equal(query(".conversion-measure-name").value, "g");
+});
+
+test("while the conversion row shows, measure rows are read-only previews in the new unit", () => {
+  const net = {
+    id: "net",
+    name: "net",
+    unit: "pcs",
+    measures: [{ id: "m1", name: "1", amount: 4 }],
+  };
+  openEditor({ ingredient: net });
+  setUnit("g");
+  setConversion("1", "120");
+
+  assert.deepEqual(measureValues(), [["1", "480"]]);
+  const [row] = measureRows();
+  assert.equal(row.querySelector(".unit").textContent, "g");
+  assert.equal(row.querySelector(".measure-name").readOnly, true);
+  assert.equal(row.querySelector(".measure-amount").readOnly, true);
+  assert.equal(row.querySelector(".remove").disabled, true);
+  assert.equal(query(".add-measure").disabled, true);
+
+  setConversion("3", "10");
+  assert.deepEqual(measureValues(), [["1", "13.33"]]);
+  setConversion("x", "10");
+  assert.deepEqual(measureValues(), [["1", "4"]]);
+});
+
+test("the preview rounds each amount as the server converts it: amount times (to / from)", () => {
+  const bunch = {
+    id: "bunch",
+    name: "bunch",
+    unit: "pcs",
+    measures: [
+      { id: "m1", name: "small", amount: 1.5 },
+      { id: "m2", name: "medium", amount: 5.5 },
+      { id: "m3", name: "large", amount: 6 },
+    ],
+  };
+  openEditor({ ingredient: bunch });
+  setUnit("g");
+
+  setConversion("20", "3");
+  assert.deepEqual(measureValues(), [
+    ["small", "0.22"],
+    ["medium", "0.83"],
+    ["large", "0.9"],
+  ]);
+  setConversion("100", "3");
+  assert.deepEqual(measureValues(), [
+    ["small", "0.05"],
+    ["medium", "0.16"],
+    ["large", "0.18"],
+  ]);
+  setConversion("80", "3");
+  assert.deepEqual(measureValues(), [
+    ["small", "0.06"],
+    ["medium", "0.21"],
+    ["large", "0.22"],
+  ]);
+});
+
+test("picking a unit that needs a conversion with unsaved measure changes keeps the old unit and explains why", () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setField(measureRows()[0].querySelector(".measure-amount"), "160");
+
+  setUnit("ml");
+
+  assert.equal(query(".unit-field").value, "g");
+  assert.equal(conversion().hidden, true);
+  assert.equal(
+    query(".save-message").textContent,
+    "Save your changes to the measures before you change the unit.",
+  );
+  assert.deepEqual(measureValues()[0], ["medium", "160"]);
+});
+
+test("Done sends unit and conversion, without measures", async () => {
+  openEditor({ ingredient: SIZED_MILK, usage: unitsUsed });
+  setUnit("ml");
+  setConversion("1", "120");
+  setField(query(".conversion-measure-name"), "piece");
+
+  query(".done").click();
+
+  assert.deepEqual(await sentBody(), {
+    unit: "ml",
+    conversion: { from: 1, to: 120, measureName: "piece" },
+  });
+});
+
+test("Done sends no measureName when recipes don't use the unit", async () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setUnit("ml");
+  setConversion("1", "2");
+
+  query(".done").click();
+
+  assert.deepEqual(await sentBody(), { unit: "ml", conversion: { from: 1, to: 2 } });
+});
+
+test("a conversion typed as 1,5 is sent as 1.5", async () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setUnit("ml");
+  setConversion("1,5", "120,25");
+
+  query(".done").click();
+
+  assert.deepEqual((await sentBody()).conversion, { from: 1.5, to: 120.25 });
+});
+
+test("an invalid conversion number or an empty measure name shows a message and sends nothing", () => {
+  openEditor({ ingredient: SIZED_MILK, usage: unitsUsed });
+  setUnit("ml");
+  setConversion("1", "");
+
+  query(".done").click();
+
+  assert.equal(
+    query(".conversion-message").textContent,
+    "Enter a number from 0.01 to 10000, with up to two decimals.",
+  );
+  assertFocus(document, query(".conversion-to"));
+
+  setConversion("0", "5");
+  query(".done").click();
+  assertFocus(document, query(".conversion-from"));
+
+  setConversion("1", "5");
+  setField(query(".conversion-measure-name"), "  ");
+  query(".done").click();
+
+  assert.equal(query(".conversion-message").textContent, "Enter a name.");
+  assertFocus(document, query(".conversion-measure-name"));
+  assert.equal(server.requests.length, 0);
+});
+
+test("going back to the old unit hides the conversion row and makes measure rows editable again", () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setUnit("ml");
+  setConversion("1", "2");
+
+  setUnit("g");
+
+  assert.equal(conversion().hidden, true);
+  assert.deepEqual(measureValues(), [
+    ["medium", "150"],
+    ["large", "250"],
+  ]);
+  assert.equal(measureRows()[0].querySelector(".measure-amount").readOnly, false);
+  assert.equal(query(".add-measure").disabled, false);
+  assert.equal(editor.hasChanges(), false);
+});
+
+test("another new unit keeps the conversion numbers, and going back to the old unit resets them", () => {
+  openEditor({ usage: unitsUsed });
+  setUnit("ml");
+  setField(query(".conversion-to"), "2");
+  setField(query(".conversion-measure-name"), "piece");
+
+  setUnit("pcs");
+
+  assert.equal(query(".conversion-from").value, "1");
+  assert.equal(query(".conversion-to").value, "2");
+  assert.equal(query(".conversion-measure-name").value, "piece");
+  assert.equal(query(".conversion-from-unit").textContent, "g");
+  assert.equal(query(".conversion-to-unit").textContent, "pcs");
+
+  setUnit("g");
+  setUnit("ml");
+
+  assert.equal(query(".conversion-from").value, "1");
+  assert.equal(query(".conversion-to").value, "");
+  assert.equal(query(".conversion-measure-name").value, "g");
+  assert.equal(query(".conversion-to-unit").textContent, "ml");
+});
+
+test("a 400 from the server shows its message", async () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setUnit("ml");
+  setConversion("1", "9999");
+
+  query(".done").click();
+  await respondToPatch(400, { error: 'The amount of "large" is out of limits.' });
+
+  assert.equal(dialog.open, true);
+  assert.equal(query(".save-message").textContent, 'The amount of "large" is out of limits.');
+  assert.equal(measureRows()[0].querySelector(".measure-amount").readOnly, true);
+});
+
+test("Unit is disabled while the save is pending, and the conversion row stays after a failed save", async () => {
+  openEditor({ ingredient: SIZED_MILK });
+  setUnit("ml");
+  setConversion("1", "2");
+
+  query(".done").click();
+
+  assert.equal(query(".unit-field").disabled, true);
+  await waitFor(() => server.requestFor("PATCH", "/api/ingredients/milk") !== undefined);
+  server.requestFor("PATCH", "/api/ingredients/milk").fail();
+  await tick();
+
+  assert.equal(query(".unit-field").disabled, false);
+  assert.equal(conversion().hidden, false);
+  assert.equal(query(".conversion-from").disabled, false);
+  assert.equal(query(".conversion-to").disabled, false);
 });

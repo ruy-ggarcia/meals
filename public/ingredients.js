@@ -16,9 +16,8 @@ const editor = createIngredientEditor(document.getElementById("ingredient-editor
 
 /**
  * How recipes, active and archived, use each ingredient, by ingredient ID:
- * { recipes, inUnit, measures }. `recipes` counts the recipes, `inUnit` tells
- * whether any line is in the unit, and `measures` counts the recipes per
- * measure ID.
+ * { inUnit, measures }. `inUnit` tells whether any line is in the unit, and
+ * `measures` counts the recipes per measure ID.
  */
 let usage = new Map();
 
@@ -51,28 +50,18 @@ const list = createCatalogList({
 });
 
 function unused() {
-  return { recipes: 0, inUnit: false, measures: new Map() };
+  return { inUnit: false, measures: new Map() };
 }
 
+// A recipe holds each ingredient at most once, so a line in a measure counts
+// one recipe for that measure.
 function countUsage(recipes) {
   const counts = new Map();
-  for (const recipe of recipes) {
-    const recipeMeasures = new Map(); // ingredient ID -> the measure IDs this recipe uses
-    for (const { ingredientId, measureId } of recipe.ingredients) {
-      if (!counts.has(ingredientId)) {
-        counts.set(ingredientId, unused());
-      }
-      if (!recipeMeasures.has(ingredientId)) {
-        recipeMeasures.set(ingredientId, new Set());
-        counts.get(ingredientId).recipes += 1;
-      }
-      if (measureId === undefined) counts.get(ingredientId).inUnit = true;
-      else recipeMeasures.get(ingredientId).add(measureId);
-    }
-    for (const [ingredientId, measureIds] of recipeMeasures) {
-      const { measures } = counts.get(ingredientId);
-      for (const id of measureIds) measures.set(id, (measures.get(id) ?? 0) + 1);
-    }
+  for (const { ingredientId, measureId } of recipes.flatMap((recipe) => recipe.ingredients)) {
+    if (!counts.has(ingredientId)) counts.set(ingredientId, unused());
+    const counted = counts.get(ingredientId);
+    if (measureId === undefined) counted.inUnit = true;
+    else counted.measures.set(measureId, (counted.measures.get(measureId) ?? 0) + 1);
   }
   return counts;
 }

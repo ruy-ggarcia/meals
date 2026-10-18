@@ -740,6 +740,8 @@ button {
   }
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
+  .conversion-measure-name,
+  .measure-name,
   .name-field,
   .quantity-field,
   .unit-field {
@@ -751,4 +753,13 @@ button {
   .catalog select {
     font-size: 16px;
   }
+}
+
+.conversion-line,
+.conversion-measure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
 }
