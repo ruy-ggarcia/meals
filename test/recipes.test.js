@@ -3,12 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import {
-  ConflictError,
-  NameConflictError,
-  NotFoundError,
-  ValidationError,
-} from "../server/errors.js";
+import { NameConflictError, NotFoundError, ValidationError } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -556,7 +551,7 @@ test("a recipe save that uses a measure and a removal of that measure never both
     const failures = results.filter((result) => result.status === "rejected");
     assert.equal(failures.length, 1, `recipe first: ${recipeFirst}`);
     if (recipeFirst) {
-      assert.ok(failures[0].reason instanceof ConflictError);
+      assert.equal(failures[0].reason.name, "ConflictError");
     } else {
       assert.equal(failures[0].reason.message, `Unknown measure: ${medium.id}`);
     }
@@ -663,11 +658,18 @@ test("a stored line whose measureId isn't a string is dropped, and a line withou
   assert.equal((await recipes.usageOf(garlic.id)).inUnit, false);
 });
 
-test("the catalog refuses a new unit for an ingredient that a recipe uses", async () => {
+test("the catalog changes the unit of an ingredient that a recipe uses only with a conversion", async () => {
   const onion = await ingredients.create({ name: "Onion", unit: "g" });
   const milk = await ingredients.create({ name: "Milk", unit: "g" });
   await recipes.create({ name: "Soup", ingredients: [entry(onion.id, 100)] });
 
-  await assert.rejects(ingredients.update(onion.id, { unit: "pcs" }), ConflictError);
+  await assert.rejects(ingredients.update(onion.id, { unit: "pcs" }), ValidationError);
+  const updated = await ingredients.update(onion.id, {
+    unit: "pcs",
+    conversion: { from: 100, to: 1, measureName: "portion" },
+  });
+  assert.deepEqual((await recipes.list())[0].ingredients, [
+    { ...entry(onion.id, 100), measureId: updated.measures[0].id },
+  ]);
   assert.equal((await ingredients.update(milk.id, { unit: "ml" })).unit, "ml");
 });

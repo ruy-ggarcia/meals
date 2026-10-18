@@ -7,7 +7,13 @@ import { randomUUID } from "node:crypto";
 import { ConflictError, NameConflictError, NotFoundError, ValidationError } from "./errors.js";
 import { dataPath, readJson, writeJson } from "./files.js";
 import { byNameKey, holderOf, nameKey, validName, validNameAt } from "./names.js";
-import { cleanQuantity, MAX_QUANTITY, MIN_QUANTITY, requireQuantity } from "./quantities.js";
+import {
+  cleanQuantity,
+  MAX_QUANTITY,
+  MIN_QUANTITY,
+  requireQuantity,
+  TOLERANCE,
+} from "./quantities.js";
 
 export const UNITS = ["g", "ml", "pcs"];
 export const MAX_MEASURES = 20;
@@ -70,8 +76,26 @@ function validNewIngredient(fields) {
   };
 }
 
-// A PATCH body: any non-empty combination of name, unit, and measures, or
-// { archived } alone. The measures stay as sent, because their IDs are checked
+// A conversion { from, to } and optionally { measureName }: `from` of the old
+// unit equal `to` of the new unit. The measure name stays as sent, because
+// only the recipes tell whether it's needed.
+function validConversion(conversion) {
+  const shape = isPlainObject(conversion) ? Object.keys(conversion).sort().join() : "";
+  if (shape !== "from,to" && shape !== "from,measureName,to") {
+    throw new ValidationError(
+      '"conversion" must have "from" and "to", and optionally "measureName".',
+    );
+  }
+  return {
+    from: requireQuantity(conversion.from, "conversion.from"),
+    to: requireQuantity(conversion.to, "conversion.to"),
+    measureName: conversion.measureName,
+  };
+}
+
+// A PATCH body: any non-empty combination of name, unit, measures, and
+// conversion, or { archived } alone. A conversion needs a unit and can't go
+// with measures. The measures stay as sent, because their IDs are checked
 // against the stored ingredient inside the queue.
 function validChanges(changes) {
   const keys = isPlainObject(changes) ? Object.keys(changes) : [];
@@ -81,9 +105,12 @@ function validChanges(changes) {
     }
     return { archived: changes.archived };
   }
-  if (keys.length === 0 || keys.some((key) => !["measures", "name", "unit"].includes(key))) {
+  if (
+    keys.length === 0 ||
+    keys.some((key) => !["conversion", "measures", "name", "unit"].includes(key))
+  ) {
     throw new ValidationError(
-      'Send "name", "unit", "measures", or any combination, or "archived" alone.',
+      'Send "name", "unit", "measures", "conversion", or any combination, or "archived" alone.',
     );
   }
   const valid = {};
@@ -93,7 +120,78 @@ function validChanges(changes) {
     if (!Array.isArray(changes.measures)) throw new ValidationError('"measures" must be an array.');
     valid.measures = changes.measures;
   }
+  if (keys.includes("conversion")) {
+    if (valid.unit === undefined) throw new ValidationError('Send "conversion" with a new "unit".');
+    if (valid.measures !== undefined) {
+      throw new ValidationError('Send "conversion" and "measures" in separate changes.');
+    }
+    valid.conversion = validConversion(changes.conversion);
+  }
   return valid;
+}
+
+// The measure's amount times the factor, rounded to two decimals. The limits
+// apply before rounding, with the tolerance of cleanQuantity for binary
+// floating point, so 0.0067 is rejected and 0.009999999999999998 isn't. The
+// message shows the amount with 4 significant digits, and `hint` after it.
+function convertedAmount(measure, factor, unit, hint) {
+  const amount = measure.amount * factor;
+  const hundredths = amount * 100;
+  if (hundredths < MIN_QUANTITY * 100 - TOLERANCE || hundredths > MAX_QUANTITY * 100 + TOLERANCE) {
+    const shown = Number(amount.toPrecision(4));
+    throw new ValidationError(
+      `"${measure.name}" would be ${shown} ${unit}, outside ${MIN_QUANTITY} to ${MAX_QUANTITY}.${hint ? ` ${hint}` : ""}`,
+    );
+  }
+  return Math.round(hundredths) / 100;
+}
+
+// The error for a unit change that needs a conversion and has none.
+// `measures`, if the body has them, are already valid. The editor sends
+// edited measures with the unit that it shows, and never with a unit change
+// once it knows of a measure. So measures that keep a stored one come from an
+// editor that loaded the ingredient before its unit changed elsewhere, and a
+// reload shows the conversion. Without one, the body changes the unit and
+// replaces the measures at once, which takes two saves.
+function missingConversion(ingredient, measures) {
+  const known = new Set(ingredient.measures.map((measure) => measure.id));
+  if (measures !== undefined && !measures.some((measure) => known.has(measure.id))) {
+    return new ValidationError(
+      `To change the unit of "${ingredient.name}", save your measure changes first, and then change the unit.`,
+    );
+  }
+  return new ValidationError(
+    `"${ingredient.name}" has measures or recipes in ${ingredient.unit}. Reload the page to change its unit.`,
+  );
+}
+
+// The measure that takes the recipe lines in the unit of the ingredient, for
+// a conversion with `measureName`, as { target, added }. It's the measure with
+// the name key of `measureName` and an amount of 1, which equals one old unit,
+// or else a new measure with that name and an amount of 1, and then `added`
+// is true.
+function unitMeasure(ingredient, measureName) {
+  if (measureName === undefined) {
+    throw new ValidationError(
+      `A recipe has "${ingredient.name}" in ${ingredient.unit}, so send conversion.measureName to name the measure that replaces it.`,
+    );
+  }
+  const name = validNameAt(measureName, "conversion.measureName");
+  const target = ingredient.measures.find((measure) => nameKey(measure.name) === nameKey(name));
+  if (target) {
+    if (target.amount !== 1) {
+      throw new ValidationError(
+        `"${ingredient.name}" already has a measure named "${target.name}".`,
+      );
+    }
+    return { target, added: false };
+  }
+  if (ingredient.measures.length >= MAX_MEASURES) {
+    throw new ValidationError(
+      `"${ingredient.name}" already has ${MAX_MEASURES} measures, so its unit can't become one.`,
+    );
+  }
+  return { target: { id: randomUUID(), name, amount: 1 }, added: true };
 }
 
 // Keeps only the measures that a PATCH would accept, so a hand-edited file
@@ -150,10 +248,12 @@ function normalize(raw) {
  * `usageOf(id)` resolves to what the recipes, active or archived, use of the
  * ingredient: `{ inUnit, measureIds }`, where `inUnit` tells whether a recipe
  * has it in its unit, and `measureIds` holds the IDs of its measures that
- * recipes use. The store calls it only inside the queue, so no recipe write
- * runs between the check and the save.
+ * recipes use. `moveUnitLinesToMeasure(id, measureId)` points every recipe
+ * line of the ingredient in its unit to the measure. The store calls both
+ * only inside the queue, so no recipe write runs between the check and the
+ * save.
  */
-export function createIngredients({ dataDir, enqueue, usageOf }) {
+export function createIngredients({ dataDir, enqueue, moveUnitLinesToMeasure, usageOf }) {
   const file = dataPath(dataDir, "ingredients.json");
 
   async function readAll() {
@@ -220,18 +320,53 @@ export function createIngredients({ dataDir, enqueue, usageOf }) {
         valid.measures = validMeasures(valid.measures, ingredient.measures);
         await checkRemovedMeasuresUnused(ingredient, valid.measures);
       }
-      if (valid.unit !== undefined && valid.unit !== ingredient.unit) {
-        const usage = await usageOf(id);
-        if (usage.inUnit || usage.measureIds.size > 0) {
-          throw new ConflictError(
-            `"${ingredient.name}" is used in recipes. To change its unit, remove it from those recipes first.`,
+      const { conversion, ...fields } = valid;
+      if (fields.unit === undefined || fields.unit === ingredient.unit) {
+        if (conversion) throw new ValidationError('Send "conversion" with a new "unit".');
+      } else {
+        const { inUnit } = await usageOf(id);
+        const needed = inUnit || ingredient.measures.length > 0;
+        if (needed && !conversion) throw missingConversion(ingredient, fields.measures);
+        if (!needed && conversion) {
+          throw new ValidationError(
+            `"${ingredient.name}" has no measures and no recipe uses its unit, so it needs no "conversion".`,
           );
         }
+        if (conversion) return changeUnit(all, ingredient, fields, conversion, inUnit);
       }
-      Object.assign(ingredient, valid);
+      Object.assign(ingredient, fields);
       await writeJson(file, { ingredients: all });
       return ingredient;
     });
+  }
+
+  // Changes the unit of the ingredient, one of `all`, with the conversion, and
+  // applies the other fields. When `inUnit`, the lines in the old unit move
+  // to a measure. Every check runs before the first write. The writes follow
+  // three steps, so that a failure after any of them leaves every recipe with
+  // the same meaning: add the new measure with an amount of 1 in the old unit,
+  // point the lines to it, and then convert every measure. A measure with the
+  // name key of `measureName` and an amount of 1 already equals one old unit,
+  // such as the one that a failed step 2 left, so it takes the lines instead
+  // of a new one.
+  async function changeUnit(all, ingredient, fields, { from, to, measureName }, inUnit) {
+    const { target, added } = inUnit
+      ? unitMeasure(ingredient, measureName)
+      : { target: undefined, added: false };
+    const factor = to / from;
+    const hint = `To change the unit, first change the recipes that use "${ingredient.name}" in ${ingredient.unit} to a measure.`;
+    const measures = [...ingredient.measures, ...(added ? [target] : [])].map((measure) => ({
+      ...measure,
+      amount: convertedAmount(measure, factor, fields.unit, measure === target ? hint : undefined),
+    }));
+    if (added) {
+      ingredient.measures.push(target);
+      await writeJson(file, { ingredients: all });
+    }
+    if (target) await moveUnitLinesToMeasure(ingredient.id, target.id);
+    Object.assign(ingredient, fields, { measures });
+    await writeJson(file, { ingredients: all });
+    return ingredient;
   }
 
   return { create, list, update };
