@@ -14,13 +14,10 @@ import {
   requireQuantity,
   TOLERANCE,
 } from "./quantities.js";
+import { isPlainObject, shapeOf } from "./shapes.js";
 
 export const UNITS = ["g", "ml", "pcs"];
 export const MAX_MEASURES = 20;
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function validUnit(unit) {
   if (!UNITS.includes(unit)) {
@@ -41,7 +38,7 @@ function validMeasures(measures, existing) {
   const keys = new Set();
   return measures.map((entry, index) => {
     const where = `measures[${index}]`;
-    const shape = isPlainObject(entry) ? Object.keys(entry).sort().join() : "";
+    const shape = shapeOf(entry);
     if (shape !== "amount,name" && shape !== "amount,id,name") {
       throw new ValidationError(`${where} must have "name" and "amount", or also "id".`);
     }
@@ -65,8 +62,8 @@ function validMeasures(measures, existing) {
 
 // A POST body: { name, unit } and optionally { measures }.
 function validNewIngredient(fields) {
-  const keys = isPlainObject(fields) ? Object.keys(fields).sort().join() : "";
-  if (keys !== "name,unit" && keys !== "measures,name,unit") {
+  const shape = shapeOf(fields);
+  if (shape !== "name,unit" && shape !== "measures,name,unit") {
     throw new ValidationError('Send "name" and "unit", and optionally "measures".');
   }
   return {
@@ -80,7 +77,7 @@ function validNewIngredient(fields) {
 // unit equal `to` of the new unit. The measure name stays as sent, because
 // only the recipes tell whether it's needed.
 function validConversion(conversion) {
-  const shape = isPlainObject(conversion) ? Object.keys(conversion).sort().join() : "";
+  const shape = shapeOf(conversion);
   if (shape !== "from,to" && shape !== "from,measureName,to") {
     throw new ValidationError(
       '"conversion" must have "from" and "to", and optionally "measureName".',

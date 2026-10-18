@@ -8,12 +8,9 @@ import { NameConflictError, NotFoundError, ValidationError } from "./errors.js";
 import { dataPath, readJson, writeJson } from "./files.js";
 import { byNameKey, holderOf, validName } from "./names.js";
 import { cleanQuantity, requireQuantity } from "./quantities.js";
+import { isPlainObject, shapeOf } from "./shapes.js";
 
 export const MAX_INGREDIENTS = 50;
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 // Checks the ingredients of a request, except that their ingredients exist.
 // Returns clean copies with only ingredientId, quantity, and, for a line in a
@@ -26,8 +23,8 @@ function validIngredients(ingredients) {
   const seen = new Set();
   return ingredients.map((entry, index) => {
     const where = `ingredients[${index}]`;
-    const keys = isPlainObject(entry) ? Object.keys(entry).sort().join() : "";
-    if (keys !== "ingredientId,quantity" && keys !== "ingredientId,measureId,quantity") {
+    const shape = shapeOf(entry);
+    if (shape !== "ingredientId,quantity" && shape !== "ingredientId,measureId,quantity") {
       throw new ValidationError(
         `${where} must have "ingredientId" and "quantity", and optionally "measureId".`,
       );

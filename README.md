@@ -476,6 +476,7 @@ server/
   names.js       # Name rules shared by recipes and ingredients.
   quantities.js  # Quantity limits shared by recipes and measures.
   recipes.js     # The recipe book: unique names, ingredients, and archiving.
+  shapes.js      # Shape checks shared by the stores.
   shutdown.js    # Stops the server once, within a deadline.
   start.js       # Listens, and stops without cutting a request or a write.
   stores.js      # Wires the stores to one write queue and to each other.
