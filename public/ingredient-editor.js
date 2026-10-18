@@ -1,5 +1,5 @@
-// The ingredient editor: a modal dialog that changes the name and the unit
-// of an ingredient. It follows the app's interaction rules:
+// The ingredient editor: a modal dialog that creates an ingredient, or
+// changes the name and the unit of one. It follows the app's interaction rules:
 // - Done checks the name and saves the changes with one request. The editor
 //   closes only when the save succeeds.
 // - Cancel, Escape, and Android's Back discard the changes.
@@ -21,10 +21,11 @@ export function createIngredientEditor(dialog) {
   const nameField = dialog.querySelector(".name-field");
   const nameMessage = dialog.querySelector(".name-message");
   const unitField = dialog.querySelector(".unit-field");
+  const noUnitOption = unitField.querySelector('option[value=""]');
   const unitHint = dialog.querySelector(".unit-hint");
   const saveMessage = dialog.querySelector(".save-message");
 
-  /** What the editor last opened with: { ingredient, usedIn }. */
+  /** What the editor last opened with: { ingredient, usage }. `ingredient` is undefined for a new one. */
   let session = null;
 
   const lifecycle = createEditorDialog({
@@ -32,37 +33,45 @@ export function createIngredientEditor(dialog) {
     hasChanges,
     onDone: save,
     onBusy: (busy) => {
-      unitField.disabled = busy || session.usedIn > 0;
+      unitField.disabled = busy || session.usage.recipes > 0;
     },
   });
 
-  function open({ ingredient, usedIn, restoreFocus, onSaved }) {
-    session = { ingredient, usedIn };
-    nameField.value = ingredient.name;
-    unitField.value = ingredient.unit;
+  function open({ ingredient, usage, restoreFocus, onSaved }) {
+    session = { ingredient, usage };
+    const { recipes } = usage;
+    title.textContent = ingredient ? "Edit ingredient" : "New ingredient";
+    nameField.value = ingredient?.name ?? "";
+    // Choosing a unit applies to a new ingredient only.
+    noUnitOption.hidden = Boolean(ingredient);
+    unitField.value = ingredient?.unit ?? "";
     nameMessage.textContent = "";
     saveMessage.textContent = "";
-    unitHint.textContent = usedIn > 0 ? usedInText(usedIn) : "";
-    unitHint.hidden = usedIn === 0;
-    // The title, not a field: on a phone, focusing a field opens the keyboard.
-    lifecycle.open({ focus: title, restoreFocus, onSaved });
+    unitHint.textContent = recipes > 0 ? usedInText(recipes) : "";
+    unitHint.hidden = recipes === 0;
+    // The title of an existing ingredient, not a field: on a phone, focusing a
+    // field opens the keyboard.
+    lifecycle.open({ focus: ingredient ? title : nameField, restoreFocus, onSaved });
   }
 
   /** True when the fields differ from the ingredient. */
   function hasChanges() {
     return (
       lifecycle.isOpen() &&
-      (nameField.value !== session.ingredient.name || unitField.value !== session.ingredient.unit)
+      (nameField.value !== (session.ingredient?.name ?? "") ||
+        unitField.value !== (session.ingredient?.unit ?? ""))
     );
   }
 
   // Sends `body`. Returns the saved ingredient, or undefined after showing why
   // the save failed.
   async function send(body) {
-    const url = `/api/ingredients/${encodeURIComponent(session.ingredient.id)}`;
+    const { ingredient } = session;
     try {
-      const { status, body: reply } = await sendJson("PATCH", url, body);
-      if (status === 200) return reply;
+      const { status, body: reply } = ingredient
+        ? await sendJson("PATCH", `/api/ingredients/${encodeURIComponent(ingredient.id)}`, body)
+        : await sendJson("POST", "/api/ingredients", body);
+      if (status === 200 || status === 201) return reply;
       if (status === 409 && reply.ingredient) {
         const text = conflictText(reply.ingredient);
         nameMessage.textContent = reply.ingredient.archived
@@ -91,9 +100,14 @@ export function createIngredientEditor(dialog) {
       return;
     }
     const { ingredient } = session;
+    if (!ingredient && unitField.value === "") {
+      saveMessage.textContent = "Choose a unit.";
+      unitField.focus();
+      return;
+    }
     const body = {};
-    if (nameField.value !== ingredient.name) body.name = nameField.value;
-    if (unitField.value !== ingredient.unit) body.unit = unitField.value;
+    if (nameField.value !== (ingredient?.name ?? "")) body.name = nameField.value;
+    if (unitField.value !== (ingredient?.unit ?? "")) body.unit = unitField.value;
     if (Object.keys(body).length === 0) lifecycle.close();
     else lifecycle.submit(() => send(body));
   }

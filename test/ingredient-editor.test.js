@@ -33,17 +33,25 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-function openEditor({ ingredient = MILK, usedIn = 0 } = {}) {
+function openEditor({ ingredient = MILK, usage = noUsage() } = {}) {
   const opener = document.createElement("button");
   document.body.append(opener);
   const saved = [];
   editor.open({
     ingredient,
-    usedIn,
+    usage,
     restoreFocus: () => opener.focus(),
     onSaved: (entry) => saved.push(entry),
   });
   return { opener, saved };
+}
+
+function noUsage() {
+  return { recipes: 0, inUnit: false, measures: new Map() };
+}
+
+function usedBy(recipes) {
+  return { ...noUsage(), recipes };
 }
 
 function query(selector) {
@@ -64,6 +72,12 @@ function pointerdownOn(element) {
   element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
 }
 
+async function respondToPost(status, body) {
+  await waitFor(() => server.requestFor("POST", "/api/ingredients") !== undefined);
+  server.requestFor("POST", "/api/ingredients").respond(status, body);
+  await tick();
+}
+
 async function respondToPatch(status, body) {
   await waitFor(() => server.requestFor("PATCH", "/api/ingredients/milk") !== undefined);
   server.requestFor("PATCH", "/api/ingredients/milk").respond(status, body);
@@ -82,7 +96,7 @@ test("opens with the name and the unit, focus on the title, and Unit enabled whe
 });
 
 test("Unit is disabled, with the reason, while recipes use the ingredient", () => {
-  openEditor({ usedIn: 2 });
+  openEditor({ usage: usedBy(2) });
 
   assert.equal(query(".unit-field").disabled, true);
   assert.equal(query(".unit-hint").hidden, false);
@@ -92,7 +106,7 @@ test("Unit is disabled, with the reason, while recipes use the ingredient", () =
   );
 
   query(".cancel").click();
-  openEditor({ usedIn: 1 });
+  openEditor({ usage: usedBy(1) });
 
   assert.equal(
     query(".unit-hint").textContent,
@@ -254,4 +268,86 @@ test("Enter in Name confirms, the same as Done", async () => {
 
   assert.equal(event.defaultPrevented, true);
   await respondToPatch(200, { ...MILK, name: "Oat milk" });
+});
+
+function openNewEditor() {
+  return openEditor({ ingredient: null });
+}
+
+test("a new ingredient opens titled New ingredient, empty, with Choose a unit, and focus in Name", () => {
+  openNewEditor();
+
+  assert.equal(dialog.open, true);
+  assert.equal(query(".dialog-title").textContent, "New ingredient");
+  assert.equal(query(".name-field").value, "");
+  assert.equal(query(".unit-field").value, "");
+  assert.equal(query(".unit-field").selectedOptions[0].textContent, "Choose a unit");
+  assert.equal(query(".unit-field").disabled, false);
+  assertFocus(document, query(".name-field"));
+});
+
+test("an existing ingredient opens titled Edit ingredient, without the Choose a unit option", () => {
+  openNewEditor();
+  query(".cancel").click();
+  openEditor();
+
+  assert.equal(query(".dialog-title").textContent, "Edit ingredient");
+  assert.equal(query('.unit-field option[value=""]').hidden, true);
+  assert.equal(query(".unit-field").value, "g");
+});
+
+test("Done on a new ingredient without a unit shows Choose a unit. and sends nothing", () => {
+  openNewEditor();
+  setName("Onion");
+
+  query(".done").click();
+
+  assert.equal(dialog.open, true);
+  assert.equal(query(".save-message").textContent, "Choose a unit.");
+  assertFocus(document, query(".unit-field"));
+  assert.equal(server.requests.length, 0);
+});
+
+test("Done on a new ingredient sends POST with the name and the unit, then closes", async () => {
+  const { saved } = openNewEditor();
+  setName("Onion");
+  setUnit("pcs");
+
+  query(".done").click();
+  await waitFor(() => server.requestFor("POST", "/api/ingredients") !== undefined);
+  assert.deepEqual(server.requestFor("POST", "/api/ingredients").body, {
+    name: "Onion",
+    unit: "pcs",
+  });
+  const created = { id: "onion", name: "Onion", unit: "pcs", measures: [], archived: false };
+  await respondToPost(201, created);
+
+  assert.equal(dialog.open, false);
+  assert.deepEqual(saved, [created]);
+});
+
+test("a 409 with an archived ingredient says to restore it from Archived", async () => {
+  openNewEditor();
+  setName("saffron");
+  setUnit("g");
+
+  query(".done").click();
+  await respondToPost(409, {
+    error: 'An ingredient named "Saffron" already exists.',
+    ingredient: { id: "saffron", name: "Saffron", unit: "g", archived: true },
+  });
+
+  assert.equal(dialog.open, true);
+  assert.equal(
+    query(".name-message").textContent,
+    '"Saffron" is archived. To use it, restore it from Archived.',
+  );
+});
+
+test("a new ingredient has changes once a field is filled", () => {
+  openNewEditor();
+  assert.equal(editor.hasChanges(), false);
+
+  setName("Onion");
+  assert.equal(editor.hasChanges(), true);
 });

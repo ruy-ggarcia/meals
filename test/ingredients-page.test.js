@@ -39,20 +39,8 @@ async function openIngredientsPage(ingredients = [], recipes = []) {
   await tick();
 }
 
-function nameField() {
-  return document.getElementById("new-ingredient-name");
-}
-
-function unitField() {
-  return document.getElementById("new-ingredient-unit");
-}
-
-function addButton() {
-  return document.querySelector('#new-ingredient button[type="submit"]');
-}
-
-function formMessage() {
-  return document.getElementById("new-ingredient-message");
+function newButton() {
+  return document.getElementById("new-ingredient");
 }
 
 function setValue(element, value) {
@@ -62,11 +50,6 @@ function setValue(element, value) {
 
 function pointerdownOn(element) {
   element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
-}
-
-function chooseUnit(unit) {
-  unitField().value = unit;
-  unitField().dispatchEvent(new window.Event("change", { bubbles: true }));
 }
 
 function activeRows() {
@@ -119,12 +102,18 @@ test("rows show each ingredient's name and unit from A to Z, and archived ones u
   assert.deepEqual(archivedNames(), ["Saffron"]);
 });
 
-test("adding an ingredient sends the name and the unit, then clears both fields", async () => {
+test("New ingredient opens the editor, and a saved one appears in its sorted place with its Edit focused", async () => {
   await openIngredientsPage([ingredient("1", "Onion")]);
-  setValue(nameField(), "Milk");
-  chooseUnit("ml");
 
-  addButton().click();
+  newButton().click();
+  const dialog = document.getElementById("ingredient-editor");
+  assert.equal(dialog.open, true);
+  assert.equal(dialog.querySelector(".dialog-title").textContent, "New ingredient");
+  setValue(document.getElementById("ingredient-name"), "Milk");
+  const unit = document.getElementById("ingredient-unit");
+  unit.value = "ml";
+  unit.dispatchEvent(new window.Event("change", { bubbles: true }));
+  dialog.querySelector(".done").click();
   await waitFor(() => server.requestFor("POST", "/api/ingredients") !== undefined);
   assert.deepEqual(server.requestFor("POST", "/api/ingredients").body, {
     name: "Milk",
@@ -132,82 +121,20 @@ test("adding an ingredient sends the name and the unit, then clears both fields"
   });
   await respondTo("POST", "/api/ingredients", 201, ingredient("2", "Milk", "ml"));
 
+  assert.equal(dialog.open, false);
   assert.deepEqual(activeNames(), ["Milk", "Onion"]);
-  assert.equal(nameField().value, "");
-  assert.equal(unitField().value, "");
-  assertFocus(document, nameField());
+  assertFocus(document, buttonLabeled("Edit Milk"));
 });
 
-test("adding without a unit asks for one and sends nothing", async () => {
+test("Cancel on a new ingredient returns focus to New ingredient", async () => {
   await openIngredientsPage();
-  setValue(nameField(), "Milk");
 
-  addButton().click();
-  await tick();
+  newButton().click();
+  const dialog = document.getElementById("ingredient-editor");
+  dialog.querySelector(".cancel").click();
 
-  assert.equal(formMessage().textContent, "Choose a unit.");
-  assertFocus(document, unitField());
-  assert.equal(server.requestFor("POST", "/api/ingredients"), undefined);
-});
-
-test("adding a name that an active ingredient has shows the conflict", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
-  setValue(nameField(), "ONION");
-  chooseUnit("pcs");
-
-  addButton().click();
-  await respondTo("POST", "/api/ingredients", 409, {
-    error: 'An ingredient named "Onion" already exists.',
-    ingredient: ingredient("1", "Onion"),
-  });
-
-  assert.equal(formMessage().textContent, '"Onion" already exists.');
-});
-
-test("adding a name that an archived ingredient has offers Restore it", async () => {
-  await openIngredientsPage([ingredient("1", "Saffron", "g", true)]);
-  setValue(nameField(), "saffron");
-  chooseUnit("g");
-
-  addButton().click();
-  await respondTo("POST", "/api/ingredients", 409, {
-    error: 'An ingredient named "Saffron" already exists.',
-    ingredient: ingredient("1", "Saffron", "g", true),
-  });
-  assert.equal(formMessage().textContent, '"Saffron" is archived. Restore it');
-
-  buttonLabeled("Restore it: Saffron").click();
-  await respondTo("PATCH", "/api/ingredients/1", 200, ingredient("1", "Saffron"));
-
-  assert.deepEqual(activeNames(), ["Saffron"]);
-  assert.equal(nameField().value, "");
-  assert.equal(formMessage().textContent, "");
-});
-
-test("a network error adding an ingredient keeps the typed name and unit", async () => {
-  await openIngredientsPage();
-  setValue(nameField(), "Milk");
-  chooseUnit("ml");
-
-  addButton().click();
-  await waitFor(() => server.requestFor("POST", "/api/ingredients") !== undefined);
-  server.requestFor("POST", "/api/ingredients").fail();
-  await tick();
-
-  assert.equal(formMessage().textContent, "Couldn't add the ingredient. Try again.");
-  assert.equal(nameField().value, "Milk");
-  assert.equal(unitField().value, "ml");
-});
-
-test("Escape clears New ingredient", async () => {
-  await openIngredientsPage();
-  setValue(nameField(), "Milk");
-
-  nameField().dispatchEvent(
-    new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
-  );
-
-  assert.equal(nameField().value, "");
+  assert.equal(dialog.open, false);
+  assertFocus(document, newButton());
 });
 
 test("Edit opens the editor, and a saved name updates the row and focuses its Edit button", async () => {
@@ -290,7 +217,7 @@ test("the empty catalog and a search with no matches show their messages", async
   await openIngredientsPage();
   assert.equal(
     document.getElementById("empty-catalog").textContent,
-    "No ingredients yet. Add your first one above.",
+    "No ingredients yet. Add your first one with New ingredient.",
   );
   assert.equal(document.getElementById("empty-catalog").hidden, false);
   await page.cleanup();

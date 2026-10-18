@@ -24,25 +24,12 @@
     </div>
 
     <main id="ingredient-catalog" class="catalog" hidden>
-      <form id="new-ingredient" class="new-entry">
-        <label for="new-ingredient-name">New ingredient</label>
-        <div class="field-row">
-          <input id="new-ingredient-name" type="text" autocomplete="off">
-          <select id="new-ingredient-unit" aria-label="Unit">
-            <option value="">Choose a unit</option>
-            <option value="g">g</option>
-            <option value="ml">ml</option>
-            <option value="pcs">pcs</option>
-          </select>
-          <button type="submit" class="primary">Add</button>
-        </div>
-        <p id="new-ingredient-message" class="field-message" role="status"></p>
-      </form>
+      <button type="button" id="new-ingredient" class="primary new-entry-button">New ingredient</button>
 
       <label for="search">Search</label>
       <input id="search" type="search" autocomplete="off">
 
-      <p id="empty-catalog" class="hint" hidden>No ingredients yet. Add your first one above.</p>
+      <p id="empty-catalog" class="hint" hidden>No ingredients yet. Add your first one with New ingredient.</p>
       <p id="no-matches" class="hint" hidden></p>
       <ul id="active-ingredients" class="catalog-list" aria-label="Ingredients"></ul>
 
@@ -61,6 +48,7 @@
         <p class="field-message name-message" role="status"></p>
         <label class="field-label" for="ingredient-unit">Unit</label>
         <select id="ingredient-unit" class="unit-field">
+          <option value="">Choose a unit</option>
           <option value="g">g</option>
           <option value="ml">ml</option>
           <option value="pcs">pcs</option>
