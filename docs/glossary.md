@@ -23,7 +23,7 @@ interface, and the documentation. Don't use synonyms, such as *cell* for
 | Recipe | An entry of the recipe book, with a stable ID and a unique name. |
 | Recipe book | All the recipes, active and archived. |
 | Servings | How many servings of a recipe a menu item has: a multiple of 0.5 from 0.5 to 99. |
-| Shopping list | For the displayed week, each ingredient with the sum of quantity × servings over every menu item, rounded up to a whole number. |
+| Shopping list | For the displayed week, each ingredient with the sum of quantity × servings over every menu item, converted to its unit and rounded up to a whole number. From 1000 `g` or `ml` on, the total shows in `kg` or `l`, rounded up to tenths. When recipes use measures, the line also shows how much came from each measure. |
 | Slot | The meeting point of a day and a meal in a week. It holds a menu. |
 | Unit | How an ingredient is measured and added up in the shopping list: `g`, `ml`, or `pcs`. |
 | Week | Seven days from Monday to Sunday, identified by the date of its Monday as `YYYY-MM-DD`. |

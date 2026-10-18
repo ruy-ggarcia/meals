@@ -7,9 +7,11 @@ import {
 } from "../public/menus.js";
 import {
   MAX_INGREDIENTS as CLIENT_MAX_INGREDIENTS,
+  MAX_MEASURES as CLIENT_MAX_MEASURES,
   MAX_QUANTITY as CLIENT_MAX_QUANTITY,
   MIN_QUANTITY as CLIENT_MIN_QUANTITY,
 } from "../public/quantities.js";
+import { MAX_MEASURES as SERVER_MAX_MEASURES } from "../server/ingredients.js";
 import {
   MAX_QUANTITY as SERVER_MAX_QUANTITY,
   MIN_QUANTITY as SERVER_MIN_QUANTITY,
@@ -31,4 +33,8 @@ test("the client's recipe limits equal the server's", () => {
   assert.equal(CLIENT_MAX_INGREDIENTS, SERVER_MAX_INGREDIENTS);
   assert.equal(CLIENT_MIN_QUANTITY, SERVER_MIN_QUANTITY);
   assert.equal(CLIENT_MAX_QUANTITY, SERVER_MAX_QUANTITY);
+});
+
+test("the client's measure limit equals the server's", () => {
+  assert.equal(CLIENT_MAX_MEASURES, SERVER_MAX_MEASURES);
 });
