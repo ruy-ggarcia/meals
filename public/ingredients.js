@@ -76,9 +76,8 @@ function countUsage(recipes) {
 
 // Loads the catalog and the recipes, and shows the catalog. Resolves to true
 // when the load succeeds.
-async function load() {
-  let loaded = false;
-  await withLoadState({
+function load() {
+  return withLoadState({
     loadError,
     retryButton: retryLoadButton,
     content: [catalog],
@@ -90,10 +89,8 @@ async function load() {
       ]);
       usage = countUsage(recipeBook.recipes);
       list.setEntries(ingredientCatalog.ingredients);
-      loaded = true;
     },
   });
-  return loaded;
 }
 
 // ---------- Events ----------

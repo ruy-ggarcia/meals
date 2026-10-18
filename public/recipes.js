@@ -38,9 +38,8 @@ const list = createCatalogList({
 
 // Loads the recipes and the catalog, and shows them. Resolves to true when
 // the load succeeds.
-async function load() {
-  let loaded = false;
-  await withLoadState({
+function load() {
+  return withLoadState({
     loadError,
     retryButton: retryLoadButton,
     content: [book],
@@ -52,10 +51,8 @@ async function load() {
       ]);
       ingredients = catalog.ingredients;
       list.setEntries(recipeBook.recipes);
-      loaded = true;
     },
   });
-  return loaded;
 }
 
 retryLoadButton.addEventListener("click", load);
