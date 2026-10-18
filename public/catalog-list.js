@@ -1,7 +1,8 @@
 // The list logic that the recipe book and the ingredient catalog share:
 // search, the active and archived lists, archiving and restoring, row
-// messages, and moving focus after a row leaves a list. Each page supplies
-// its elements, its texts, and what a row shows besides the name.
+// messages, moving focus after a row leaves a list, and reloading before New
+// or Edit opens the editor. Each page supplies its elements, its texts, what a
+// row shows besides the name, its reload, and its editor.
 
 import { createButton, createElement, focusIsFree } from "./dom.js";
 import { sendJson } from "./http.js";
@@ -10,16 +11,31 @@ import { filterByName, sortByName } from "./name-search.js";
 
 /**
  * `elements` holds the page's `search` field, `emptyMessage`, `noMatches`,
- * `activeList`, `archived` (the <details>), `archivedCount`, and
- * `archivedList`. `noun` is "recipe" or "ingredient", for messages.
- * `url(id)` is an entry's API URL, and `details(entry)` returns the nodes a
- * row shows after the name. `onEdit(entry)` opens the entry's editor.
+ * `activeList`, `archived` (the <details>), `archivedCount`, `archivedList`,
+ * the `newButton` that opens the editor on a new entry, and the
+ * `retryButton` of the load error. `noun` is "recipe" or "ingredient", for
+ * messages. `url(id)` is an entry's API URL, and `details(entry)` returns the
+ * nodes a row shows after the name.
  *
- * Returns { focusEdit, remember, resetMessages, setEntries }.
+ * `reload()` loads the entries again, calls setEntries(), and resolves to
+ * true when the load succeeds. `open(entry, { restoreFocus, onSaved })` opens
+ * the page's editor on `entry`, or on a new entry when it's undefined, and
+ * passes the two callbacks on to it.
+ *
+ * Returns { setEntries }.
  */
-export function createCatalogList({ elements, noun, url, details, onEdit }) {
-  const { search, emptyMessage, noMatches, activeList, archived, archivedCount, archivedList } =
-    elements;
+export function createCatalogList({ elements, noun, url, details, reload, open }) {
+  const {
+    search,
+    emptyMessage,
+    noMatches,
+    activeList,
+    archived,
+    archivedCount,
+    archivedList,
+    newButton,
+    retryButton,
+  } = elements;
 
   /** Every entry, active and archived, as the server last confirmed. */
   let entries = [];
@@ -27,6 +43,8 @@ export function createCatalogList({ elements, noun, url, details, onEdit }) {
   const rowMessages = new Map();
   /** Entry IDs with an archive or restore request running. */
   const busy = new Set();
+  /** True while New or Edit reloads, so a second click opens no second editor. */
+  let opening = false;
 
   function rowElement(id) {
     const selector = `.catalog-row[data-id="${CSS.escape(id)}"]`;
@@ -44,7 +62,7 @@ export function createCatalogList({ elements, noun, url, details, onEdit }) {
     item.dataset.id = entry.id;
     const label = createElement("span", "entry");
     label.append(createElement("span", "entry-name", entry.name), ...details(entry));
-    const edit = button("Edit", `Edit ${entry.name}`, () => onEdit(entry));
+    const edit = button("Edit", `Edit ${entry.name}`, () => openEditor(entry.id));
     const toggle = entry.archived
       ? button("Restore", `Restore ${entry.name}`, () => setArchived(entry.id, false))
       : button("Archive", `Archive ${entry.name}`, () => setArchived(entry.id, true));
@@ -129,7 +147,38 @@ export function createCatalogList({ elements, noun, url, details, onEdit }) {
     }
   }
 
+  // Opens the editor on the entry with `id`, or on a new entry when it's
+  // undefined. It first reloads, so the editor never saves what another device
+  // changed since the page loaded, such as the unit of an ingredient. When the
+  // reload fails, the load error shows instead, with focus on Retry.
+  async function openEditor(id) {
+    if (opening) return;
+    opening = true;
+    resetMessages();
+    const loaded = await reload();
+    opening = false;
+    if (!loaded) {
+      retryButton.focus();
+      return;
+    }
+    const entry = id === undefined ? undefined : entries.find((other) => other.id === id);
+    // The refreshed list no longer has the row, so focus falls back to Search.
+    if (id !== undefined && !entry) {
+      focusEdit(id);
+      return;
+    }
+    open(entry, {
+      // By ID: the rows re-render, which replaces the Edit button that was clicked.
+      restoreFocus: () => (entry ? focusEdit(entry.id) : newButton.focus()),
+      onSaved: (saved) => {
+        remember(saved);
+        focusEdit(saved.id);
+      },
+    });
+  }
+
+  newButton.addEventListener("click", () => openEditor());
   search.addEventListener("input", render);
 
-  return { focusEdit, remember, resetMessages, setEntries };
+  return { setEntries };
 }

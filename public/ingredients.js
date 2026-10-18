@@ -4,22 +4,20 @@
 // leaving a field never discards changes.
 
 import { createCatalogList } from "./catalog-list.js";
-import { createButton, createElement, focusIsFree, withLoadState } from "./dom.js";
-import { getJson, sendJson } from "./http.js";
+import { createElement, withLoadState } from "./dom.js";
+import { getJson } from "./http.js";
 import { createIngredientEditor } from "./ingredient-editor.js";
-import { conflictText } from "./messages.js";
 
 const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
 const catalog = document.getElementById("ingredient-catalog");
-const form = document.getElementById("new-ingredient");
-const nameField = document.getElementById("new-ingredient-name");
-const unitField = document.getElementById("new-ingredient-unit");
-const addButton = form.querySelector('button[type="submit"]');
-const formMessage = document.getElementById("new-ingredient-message");
 const editor = createIngredientEditor(document.getElementById("ingredient-editor"));
 
-/** How many recipes, active and archived, use each ingredient, by ingredient ID. */
+/**
+ * How recipes, active and archived, use each ingredient, by ingredient ID:
+ * { inUnit, measures }. `inUnit` tells whether any line is in the unit, and
+ * `measures` counts the recipes per measure ID.
+ */
 let usage = new Map();
 
 function ingredientUrl(id) {
@@ -35,39 +33,51 @@ const list = createCatalogList({
     archived: document.getElementById("archived"),
     archivedCount: document.getElementById("archived-count"),
     archivedList: document.getElementById("archived-ingredients"),
+    newButton: document.getElementById("new-ingredient"),
+    retryButton: retryLoadButton,
   },
   noun: "ingredient",
   url: ingredientUrl,
-  details: (ingredient) => [createElement("span", "entry-unit", ingredient.unit)],
-  onEdit: openEditor,
+  details: (ingredient) => [
+    createElement(
+      "span",
+      "entry-unit",
+      ingredient.measures.length === 0
+        ? ingredient.unit
+        : `${ingredient.unit} · ${ingredient.measures.map((measure) => measure.name).join(", ")}`,
+    ),
+  ],
+  // The editor shows the current usage, from the reload.
+  reload: load,
+  open: (ingredient, focus) =>
+    editor.open({
+      ingredient,
+      usage: (ingredient && usage.get(ingredient.id)) ?? unused(),
+      ...focus,
+    }),
 });
 
+function unused() {
+  return { inUnit: false, measures: new Map() };
+}
+
+// A recipe holds each ingredient at most once, so a line in a measure counts
+// one recipe for that measure.
 function countUsage(recipes) {
   const counts = new Map();
-  for (const recipe of recipes) {
-    for (const { ingredientId } of recipe.ingredients) {
-      counts.set(ingredientId, (counts.get(ingredientId) ?? 0) + 1);
-    }
+  for (const { ingredientId, measureId } of recipes.flatMap((recipe) => recipe.ingredients)) {
+    if (!counts.has(ingredientId)) counts.set(ingredientId, unused());
+    const counted = counts.get(ingredientId);
+    if (measureId === undefined) counted.inUnit = true;
+    else counted.measures.set(measureId, (counted.measures.get(measureId) ?? 0) + 1);
   }
   return counts;
 }
 
-function openEditor(ingredient) {
-  list.resetMessages();
-  editor.open({
-    ingredient,
-    usedIn: usage.get(ingredient.id) ?? 0,
-    // By ID: the rows re-render, which replaces the Edit button that was clicked.
-    restoreFocus: () => list.focusEdit(ingredient.id),
-    onSaved: (saved) => {
-      list.remember(saved);
-      list.focusEdit(saved.id);
-    },
-  });
-}
-
-async function load() {
-  await withLoadState({
+// Loads the catalog and the recipes, and shows the catalog. Resolves to true
+// when the load succeeds.
+function load() {
+  return withLoadState({
     loadError,
     retryButton: retryLoadButton,
     content: [catalog],
@@ -83,98 +93,7 @@ async function load() {
   });
 }
 
-// ---------- Adding ----------
-
-function showFormMessage(...content) {
-  formMessage.replaceChildren(...content);
-}
-
-function setFormBusy(isBusy) {
-  nameField.disabled = isBusy;
-  unitField.disabled = isBusy;
-  addButton.disabled = isBusy;
-  for (const control of formMessage.querySelectorAll("button")) control.disabled = isBusy;
-}
-
-function clearForm() {
-  nameField.value = "";
-  unitField.value = "";
-  showFormMessage();
-}
-
-function restoreButton(id, name) {
-  const button = createButton("Restore it", `Restore it: ${name}`);
-  button.addEventListener("click", () => restoreFromForm(id, name));
-  return button;
-}
-
-async function addIngredient() {
-  if (unitField.value === "") {
-    showFormMessage("Choose a unit.");
-    unitField.focus();
-    return;
-  }
-  setFormBusy(true);
-  showFormMessage();
-  list.resetMessages();
-  try {
-    const { status, body } = await sendJson("POST", "/api/ingredients", {
-      name: nameField.value,
-      unit: unitField.value,
-    });
-    if (status === 201) {
-      list.remember(body);
-      clearForm();
-    } else if (status === 409 && body.ingredient?.archived) {
-      showFormMessage(
-        `${conflictText(body.ingredient)} `,
-        restoreButton(body.ingredient.id, body.ingredient.name),
-      );
-    } else if (status === 409 && body.ingredient) {
-      showFormMessage(conflictText(body.ingredient));
-    } else if (status === 400 && typeof body.error === "string") {
-      showFormMessage(body.error);
-    } else {
-      throw new Error(`HTTP ${status}`);
-    }
-  } catch (error) {
-    console.error("Couldn't add the ingredient:", error);
-    showFormMessage("Couldn't add the ingredient. Try again."); // the text stays in the field
-  } finally {
-    setFormBusy(false);
-    if (focusIsFree()) nameField.focus();
-  }
-}
-
-async function restoreFromForm(id, name) {
-  setFormBusy(true);
-  list.resetMessages();
-  try {
-    const { status, body } = await sendJson("PATCH", ingredientUrl(id), { archived: false });
-    if (status !== 200) throw new Error(`HTTP ${status}`);
-    list.remember(body);
-    clearForm();
-  } catch (error) {
-    console.error("Couldn't restore the ingredient:", error);
-    showFormMessage("Couldn't restore the ingredient. Try again. ", restoreButton(id, name));
-  } finally {
-    setFormBusy(false);
-    if (focusIsFree()) nameField.focus();
-  }
-}
-
 // ---------- Events ----------
-
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
-  addIngredient();
-});
-
-nameField.addEventListener("keydown", (event) => {
-  if (event.isComposing || event.key !== "Escape") return;
-  nameField.value = "";
-  showFormMessage();
-});
 
 retryLoadButton.addEventListener("click", load);
 // Unconfirmed changes in the editor would be lost: ask before leaving.

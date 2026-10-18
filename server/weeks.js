@@ -4,6 +4,7 @@
 
 import { ValidationError } from "./errors.js";
 import { dataPath, readJson, writeJson } from "./files.js";
+import { isPlainObject, shapeOf } from "./shapes.js";
 
 // Stable identifiers shared by the API and the storage format. Order matters.
 export const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -34,10 +35,6 @@ function isValidServings(servings) {
     servings >= MIN_SERVINGS &&
     servings <= MAX_SERVINGS
   );
-}
-
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function emptyWeek() {
@@ -113,7 +110,7 @@ function validItems(items) {
   const seen = new Set();
   return items.map((item, index) => {
     const where = `items[${index}]`;
-    if (!isPlainObject(item) || Object.keys(item).sort().join() !== "recipeId,servings") {
+    if (shapeOf(item) !== "recipeId,servings") {
       throw new ValidationError(`${where} must have exactly "recipeId" and "servings".`);
     }
     if (typeof item.recipeId !== "string") {

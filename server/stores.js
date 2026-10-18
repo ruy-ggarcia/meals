@@ -1,6 +1,7 @@
 // Creates the stores on one write queue and wires them to each other: the
 // recipe book checks ingredients against the catalog, and the catalog asks
-// the recipe book whether an ingredient is in use.
+// the recipe book whether an ingredient is in use, and has it move recipe
+// lines to a measure when the unit changes.
 
 import { createQueue } from "./files.js";
 import { createIngredients } from "./ingredients.js";
@@ -11,11 +12,12 @@ export function createStores({ dataDir }) {
   // One queue for every file, so a save never checks another file while it
   // changes.
   const enqueue = createQueue();
-  // `recipes` is read only when isInUse runs, after it's created below.
+  // `recipes` is read only when these functions run, after it's created below.
   const ingredients = createIngredients({
     dataDir,
     enqueue,
-    isInUse: (id) => recipes.usesIngredient(id),
+    moveUnitLinesToMeasure: (id, measureId) => recipes.moveUnitLinesToMeasure(id, measureId),
+    usageOf: (id) => recipes.usageOf(id),
   });
   const recipes = createRecipes({ dataDir, enqueue, ingredients });
   const weeks = createWeeks({ dataDir, enqueue, recipes });

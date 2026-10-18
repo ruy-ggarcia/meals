@@ -3,6 +3,7 @@
 // backdrop close it.
 
 import { createElement, createWarningIcon, onBackdropClick } from "./dom.js";
+import { lineAmount } from "./shopping-list.js";
 
 export function createShoppingDialog(dialog) {
   const title = dialog.querySelector(".dialog-title");
@@ -15,11 +16,11 @@ export function createShoppingDialog(dialog) {
   /** The control that opened the dialog, or null while it's closed. */
   let opener = null;
 
-  function line({ name, total, unit }) {
+  function line(entry) {
     const item = createElement("li", "shopping-line");
     item.append(
-      createElement("span", "line-name", name),
-      createElement("span", "line-amount", `${total} ${unit}`),
+      createElement("span", "line-name", entry.name),
+      createElement("span", "line-amount", lineAmount(entry)),
     );
     return item;
   }

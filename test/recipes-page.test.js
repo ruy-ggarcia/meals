@@ -18,14 +18,38 @@ let page;
 let server;
 let document;
 let window;
+/** The recipes and the catalog that the page loaded with: { recipes, ingredients }. */
+let served;
 
 async function openRecipesPage(recipes = [], ingredients = [ONION]) {
   server = fakeFetch();
   page = await loadPage({ html: "recipes.html", script: "recipes.js", fetch: server.fetch });
   ({ document, window } = page);
+  served = { recipes, ingredients };
   await tick();
   server.requestFor("GET", "/api/recipes").respond(200, { recipes });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients });
+  await tick();
+}
+
+// Waits for the reload that New and Edit send before the editor opens.
+async function reloadRequests() {
+  await waitFor(
+    () => server.requests.filter((request) => request.url === "/api/recipes").length === 2,
+  );
+  return {
+    recipes: server.requestFor("GET", "/api/recipes"),
+    ingredients: server.requestFor("GET", "/api/ingredients"),
+  };
+}
+
+// Clicks New or Edit, and answers the reload with `fresh`, or else with the
+// data that the page loaded with.
+async function clickAndReload(button, fresh = served) {
+  button.click();
+  const reload = await reloadRequests();
+  reload.recipes.respond(200, { recipes: fresh.recipes });
+  reload.ingredients.respond(200, { ingredients: fresh.ingredients });
   await tick();
 }
 
@@ -88,7 +112,7 @@ afterEach(async () => {
 test("New recipe opens the editor, and the saved recipe appears in its sorted place with focus on Edit", async () => {
   await openRecipesPage([recipe("1", "Green salad", false, WITH_ONION)]);
 
-  document.getElementById("new-recipe").click();
+  await clickAndReload(document.getElementById("new-recipe"));
 
   assert.equal(editorDialog().open, true);
   assert.equal(editorDialog().querySelector(".dialog-title").textContent, "New recipe");
@@ -105,7 +129,7 @@ test("Cancel in a new recipe returns focus to New recipe and sends nothing", asy
   await openRecipesPage();
   const newRecipe = document.getElementById("new-recipe");
 
-  newRecipe.click();
+  await clickAndReload(newRecipe);
   editorDialog().querySelector(".cancel").click();
 
   assert.equal(editorDialog().open, false);
@@ -116,7 +140,7 @@ test("Cancel in a new recipe returns focus to New recipe and sends nothing", asy
 test("Edit opens the recipe with its ingredients, and a save updates its row", async () => {
   await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
 
-  buttonLabeled("Edit Soup").click();
+  await clickAndReload(buttonLabeled("Edit Soup"));
 
   assert.equal(document.getElementById("recipe-name").value, "Soup");
   assert.equal(editorDialog().querySelector(".quantity-field").value, "100");
@@ -132,7 +156,7 @@ test("a save whose recipe the search hides focuses Search", async () => {
   await openRecipesPage([recipe("1", "Green salad", false, WITH_ONION)]);
   setValue(searchField(), "sal");
 
-  buttonLabeled("Edit Green salad").click();
+  await clickAndReload(buttonLabeled("Edit Green salad"));
   setValue(document.getElementById("recipe-name"), "Soup");
   editorDialog().querySelector(".done").click();
   await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
@@ -144,7 +168,7 @@ test("a save whose recipe the search hides focuses Search", async () => {
 test("Cancel after Edit returns focus to the recipe's Edit button", async () => {
   await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
 
-  buttonLabeled("Edit Soup").click();
+  await clickAndReload(buttonLabeled("Edit Soup"));
   editorDialog().querySelector(".cancel").click();
 
   assert.equal(editorDialog().open, false);
@@ -154,7 +178,7 @@ test("Cancel after Edit returns focus to the recipe's Edit button", async () => 
 test("Escape after Edit returns focus to the recipe's Edit button", async () => {
   await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
 
-  buttonLabeled("Edit Soup").click();
+  await clickAndReload(buttonLabeled("Edit Soup"));
   editorDialog().close(); // what Escape does to a modal dialog
 
   assertFocus(document, buttonLabeled("Edit Soup"));
@@ -163,7 +187,7 @@ test("Escape after Edit returns focus to the recipe's Edit button", async () => 
 test("a backdrop click with no changes after Edit returns focus to the recipe's Edit button", async () => {
   await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
 
-  buttonLabeled("Edit Soup").click();
+  await clickAndReload(buttonLabeled("Edit Soup"));
   pointerdownOn(editorDialog());
   editorDialog().click();
 
@@ -192,7 +216,7 @@ test("a recipe without ingredients shows a warning icon, and one with ingredient
 test("saving ingredients for a recipe removes its warning icon", async () => {
   await openRecipesPage([recipe("1", "Soup")]);
 
-  buttonLabeled("Edit Soup").click();
+  await clickAndReload(buttonLabeled("Edit Soup"));
   const search = editorDialog().querySelector(".option-search");
   setValue(search, "oni");
   keydownOn(search, "Enter");
@@ -211,7 +235,7 @@ test("beforeunload prevents leaving only while the editor has changes", async ()
     return event;
   }
 
-  document.getElementById("new-recipe").click();
+  await clickAndReload(document.getElementById("new-recipe"));
   assert.equal(dispatchBeforeUnload().defaultPrevented, false);
   setValue(document.getElementById("recipe-name"), "Pie");
   assert.equal(dispatchBeforeUnload().defaultPrevented, true);
@@ -334,4 +358,101 @@ test("a failed load of the ingredient catalog shows the error, and Retry loads b
 
   assert.equal(document.getElementById("load-error").hidden, true);
   assert.deepEqual(activeNames(), ["Soup"]);
+});
+
+const CARROT_PCS = { id: "carrot", name: "Carrot", unit: "pcs", measures: [], archived: false };
+const CARROT_G = {
+  ...CARROT_PCS,
+  unit: "g",
+  measures: [{ id: "piece", name: "pcs", amount: 120 }],
+};
+
+test("Edit opens the editor with the recipe and the catalog from a reload, not from the first load", async () => {
+  await openRecipesPage(
+    [recipe("1", "Soup", false, [{ ingredientId: "carrot", quantity: 2 }])],
+    [CARROT_PCS],
+  );
+  // Meanwhile, another device converted Carrot to g, and added a recipe.
+  const soup = recipe("1", "Soup", false, [
+    { ingredientId: "carrot", quantity: 2, measureId: "piece" },
+  ]);
+
+  await clickAndReload(buttonLabeled("Edit Soup"), {
+    recipes: [soup, recipe("2", "Stew", false, WITH_ONION)],
+    ingredients: [CARROT_G, ONION],
+  });
+
+  assert.equal(editorDialog().open, true);
+  assert.equal(editorDialog().querySelector(".quantity-field").value, "2");
+  const measure = editorDialog().querySelector(".measure-field");
+  assert.equal(measure.value, "piece");
+  assert.equal(measure.selectedOptions[0].textContent, "pcs (120 g)");
+  assert.deepEqual(activeNames(), ["Soup", "Stew"]);
+});
+
+test("New recipe offers the catalog from a reload", async () => {
+  await openRecipesPage([], [ONION]);
+
+  await clickAndReload(document.getElementById("new-recipe"), {
+    recipes: [],
+    ingredients: [CARROT_G, ONION],
+  });
+  setValue(editorDialog().querySelector(".option-search"), "car");
+
+  assert.equal(editorDialog().open, true);
+  assert.deepEqual(
+    [...editorDialog().querySelectorAll(".options .option")].map((option) => option.textContent),
+    ["Carrot (g)"],
+  );
+});
+
+test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async () => {
+  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+
+  for (const button of [buttonLabeled("Edit Soup"), document.getElementById("new-recipe")]) {
+    const count = server.requests.length;
+    button.click();
+    await waitFor(() => server.requests.length === count + 2);
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
+    server.requestFor("GET", "/api/ingredients").fail();
+    await tick();
+
+    assert.equal(editorDialog().open, false);
+    assert.equal(document.getElementById("load-error").hidden, false);
+    assertFocus(document, document.getElementById("retry-load"));
+
+    document.getElementById("retry-load").click();
+    await waitFor(() => server.requests.length === count + 4);
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
+    server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: served.ingredients });
+    await tick();
+    assert.equal(document.getElementById("load-error").hidden, true);
+  }
+});
+
+test("Edit on a recipe that the reload no longer has refreshes the list and doesn't open the editor", async () => {
+  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+
+  await clickAndReload(buttonLabeled("Edit Soup"), {
+    recipes: [recipe("2", "Stew", false, WITH_ONION)],
+    ingredients: [ONION],
+  });
+
+  assert.equal(editorDialog().open, false);
+  assert.deepEqual(activeNames(), ["Stew"]);
+  assertFocus(document, searchField());
+});
+
+test("a second click while the reload runs sends no second reload", async () => {
+  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+
+  buttonLabeled("Edit Soup").click();
+  document.getElementById("new-recipe").click();
+  const reload = await reloadRequests();
+  reload.recipes.respond(200, { recipes: served.recipes });
+  reload.ingredients.respond(200, { ingredients: served.ingredients });
+  await tick();
+
+  assert.equal(server.requests.length, 4);
+  assert.equal(editorDialog().querySelector(".dialog-title").textContent, "Edit recipe");
 });

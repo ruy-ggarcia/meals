@@ -5,7 +5,10 @@ import { ValidationError } from "./errors.js";
 
 export const MAX_NAME_LENGTH = 100;
 
-/** The name as stored: trimmed, with runs of whitespace collapsed to one space. */
+/**
+ * The name as stored: trimmed, with runs of whitespace collapsed to one space.
+ * public/name-search.js has the same rule.
+ */
 export function cleanName(name) {
   return name.trim().replace(/\s+/g, " ");
 }
@@ -35,6 +38,15 @@ export function validName(name) {
     throw new ValidationError(`The name must be at most ${MAX_NAME_LENGTH} characters.`);
   }
   return clean;
+}
+
+/** The cleaned name, like validName, but its error message starts with `where`. */
+export function validNameAt(name, where) {
+  try {
+    return validName(name);
+  } catch (error) {
+    throw new ValidationError(`${where}: ${error.message}`);
+  }
 }
 
 /** The entry of `all`, other than `exceptId`, whose name key equals the key of `name`. */

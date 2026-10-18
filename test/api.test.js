@@ -509,7 +509,13 @@ test("POST /api/ingredients returns 201 with the new ingredient, and GET lists t
   const res = await request(app).post("/api/ingredients").send({ name: " Onion ", unit: "g" });
 
   assert.equal(res.status, 201);
-  assert.deepEqual(res.body, { id: res.body.id, name: "Onion", unit: "g", archived: false });
+  assert.deepEqual(res.body, {
+    id: res.body.id,
+    name: "Onion",
+    unit: "g",
+    measures: [],
+    archived: false,
+  });
 
   const egg = await addIngredient("Egg", "pcs");
   await request(app).patch(`/api/ingredients/${egg.id}`).send({ archived: true });
@@ -578,7 +584,7 @@ test("PATCH /api/ingredients/ID returns 400, 404, and 409 JSON errors", async ()
   assert.deepEqual(conflict.body.ingredient, onion);
 });
 
-test("PATCH /api/ingredients/ID with a new unit returns 409 while a recipe uses it", async () => {
+test("PATCH /api/ingredients/ID with a new unit and no conversion returns 400 while a recipe uses it", async () => {
   const onion = await addIngredient("Onion");
   await request(app)
     .post("/api/recipes")
@@ -586,9 +592,55 @@ test("PATCH /api/ingredients/ID with a new unit returns 409 while a recipe uses 
 
   const res = await request(app).patch(`/api/ingredients/${onion.id}`).send({ unit: "pcs" });
 
-  assertJsonError(res, 409, "unit in use");
+  assertJsonError(res, 400, "unit in use");
   assert.deepEqual(Object.keys(res.body), ["error"]);
   assert.equal((await request(app).get("/api/ingredients")).body.ingredients[0].unit, "g");
+});
+
+test("PATCH unit with a conversion moves recipe lines to the new measure", async () => {
+  const created = await request(app)
+    .post("/api/ingredients")
+    .send({ name: "Carrot", unit: "pcs", measures: [{ name: "net", amount: 4 }] });
+  const carrot = created.body;
+  const [net] = carrot.measures;
+  const lines = {
+    Salad: { ingredientId: carrot.id, measureId: net.id, quantity: 1 },
+    Soup: { ingredientId: carrot.id, quantity: 2 },
+    Stew: { ingredientId: carrot.id, quantity: 0.5 },
+  };
+  for (const [name, line] of Object.entries(lines)) {
+    const res = await request(app)
+      .post("/api/recipes")
+      .send({ name, ingredients: [line] });
+    assert.equal(res.status, 201, name);
+    if (name === "Stew") {
+      await request(app).patch(`/api/recipes/${res.body.id}`).send({ archived: true });
+    }
+  }
+
+  const res = await request(app)
+    .patch(`/api/ingredients/${carrot.id}`)
+    .send({ unit: "g", conversion: { from: 1, to: 120, measureName: "piece" } });
+
+  assert.equal(res.status, 200);
+  const piece = res.body.measures[1];
+  assert.deepEqual(res.body, {
+    ...carrot,
+    unit: "g",
+    measures: [
+      { ...net, amount: 480 },
+      { id: piece.id, name: "piece", amount: 120 },
+    ],
+  });
+  const { recipes } = (await request(app).get("/api/recipes")).body;
+  assert.deepEqual(
+    recipes.map((recipe) => [recipe.name, recipe.ingredients]),
+    [
+      ["Salad", [lines.Salad]],
+      ["Soup", [{ ...lines.Soup, measureId: piece.id }]],
+      ["Stew", [{ ...lines.Stew, measureId: piece.id }]],
+    ],
+  );
 });
 
 test("POST and PATCH /api/recipes save ingredients, and GET returns them", async () => {
@@ -625,6 +677,50 @@ test("POST /api/recipes with invalid or unknown ingredients returns 400 JSON", a
   for (const body of bodies) {
     assertJsonError(await request(app).post("/api/recipes").send(body), 400, JSON.stringify(body));
   }
+});
+
+async function addOnionWithMedium() {
+  const res = await request(app)
+    .post("/api/ingredients")
+    .send({ name: "Onion", unit: "g", measures: [{ name: "medium", amount: 150 }] });
+  assert.equal(res.status, 201);
+  return res.body;
+}
+
+test("POST /api/ingredients with measures returns them with IDs", async () => {
+  const onion = await addOnionWithMedium();
+
+  assert.equal(onion.measures.length, 1);
+  assert.equal(typeof onion.measures[0].id, "string");
+  assert.deepEqual(onion.measures[0], { id: onion.measures[0].id, name: "medium", amount: 150 });
+});
+
+test("POST /api/recipes with a measureId returns it in GET /api/recipes", async () => {
+  const onion = await addOnionWithMedium();
+  const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
+
+  const created = await request(app)
+    .post("/api/recipes")
+    .send({ name: "Soup", ingredients: [line] });
+
+  assert.equal(created.status, 201);
+  assert.deepEqual((await request(app).get("/api/recipes")).body.recipes[0].ingredients, [line]);
+});
+
+test("PATCH /api/ingredients/ID removing a measure that an archived recipe uses returns 409", async () => {
+  const onion = await addOnionWithMedium();
+  const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 1 };
+  const soup = await request(app)
+    .post("/api/recipes")
+    .send({ name: "Soup", ingredients: [line] });
+  await request(app).patch(`/api/recipes/${soup.body.id}`).send({ archived: true });
+
+  const res = await request(app).patch(`/api/ingredients/${onion.id}`).send({ measures: [] });
+
+  assertJsonError(res, 409, "measure in use");
+  assert.match(res.body.error, /medium/);
+  const listed = await request(app).get("/api/ingredients");
+  assert.deepEqual(listed.body.ingredients[0].measures, onion.measures);
 });
 
 test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes return 500", async () => {

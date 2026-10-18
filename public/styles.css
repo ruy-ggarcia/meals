@@ -296,9 +296,11 @@ button {
   font-size: 1rem;
 }
 
+.measure-name,
 .name-field,
 .quantity-field,
-.unit-field {
+.unit-field,
+select.measure-field {
   padding: 0.4rem;
   border: 1px solid var(--border);
   border-radius: 0.3rem;
@@ -336,11 +338,26 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+.measure-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-hint {
+  margin: 0;
+  color: #666;
+}
+
+.add-measure {
+  align-self: flex-start;
+}
+
 .unit {
   min-width: 2rem;
 }
 
-.unit-field {
+.unit-field,
+select.measure-field {
   background: #fff;
 }
 
@@ -368,8 +385,9 @@ button {
 }
 
 .line-amount {
+  max-width: 70%;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  text-align: end;
 }
 
 .not-included {
@@ -509,6 +527,7 @@ button {
   gap: 0.5rem;
 }
 
+.row-hint,
 .row-message {
   flex-basis: 100%;
 }
@@ -724,9 +743,12 @@ button {
   }
 
   /* >= 16px prevents iOS Safari from zooming in on focus. */
+  .conversion-measure-name,
+  .measure-name,
   .name-field,
   .quantity-field,
-  .unit-field {
+  .unit-field,
+  select.measure-field {
     font-size: 16px;
   }
 
@@ -735,4 +757,13 @@ button {
   .catalog select {
     font-size: 16px;
   }
+}
+
+.conversion-line,
+.conversion-measure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
 }

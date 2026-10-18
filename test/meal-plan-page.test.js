@@ -328,8 +328,8 @@ test("a load failure shows the error, and Retry reloads", async () => {
 
 // ---------- Shopping list ----------
 
-const EGG = { id: "egg", name: "Egg", unit: "pcs", archived: false };
-const ONION = { id: "onion", name: "Onion", unit: "g", archived: false };
+const EGG = { id: "egg", name: "Egg", unit: "pcs", measures: [], archived: false };
+const ONION = { id: "onion", name: "Onion", unit: "g", measures: [], archived: false };
 
 function shoppingButton() {
   return page.document.getElementById("shopping-list");
@@ -345,6 +345,40 @@ function lineTexts() {
     line.querySelector(".line-amount").textContent,
   ]);
 }
+
+test("the shopping list shows kilograms and a measure breakdown", async () => {
+  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
+    { recipeId: "soup", servings: 1 },
+  ]);
+  await openWeek({
+    weekData,
+    recipes: [
+      {
+        id: "soup",
+        name: "Soup",
+        archived: false,
+        ingredients: [
+          { ingredientId: "onion", quantity: 300 },
+          { ingredientId: "onion", quantity: 3, measureId: "medium" },
+          { ingredientId: "onion", quantity: 1.5, measureId: "large" },
+        ],
+      },
+    ],
+    ingredients: [
+      {
+        ...ONION,
+        measures: [
+          { id: "medium", name: "medium", amount: 150 },
+          { id: "large", name: "large", amount: 250 },
+        ],
+      },
+    ],
+  });
+
+  shoppingButton().click();
+
+  assert.deepEqual(lineTexts(), [["Onion", "1.2 kg (300 g, 3 medium, 1.5 large)"]]);
+});
 
 test("Shopping list shows the week's totals per ingredient, from A to Z", async () => {
   let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [

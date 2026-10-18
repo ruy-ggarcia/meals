@@ -69,8 +69,9 @@ export function createWarningIcon(label) {
  * Runs `run()` as a load: hides `loadError` and disables `retryButton` while
  * it runs, then shows `content` on success or `loadError` on failure, logging
  * the error with `errorMessage`. Always re-enables `retryButton` at the end.
- * Both the meal plan page and the recipe book page load this way, once each
- * on page load and again on Retry.
+ * Resolves to true when the load succeeds, and to false when it fails.
+ * The pages load this way on page load and again on Retry. The recipe book
+ * and the ingredients page also reload this way before they open an editor.
  */
 export async function withLoadState({ loadError, retryButton, content, run, errorMessage }) {
   loadError.hidden = true;
@@ -78,10 +79,12 @@ export async function withLoadState({ loadError, retryButton, content, run, erro
   try {
     await run();
     for (const element of content) element.hidden = false;
+    return true;
   } catch (error) {
     console.error(errorMessage, error);
     for (const element of content) element.hidden = true;
     loadError.hidden = false;
+    return false;
   } finally {
     retryButton.disabled = false;
   }

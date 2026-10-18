@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { filterByName, nameKey, sortByName } from "../public/name-search.js";
-import { cleanName, nameKey as serverNameKey } from "../server/names.js";
+import { cleanName, filterByName, nameKey, sortByName } from "../public/name-search.js";
+import { cleanName as serverCleanName, nameKey as serverNameKey } from "../server/names.js";
 
 function entry(name, archived = false) {
   return { id: `id-${name}`, name, archived };
@@ -53,8 +53,16 @@ test("nameKey equals the server's nameKey for accented, cased, and emoji names",
   }
 });
 
+// The same for cleanName: the editors send names that the server would store
+// unchanged.
+test("cleanName equals the server's cleanName", () => {
+  for (const name of ["Tea", "  Crème   brûlée  \t", "a\n\nb", "   "]) {
+    assert.equal(cleanName(name), serverCleanName(name), JSON.stringify(name));
+  }
+});
+
 test("filterByName matches a name the server would store, for a query with extra spaces", () => {
-  const stored = entry(cleanName("  Crème   brûlée  \t"));
+  const stored = entry(serverCleanName("  Crème   brûlée  \t"));
 
   assert.deepEqual(filterByName([stored], "  crème   brûlée  "), [stored]);
 });

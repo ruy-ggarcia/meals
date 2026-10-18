@@ -34,8 +34,7 @@ every other test.
 ## Set up a test server
 
 The test server uses its own empty data directory, so the tests don't change
-your real meal plan or recipe book. To set up the test server, do the
-following:
+your real data. To set up the test server, do the following:
 
 1. If a development server is running on port `3001`, stop it. In its
    terminal, press `Control+C`. A deployed Meals on port `3000` can keep
@@ -202,7 +201,7 @@ Run these tests on desktop unless a test says otherwise.
 | 8.4 | Type `Tortilla`. In **Add ingredient**, type `eg`, and press `Enter`. | `Egg` appears with `pcs` and an empty quantity field, which has focus. |
 | 8.5 | Type `1,25` in the quantity, and press `Enter`. | The editor closes. `Tortilla` appears in its sorted place without a warning icon, and its **Edit** button has focus. |
 | 8.6 | Click **Edit** on `Tortilla`. | The quantity reads `1.25`, and focus is on the title. |
-| 8.7 | Replace the quantity with `1.255`, and click **Done**. | `Enter a quantity from 0.01 to 10000, with up to two decimals.` appears below the row, focus moves to the field, and the editor stays open. |
+| 8.7 | Replace the quantity with `1.255`, and click **Done**. Then type `1.3` instead. | `Enter a quantity from 0.01 to 10000, with up to two decimals.` appears below the row, focus moves to the field, and the editor stays open. The message disappears as you type the corrected quantity, and focus stays in the field. |
 | 8.8 | Click the dark area outside the editor. | The editor stays open. Click **Cancel**: the editor closes, nothing is saved, and focus is on the **Edit** button of `Tortilla`. |
 | 8.9 | Click **Edit** on `Lentil soup`, change the name to `Red lentil soup`, and press `Enter`. | The row shows `Red lentil soup` in its sorted place. |
 | 8.10 | Go to the meal plan, show the next week, and look at the slot from `1.3`. | It shows `Red lentil soup × 1`. |
@@ -210,29 +209,46 @@ Run these tests on desktop unless a test says otherwise.
 | 8.12 | Archive `Omelette`. Click **New recipe**, type `Omelette`, and click **Done**. | `Omelette` moves under **Archived**, and the editor reads `"Omelette" is archived. To use it, restore it from Archived.` Click **Cancel**. |
 | 8.13 | Click **New recipe**, type a name, and reload the page. | The browser asks whether to leave. Click **Cancel** or **Stay**: the editor keeps the name. Click **Cancel** in the editor. |
 | 8.14 | Archive `Green salad`, which the slot from `5.7` uses. Go to the meal plan. | The slot still shows `Green salad × 2`. In its editor, `+` on `Green salad` followed by **Done** saves without a red cross. |
-| 8.15 | Stop the server. Click **Edit** on a recipe, change its name, and click **Done**. Then archive a recipe. | The editor shows `Couldn't save the recipe. Try again.` and keeps your change. Archiving shows `Couldn't archive the recipe. Try again.` below the row. |
+| 8.15 | Click **Edit** on a recipe, and change its name. Stop the server, and click **Done**. Then archive a recipe. | The editor shows `Couldn't save the recipe. Try again.` and keeps your change. Archiving shows `Couldn't archive the recipe. Try again.` below the row. |
 | 8.16 | Start the server, and click **Done** in the editor from `8.15`. | The recipe is saved, and the editor closes. |
-| 8.17 | Stop the server again, and reload the recipe book. Start the server and click **Retry**. | The page shows `Couldn't load the recipes.`, and **Retry** loads the recipe book. |
+| 8.17 | Stop the server again, and click **Edit** on a recipe. Then reload the recipe book. Start the server and click **Retry**. | The editor doesn't open: the page shows `Couldn't load the recipes.` with focus on **Retry**. After the reload, the page shows the same message, and **Retry** loads the recipe book. |
 | 8.18 | On mobile, open the recipe book, and tap **New recipe**. | The editor fills the screen, the keyboard opens for **Name**, and the page doesn't zoom or scroll sideways. |
 | 8.19 | On mobile, add an ingredient to the recipe, and tap its quantity field. | The keyboard offers digits and a decimal separator. `0,25` is accepted when you tap **Done**. |
 
 ## 9. Ingredients
 
-Run these tests on desktop unless a test says otherwise.
+Run these tests on desktop unless a test says otherwise. They build on the
+earlier sections, and section 10 builds on them.
 
-| ID  | Step | Expected result |
-|-----|------|-----------------|
-| 9.1 | Click **Ingredients** in the title bar. | The page lists `Egg pcs`, `Milk ml`, `Onion g`, and `Rice g`, with each unit next to its **Edit** button. The title bar links to **Meal plan** and **Recipes**. |
-| 9.2 | In **New ingredient**, type `Flour`, and press `Enter`. | `Choose a unit.` appears, focus moves to the unit, and nothing is added. |
-| 9.3 | Choose `g`, and click **Add**. | `Flour g` appears in its sorted place. The name clears, the unit goes back to `Choose a unit`, and focus returns to the name. |
-| 9.4 | Type `ONION`, choose `pcs`, and click **Add**. | `"Onion" already exists.` appears. |
-| 9.5 | Archive `Flour`. Type `flour`, choose `g`, and click **Add**. | `"Flour" is archived.` appears with **Restore it**. Click it: `Flour` is back in the list, and the field is empty. |
-| 9.6 | Click **Edit** on `Egg`. | The editor shows `Egg` and `pcs`. **Unit** is disabled, with `Used in 1 recipe. To change the unit, remove the ingredient from that recipe first.` |
-| 9.7 | Click **Cancel**. Click **Edit** on `Milk`, choose `g`, and click **Done**. Then change it back to `ml`. | `Milk` shows `g`, and then `ml` again. |
-| 9.8 | Open the recipe book in a second tab, and add `Milk` to a recipe. In the first tab, click **Edit** on `Milk`, choose `g`, and click **Done**. | The editor stays open with `"Milk" is used in recipes. To change its unit, remove it from those recipes first.` Click **Cancel**. |
-| 9.9 | Stop the server. Type a name, choose a unit, and click **Add**. | `Couldn't add the ingredient. Try again.` appears, and the name and the unit stay. |
-| 9.10 | Reload the page. Start the server, and click **Retry**. | The page shows `Couldn't load the ingredients.`, and **Retry** loads the catalog. |
-| 9.11 | On mobile, open the Ingredients page, and tap **Edit** on an ingredient. | The editor fills the screen, and no keyboard opens until you tap **Name**. |
+| ID   | Step | Expected result |
+|------|------|-----------------|
+| 9.1  | Click **Ingredients** in the title bar. | The page lists `Egg pcs`, `Milk ml`, `Onion g`, and `Rice g`, with each unit next to its **Edit** button. The title bar links to **Meal plan** and **Recipes**. |
+| 9.2  | Click **New ingredient**. | The editor opens, titled `New ingredient`, with focus in **Name**. **Unit** reads `Choose a unit`. The editor shows **Measures** with no rows and **Add measure**. |
+| 9.3  | Type `Flour`, and click **Done**. | `Choose a unit.` appears, focus moves to **Unit**, and the editor stays open. |
+| 9.4  | Choose `g`, click **Add measure**, and click **Done**. | A measure row appears with focus in its name, and `g` after its amount field. After **Done**, `Enter a name.` appears below the row, and focus moves to the name. |
+| 9.5  | Type `cup` as the name and `0` as the amount, and click **Done**. Then type `120,5` as the amount, and click **Done**. | The first **Done** shows `Enter an amount from 0.01 to 10000, with up to two decimals.` below the row. The message disappears as you type the corrected amount, and focus stays in the field. The second **Done** closes the editor. `Flour` appears in its sorted place as `g · cup`, and its **Edit** button has focus. |
+| 9.6  | Click **New ingredient**, type `ONION`, choose `pcs`, and click **Done**. | `"Onion" already exists.` appears below **Name**. Click **Cancel**. |
+| 9.7  | Archive `Flour`. Click **New ingredient**, type `flour`, choose `g`, and click **Done**. Click **Cancel**, and then click **Restore** under **Archived**. | The editor shows `"Flour" is archived. To use it, restore it from Archived.` below **Name**. After **Restore**, `Flour` is back in the list. |
+| 9.8  | Click **Edit** on `Onion`. Add the measures `medium` with `150` and `large` with `250`. Add a third measure named `MEDIUM` with `100`, and click **Done**. | `"MEDIUM" is already a measure.` appears below the third row. Click **Remove** on that row: focus moves to **Remove** on `large`. Click **Done**: the editor closes, and `Onion` reads `g · medium, large`. |
+| 9.9  | In the recipe book, click **Edit** on `Russian salad`. In **Add ingredient**, type `oni` and look at the list. Add `Onion`. | The list offers `Onion (g)`. The new row shows a measure list after the quantity, which starts on `g` and offers `g`, `medium (150 g)`, and `large (250 g)`. |
+| 9.10 | Choose `medium (150 g)`, type `2` as the quantity, and click **Done**. Click **Edit** on `Russian salad` again. | The editor shows `Onion` with `2` and `medium (150 g)`. Click **Cancel**. |
+| 9.11 | In **Ingredients**, click **Edit** on `Onion`. | On `medium`, **Remove** is disabled, with `Used in 1 recipe.` below the row. On `large`, **Remove** is enabled. Click **Cancel**. |
+| 9.12 | Click **Edit** on `Onion`, and choose `pcs` in **Unit**. | A conversion row appears, reading `1 g = [ ] pcs`. It has no **Saved as measure** field, because no recipe has `Onion` in grams. The measure rows are read-only, and **Remove** and **Add measure** are disabled. |
+| 9.13 | Type `150` in the first field of the conversion row and `1` in the second. Then choose `g` in **Unit**. | The conversion row reads `150 g = 1 pcs`, and the measures show `1` and `1.67`. After you choose `g`, the conversion row disappears and the measures read `150` and `250` again. Click **Cancel**. |
+| 9.14 | Click **New ingredient**, type `Carrot`, choose `pcs`, and click **Done**. In the recipe book, add `Carrot` with the quantity `2` to `Gnocchi carbonara`. | `Carrot` appears as `pcs`. In the recipe, `Carrot` has no measure list, only the unit `pcs`. |
+| 9.15 | Keep the recipe book open in this tab, tab A. Open **Ingredients** in a second tab, tab B. Click **Edit** on `Carrot`, and choose `g` in **Unit**. | A conversion row appears, reading `1 pcs = [ ] g`, with a **Saved as measure** field that reads `pcs`. **Unit** is enabled. |
+| 9.16 | Click **Done** with the second field empty. Then type `120` in it, and click **Done**. | The first **Done** shows `Enter a number from 0.01 to 10000, with up to two decimals.` and moves focus to the empty field. The second closes the editor, and `Carrot` reads `g · pcs`. |
+| 9.17 | In tab A, which loaded before the conversion, click **Edit** on `Gnocchi carbonara`, change the quantity of `Carrot` to `3`, and click **Done**. Then change it back to `2` the same way. | The editor first shows `Carrot` with `2` and `pcs (120 g)`, and then with `3` and `pcs (120 g)`, so the recipe keeps its meaning. Close tab A, and continue in tab B. |
+| 9.18 | Click **Edit** on `Egg`, and choose `g` in **Unit**. | The conversion row reads `1 pcs = [ ] g`, with `pcs` in its **Saved as measure** field, because `Tortilla` uses `Egg` in `pcs`. Click **Cancel**: `Egg` still reads `pcs`. |
+| 9.19 | Click **Edit** on `Milk`, choose `g`, and click **Done**. Then change it back to `ml`. | No conversion row appears, because `Milk` has no measures and no recipe uses it. `Milk` shows `g`, and then `ml` again. |
+| 9.20 | Click **Edit** on `Milk`. Open the recipe book in a second tab, and add `Milk` to a recipe. In the first tab, choose `g`, and click **Done**. | The editor stays open with `"Milk" has measures or recipes in ml. Reload the page to change its unit.` Click **Cancel**, click **Edit** on `Milk`, and choose `g`: the conversion row appears, with `ml` in **Saved as measure**. Click **Cancel**. |
+| 9.21 | Click **New ingredient**, type a name, and choose a unit. Stop the server, and click **Done**. | `Couldn't save the ingredient. Try again.` appears, and the name and the unit stay. |
+| 9.22 | Click **Cancel**, and reload the page. Start the server, and click **Retry**. | The page shows `Couldn't load the ingredients.`, and **Retry** loads the catalog. |
+| 9.23 | On mobile, open the Ingredients page, and tap **Edit** on an ingredient. | The editor fills the screen, and no keyboard opens until you tap **Name**. |
+| 9.24 | On mobile, tap **Edit** on `Onion`, choose `pcs` in **Unit**, and tap **Cancel**. Then tap **Edit** on `Egg`, and choose `g`. | Every measure row and conversion row fits the width with all its fields and buttons, including **Saved as measure** for `Egg`. The page doesn't scroll sideways. |
+| 9.25 | On mobile, tap the amount of a measure, and then a field of the conversion row. | The keyboard offers digits and a decimal separator. `0,25` is accepted when you tap **Done**. |
+| 9.26 | On mobile, tap the name of a measure, the amount of a measure, a field of the conversion row, and **Saved as measure**. Then edit a recipe, and tap the measure list of an ingredient. | Each time, the page doesn't zoom. |
+| 9.27 | On mobile, in the recipe book, edit `Russian salad`, and choose `large (250 g)` for `Onion`. | The measure list fits the row with its long label, and the row doesn't push **Remove** off the screen. The page doesn't scroll sideways. |
 
 ## 10. Shopping list
 
@@ -243,7 +259,11 @@ Run these tests on desktop unless a test says otherwise.
 | 10.3 | Show a week with no menus, and click **Shopping list**. | The dialog reads `This week has no menus yet.` Click outside the dialog: it closes. |
 | 10.4 | Stop the server. In the week from `10.1`, change `Tortilla` to 3 servings, and click **Done**. When the red cross appears, click **Shopping list**. | The list shows `Egg 4 pcs`: 1.25 × 3 = 3.75, rounded up. Close it, start the server, and retry the save. |
 | 10.5 | With the shopping list open, change the week in the address bar, and press `Enter`. | The address goes back, and the dialog stays open on the same week. |
-| 10.6 | On mobile, tap **Shopping list** in a week with many ingredients. | The dialog fills the screen, the list scrolls inside it, and the page doesn't scroll sideways. The week bar shows **Shopping list** on its own row. |
+| 10.6 | In the recipe book, edit `Red lentil soup`: add `Onion`, keep `g`, and type `220`. Edit `Gnocchi carbonara`: add `Onion`, choose `large (250 g)`, and type `1`. | Both recipes are saved. |
+| 10.7 | In the next week, add `Russian salad` with 2 servings and `Gnocchi carbonara` with 1 serving to Wednesday's lunch. Click **Shopping list**. | The list reads `Carrot 240 g (2 pcs)`, `Egg 4 pcs`, and `Onion 1.1 kg (220 g, 4 medium, 1 large)`: 220 g + 4 × 150 g + 250 g = 1070 g. The **Not included** section no longer appears. |
+| 10.8 | In **Ingredients**, edit `Onion` and change `medium` to `300`. Go back to the week, and click **Shopping list**. | `Onion` reads `1.7 kg (220 g, 4 medium, 1 large)`: 1670 g, rounded up to tenths. |
+| 10.9 | Change `medium` to `132.5`, and open the shopping list. Then change it to `132`, and open the list again. | With `132.5`, `Onion` reads `1 kg (220 g, 4 medium, 1 large)`: 1000 g. With `132`, it reads `998 g (220 g, 4 medium, 1 large)`. |
+| 10.10 | On mobile, tap **Shopping list** in a week with many ingredients. | The dialog fills the screen, the list scrolls inside it, and the page doesn't scroll sideways. The week bar shows **Shopping list** on its own row. A line with a breakdown stays inside the dialog. |
 
 ## 11. Keyboard and screen readers (optional)
 
@@ -285,7 +305,7 @@ host: systemd, the `deployer` user, the real data, GitHub, and GHCR.
 | 13.2 | Run `systemctl list-timers 'meals-*'`. | The list shows `meals-backup.timer`, `meals-deploy.timer`, and `meals-restore-check.timer`, each with a next run. |
 | 13.3 | Run `sudo scripts/install.sh` again, and compare `/opt/server/meals/.env` with its content before. | The file is unchanged, and `hold` still exists. |
 | 13.4 | Move the data in, as in [Move an existing installation](deployment.md#move-an-existing-installation). | `curl http://localhost:3000/api/health` returns `ok` and the release's version, every week, recipe, and ingredient is there, and `stat -c '%A' /opt/server/meals/data` reads `drwxrwsr-x`. |
-| 13.5 | Run `sudo -u deployer meals-deploy` with an older release's version, such as `0.2.0`. Then run `sudo -u deployer meals-deploy --resume` and `sudo systemctl start meals-deploy`. | The health check reports the older version and `hold` exists. After the resume, it reports the latest version again. |
+| 13.5 | On an installation whose data has no measures, run `sudo -u deployer meals-deploy` with an older release's version, such as `0.2.0`. Then run `sudo -u deployer meals-deploy --resume` and `sudo systemctl start meals-deploy`. | The health check reports the older version and `hold` exists. After the resume, it reports the latest version again. |
 | 13.6 | Rename a recipe in the app. Run `sudo systemctl start meals-backup`, rename the recipe again, and restore the new `daily` backup with `sudo -u deployer meals-restore`. | The recipe has the first new name, and `backups/` has a new `pre-restore` backup. |
 | 13.7 | Run `sudo systemctl start meals-restore-check`, and then `journalctl -u meals-restore-check -n 5`. | The journal reads `The backup ... restores into version ...`. `docker ps -a` lists no `meals-restore-check` container. |
 | 13.8 | Reboot the host. | Within 2 minutes after boot, `curl http://localhost:3000/api/health` returns `ok`, and `systemctl list-timers 'meals-*'` lists the three timers. |

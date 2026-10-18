@@ -241,6 +241,11 @@ hold that it created, and logs `Ended the hold`.
 To go back to an earlier release, deploy it by hand. When a newer release
 fixes the problem, run `sudo -u deployer meals-deploy --resume`.
 
+Go back only if the newer release hasn't saved data that the earlier one
+doesn't know. The earlier release ignores that data, and drops it on its next
+save. For example, `0.2.0` doesn't know measures, so it reads
+`2 medium` of onion as `2 g`.
+
 To keep the app stopped, for example while you repair the host, put the host
 on hold first. Otherwise the timer starts the deployed version again. To put
 the host on hold, run the following command:

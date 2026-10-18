@@ -2,6 +2,14 @@
 // tests import this module directly in Node.js.
 
 /**
+ * The name as the server stores it: trimmed, with runs of whitespace
+ * collapsed to one space. The server has the same rule in server/names.js.
+ */
+export function cleanName(name) {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+/**
  * Decides matching and order. It ignores case and accents, so "Café" and
  * "cafe" share a key. The server has the same rule in server/names.js.
  */
@@ -21,6 +29,6 @@ export function sortByName(entries) {
 
 /** The entries whose name contains `query`, ignoring case, accents, and extra spaces. */
 export function filterByName(entries, query) {
-  const key = nameKey(query.trim().replace(/\s+/g, " "));
+  const key = nameKey(cleanName(query));
   return entries.filter((entry) => nameKey(entry.name).includes(key));
 }
