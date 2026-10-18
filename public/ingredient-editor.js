@@ -10,7 +10,7 @@ import { createButton, createElement } from "./dom.js";
 import { createEditorDialog } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
-import { nameKey } from "./name-search.js";
+import { cleanName, nameKey } from "./name-search.js";
 import { MAX_MEASURES, parseQuantity } from "./quantities.js";
 
 const AMOUNT_MESSAGE = "Enter an amount from 0.01 to 10000, with up to two decimals.";
@@ -19,11 +19,6 @@ const CONVERSION_MESSAGE = "Enter a number from 0.01 to 10000, with up to two de
 // Why a measure can't be removed while `count` recipes use it.
 function measureUsedText(count) {
   return count === 1 ? "Used in 1 recipe." : `Used in ${count} recipes.`;
-}
-
-// The name as the server stores it: trimmed, with runs of whitespace collapsed.
-function cleanName(name) {
-  return name.trim().replace(/\s+/g, " ");
 }
 
 // The measure rows that `ingredient` starts with.

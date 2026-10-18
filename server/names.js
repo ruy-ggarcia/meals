@@ -5,7 +5,10 @@ import { ValidationError } from "./errors.js";
 
 export const MAX_NAME_LENGTH = 100;
 
-/** The name as stored: trimmed, with runs of whitespace collapsed to one space. */
+/**
+ * The name as stored: trimmed, with runs of whitespace collapsed to one space.
+ * public/name-search.js has the same rule.
+ */
 export function cleanName(name) {
   return name.trim().replace(/\s+/g, " ");
 }
