@@ -15,7 +15,7 @@ export function createStores({ dataDir }) {
   const ingredients = createIngredients({
     dataDir,
     enqueue,
-    usageOf: async (id) => ({ inUnit: await recipes.usesIngredient(id), measureIds: new Set() }),
+    usageOf: (id) => recipes.usageOf(id),
   });
   const recipes = createRecipes({ dataDir, enqueue, ingredients });
   const weeks = createWeeks({ dataDir, enqueue, recipes });

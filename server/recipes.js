@@ -16,7 +16,8 @@ function isPlainObject(value) {
 }
 
 // Checks the ingredients of a request, except that their ingredients exist.
-// Returns clean copies with only ingredientId and quantity.
+// Returns clean copies with only ingredientId, quantity, and, for a line in a
+// measure, measureId.
 function validIngredients(ingredients) {
   if (!Array.isArray(ingredients)) throw new ValidationError('"ingredients" must be an array.');
   if (ingredients.length > MAX_INGREDIENTS) {
@@ -25,8 +26,11 @@ function validIngredients(ingredients) {
   const seen = new Set();
   return ingredients.map((entry, index) => {
     const where = `ingredients[${index}]`;
-    if (!isPlainObject(entry) || Object.keys(entry).sort().join() !== "ingredientId,quantity") {
-      throw new ValidationError(`${where} must have exactly "ingredientId" and "quantity".`);
+    const keys = isPlainObject(entry) ? Object.keys(entry).sort().join() : "";
+    if (keys !== "ingredientId,quantity" && keys !== "ingredientId,measureId,quantity") {
+      throw new ValidationError(
+        `${where} must have "ingredientId" and "quantity", and optionally "measureId".`,
+      );
     }
     if (typeof entry.ingredientId !== "string") {
       throw new ValidationError(`${where}.ingredientId must be a string.`);
@@ -40,6 +44,12 @@ function validIngredients(ingredients) {
       throw new ValidationError(
         `${where}.quantity must be from ${MIN_QUANTITY} to ${MAX_QUANTITY}, with at most two decimals.`,
       );
+    }
+    if ("measureId" in entry) {
+      if (typeof entry.measureId !== "string") {
+        throw new ValidationError(`${where}.measureId must be a string.`);
+      }
+      return { ingredientId: entry.ingredientId, measureId: entry.measureId, quantity };
     }
     return { ingredientId: entry.ingredientId, quantity };
   });
@@ -78,19 +88,26 @@ function validChanges(changes) {
 }
 
 // Keeps only the ingredients that a PATCH would accept: a string
-// ingredientId, a valid quantity, no repeats, at most MAX_INGREDIENTS. Doesn't
-// check the catalog, so a write never drops another recipe's ingredients
-// just because the catalog on disk is older or missing.
+// ingredientId, a valid quantity, a string measureId if it has the key, no
+// repeats, at most MAX_INGREDIENTS. Doesn't check the catalog, so a write
+// never drops another recipe's ingredients just because the catalog on disk
+// is older or missing.
 function normalizeIngredients(raw) {
   const clean = [];
   const seen = new Set();
   for (const entry of Array.isArray(raw) ? raw : []) {
     if (clean.length === MAX_INGREDIENTS) break;
     if (!isPlainObject(entry) || typeof entry.ingredientId !== "string") continue;
+    const inMeasure = "measureId" in entry;
+    if (inMeasure && typeof entry.measureId !== "string") continue;
     const quantity = cleanQuantity(entry.quantity);
     if (quantity === undefined || seen.has(entry.ingredientId)) continue;
     seen.add(entry.ingredientId);
-    clean.push({ ingredientId: entry.ingredientId, quantity });
+    clean.push(
+      inMeasure
+        ? { ingredientId: entry.ingredientId, measureId: entry.measureId, quantity }
+        : { ingredientId: entry.ingredientId, quantity },
+    );
   }
   return clean;
 }
@@ -122,24 +139,39 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
     return normalize(await readJson(file));
   }
 
-  async function knownIngredientIds() {
-    return new Set((await ingredients.list()).map((ingredient) => ingredient.id));
+  // The IDs of the measures of each ingredient in the catalog.
+  async function knownMeasures() {
+    return new Map(
+      (await ingredients.list()).map((ingredient) => [
+        ingredient.id,
+        new Set(ingredient.measures.map((measure) => measure.id)),
+      ]),
+    );
   }
 
-  // A copy of `recipe` without the ingredients that aren't in `known`.
+  // Whether the catalog `known` has the entry's ingredient and, if it has one,
+  // its measure.
+  function isKnown(known, entry) {
+    const measureIds = known.get(entry.ingredientId);
+    return (
+      measureIds !== undefined && (entry.measureId === undefined || measureIds.has(entry.measureId))
+    );
+  }
+
+  // A copy of `recipe` without the ingredients that `known` doesn't have, or
+  // whose measure it doesn't have.
   function withKnownIngredients(recipe, known) {
-    return {
-      ...recipe,
-      ingredients: recipe.ingredients.filter((entry) => known.has(entry.ingredientId)),
-    };
+    return { ...recipe, ingredients: recipe.ingredients.filter((entry) => isKnown(known, entry)) };
   }
 
-  // Throws if any entry's ingredientId isn't in `known`. Called inside the
-  // queue, with `known` read there, so no catalog write runs between this
-  // check and the save.
+  // Throws if any entry's ingredient or measure isn't in `known`. Called
+  // inside the queue, with `known` read there, so no catalog write runs
+  // between this check and the save.
   function checkIngredientsExist(known, entries) {
     const unknown = entries.find((entry) => !known.has(entry.ingredientId));
     if (unknown) throw new ValidationError(`Unknown ingredient: ${unknown.ingredientId}`);
+    const unknownMeasure = entries.find((entry) => !isKnown(known, entry));
+    if (unknownMeasure) throw new ValidationError(`Unknown measure: ${unknownMeasure.measureId}`);
   }
 
   function conflict(recipe) {
@@ -158,7 +190,7 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
    */
   async function list() {
     const all = await readAll();
-    const known = await knownIngredientIds();
+    const known = await knownMeasures();
     return all.map((recipe) => withKnownIngredients(recipe, known)).sort(byNameKey);
   }
 
@@ -176,7 +208,7 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
       const all = await readAll();
       const holder = holderOf(all, valid.name);
       if (holder) throw conflict(holder);
-      checkIngredientsExist(await knownIngredientIds(), valid.ingredients);
+      checkIngredientsExist(await knownMeasures(), valid.ingredients);
       const recipe = {
         id: randomUUID(),
         name: valid.name,
@@ -198,7 +230,7 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
         const holder = holderOf(all, valid.name, id);
         if (holder) throw conflict(holder);
       }
-      const known = await knownIngredientIds();
+      const known = await knownMeasures();
       if (valid.ingredients !== undefined) checkIngredientsExist(known, valid.ingredients);
       Object.assign(recipe, valid);
       await writeJson(file, { recipes: all });
@@ -207,12 +239,43 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
     });
   }
 
-  /** Whether any recipe, active or archived, uses the ingredient. Never waits for the queue. */
-  async function usesIngredient(ingredientId) {
-    return (await readAll()).some((recipe) =>
-      recipe.ingredients.some((entry) => entry.ingredientId === ingredientId),
-    );
+  /**
+   * What the recipes, active and archived, use of the ingredient: `inUnit` is
+   * whether any line has it in its unit, and `measureIds` holds the IDs of
+   * its measures that any line uses. Never waits for the queue.
+   */
+  async function usageOf(ingredientId) {
+    let inUnit = false;
+    const measureIds = new Set();
+    for (const recipe of await readAll()) {
+      for (const entry of recipe.ingredients) {
+        if (entry.ingredientId !== ingredientId) continue;
+        if (entry.measureId === undefined) inUnit = true;
+        else measureIds.add(entry.measureId);
+      }
+    }
+    return { inUnit, measureIds };
   }
 
-  return { create, ids, list, update, usesIngredient };
+  /**
+   * Points every line of the ingredient that is in its unit to the measure, in
+   * every recipe, and writes the file once if any line changed. Returns how
+   * many lines changed. Doesn't enqueue: the caller is already inside the
+   * queue, and waiting for it here would never finish.
+   */
+  async function moveUnitLinesToMeasure(ingredientId, measureId) {
+    const all = await readAll();
+    let changed = 0;
+    for (const recipe of all) {
+      recipe.ingredients = recipe.ingredients.map((entry) => {
+        if (entry.ingredientId !== ingredientId || entry.measureId !== undefined) return entry;
+        changed += 1;
+        return { ingredientId, measureId, quantity: entry.quantity };
+      });
+    }
+    if (changed > 0) await writeJson(file, { recipes: all });
+    return changed;
+  }
+
+  return { create, ids, list, moveUnitLinesToMeasure, update, usageOf };
 }

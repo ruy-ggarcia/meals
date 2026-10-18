@@ -19,7 +19,7 @@ interface, and the documentation. Don't use synonyms, such as *cell* for
 | Menu | The content of a slot: an ordered list of menu items, possibly empty. |
 | Menu item | A recipe in a menu, with its servings. |
 | Name key | The form of a recipe or ingredient name that decides uniqueness and order: without accents and in lowercase. `Café` and `cafe` have the same name key. |
-| Quantity | How much of an ingredient one serving of a recipe needs, in the ingredient's unit: a number from 0.01 to 10000 with at most two decimals. |
+| Quantity | How much of an ingredient one serving of a recipe needs, in the ingredient's unit or in one of its measures: a number from 0.01 to 10000 with at most two decimals. |
 | Recipe | An entry of the recipe book, with a stable ID and a unique name. |
 | Recipe book | All the recipes, active and archived. |
 | Servings | How many servings of a recipe a menu item has: a multiple of 0.5 from 0.5 to 99. |

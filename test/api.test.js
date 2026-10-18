@@ -633,6 +633,50 @@ test("POST /api/recipes with invalid or unknown ingredients returns 400 JSON", a
   }
 });
 
+async function addOnionWithMedium() {
+  const res = await request(app)
+    .post("/api/ingredients")
+    .send({ name: "Onion", unit: "g", measures: [{ name: "medium", amount: 150 }] });
+  assert.equal(res.status, 201);
+  return res.body;
+}
+
+test("POST /api/ingredients with measures returns them with IDs", async () => {
+  const onion = await addOnionWithMedium();
+
+  assert.equal(onion.measures.length, 1);
+  assert.equal(typeof onion.measures[0].id, "string");
+  assert.deepEqual(onion.measures[0], { id: onion.measures[0].id, name: "medium", amount: 150 });
+});
+
+test("POST /api/recipes with a measureId returns it in GET /api/recipes", async () => {
+  const onion = await addOnionWithMedium();
+  const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
+
+  const created = await request(app)
+    .post("/api/recipes")
+    .send({ name: "Soup", ingredients: [line] });
+
+  assert.equal(created.status, 201);
+  assert.deepEqual((await request(app).get("/api/recipes")).body.recipes[0].ingredients, [line]);
+});
+
+test("PATCH /api/ingredients/ID removing a measure that an archived recipe uses returns 409", async () => {
+  const onion = await addOnionWithMedium();
+  const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 1 };
+  const soup = await request(app)
+    .post("/api/recipes")
+    .send({ name: "Soup", ingredients: [line] });
+  await request(app).patch(`/api/recipes/${soup.body.id}`).send({ archived: true });
+
+  const res = await request(app).patch(`/api/ingredients/${onion.id}`).send({ measures: [] });
+
+  assertJsonError(res, 409, "measure in use");
+  assert.match(res.body.error, /medium/);
+  const listed = await request(app).get("/api/ingredients");
+  assert.deepEqual(listed.body.ingredients[0].measures, onion.measures);
+});
+
 test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes return 500", async () => {
   await mkdir(path.join(dataDir, "v2"), { recursive: true });
   await writeFile(path.join(dataDir, "v2", "ingredients.json"), "{ not json");
