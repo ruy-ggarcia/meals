@@ -37,6 +37,15 @@ export function validName(name) {
   return clean;
 }
 
+/** The cleaned name, like validName, but its error message starts with `where`. */
+export function validNameAt(name, where) {
+  try {
+    return validName(name);
+  } catch (error) {
+    throw new ValidationError(`${where}: ${error.message}`);
+  }
+}
+
 /** The entry of `all`, other than `exceptId`, whose name key equals the key of `name`. */
 export function holderOf(all, name, exceptId) {
   const key = nameKey(cleanName(name));

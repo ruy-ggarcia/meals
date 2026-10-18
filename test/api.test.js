@@ -509,7 +509,13 @@ test("POST /api/ingredients returns 201 with the new ingredient, and GET lists t
   const res = await request(app).post("/api/ingredients").send({ name: " Onion ", unit: "g" });
 
   assert.equal(res.status, 201);
-  assert.deepEqual(res.body, { id: res.body.id, name: "Onion", unit: "g", archived: false });
+  assert.deepEqual(res.body, {
+    id: res.body.id,
+    name: "Onion",
+    unit: "g",
+    measures: [],
+    archived: false,
+  });
 
   const egg = await addIngredient("Egg", "pcs");
   await request(app).patch(`/api/ingredients/${egg.id}`).send({ archived: true });

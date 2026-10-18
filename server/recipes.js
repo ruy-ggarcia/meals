@@ -7,26 +7,12 @@ import { randomUUID } from "node:crypto";
 import { NameConflictError, NotFoundError, ValidationError } from "./errors.js";
 import { dataPath, readJson, writeJson } from "./files.js";
 import { byNameKey, holderOf, validName } from "./names.js";
+import { cleanQuantity, MAX_QUANTITY, MIN_QUANTITY } from "./quantities.js";
 
 export const MAX_INGREDIENTS = 50;
-export const MIN_QUANTITY = 0.01;
-export const MAX_QUANTITY = 10000;
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-/**
- * The quantity rounded to two decimals, or undefined when it isn't a number
- * from MIN_QUANTITY to MAX_QUANTITY with at most two decimals. The tolerance
- * absorbs binary floating point, so 0.30000000000000004 counts as 0.3.
- */
-function cleanQuantity(quantity) {
-  if (typeof quantity !== "number" || !Number.isFinite(quantity)) return undefined;
-  const hundredths = Math.round(quantity * 100);
-  if (Math.abs(quantity * 100 - hundredths) > 1e-6) return undefined;
-  const clean = hundredths / 100;
-  return clean >= MIN_QUANTITY && clean <= MAX_QUANTITY ? clean : undefined;
 }
 
 // Checks the ingredients of a request, except that their ingredients exist.

@@ -11,11 +11,11 @@ export function createStores({ dataDir }) {
   // One queue for every file, so a save never checks another file while it
   // changes.
   const enqueue = createQueue();
-  // `recipes` is read only when isInUse runs, after it's created below.
+  // `recipes` is read only when usageOf runs, after it's created below.
   const ingredients = createIngredients({
     dataDir,
     enqueue,
-    isInUse: (id) => recipes.usesIngredient(id),
+    usageOf: async (id) => ({ inUnit: await recipes.usesIngredient(id), measureIds: new Set() }),
   });
   const recipes = createRecipes({ dataDir, enqueue, ingredients });
   const weeks = createWeeks({ dataDir, enqueue, recipes });
