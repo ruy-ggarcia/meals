@@ -385,8 +385,9 @@ select.measure-field {
 }
 
 .line-amount {
+  max-width: 70%;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  text-align: end;
 }
 
 .not-included {
