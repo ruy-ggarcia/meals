@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
 
-function ingredient(id, name, unit = "g", archived = false) {
-  return { id, name, unit, archived };
+function ingredient(id, name, unit = "g", archived = false, measures = []) {
+  return { id, name, unit, archived, measures };
 }
 
 function recipe(id, name, ingredientIds, archived = false) {
@@ -100,6 +100,34 @@ test("rows show each ingredient's name and unit from A to Z, and archived ones u
     ["Onion", "g"],
   ]);
   assert.deepEqual(archivedNames(), ["Saffron"]);
+});
+
+test("a row shows the unit followed by the measure names", async () => {
+  const measures = [
+    { id: "m1", name: "medium", amount: 150 },
+    { id: "m2", name: "large", amount: 250 },
+  ];
+  await openIngredientsPage([ingredient("1", "Onion", "g", false, measures)]);
+
+  assert.deepEqual(activeRows(), [["Onion", "g · medium, large"]]);
+});
+
+test("a measure used by two recipes, one archived, has Remove disabled with Used in 2 recipes.", async () => {
+  const onion = ingredient("1", "Onion", "g", false, [{ id: "m1", name: "medium", amount: 150 }]);
+  const line = { ingredientId: "1", quantity: 1, measureId: "m1" };
+  await openIngredientsPage(
+    [onion],
+    [
+      { id: "r1", name: "Soup", archived: false, ingredients: [line] },
+      { id: "r2", name: "Stew", archived: true, ingredients: [line] },
+    ],
+  );
+
+  buttonLabeled("Edit Onion").click();
+
+  const dialog = document.getElementById("ingredient-editor");
+  assert.equal(dialog.querySelector(".measure-row .remove").disabled, true);
+  assert.equal(dialog.querySelector(".measure-row .row-hint").textContent, "Used in 2 recipes.");
 });
 
 test("New ingredient opens the editor, and a saved one appears in its sorted place with its Edit focused", async () => {

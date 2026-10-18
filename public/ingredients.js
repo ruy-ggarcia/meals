@@ -38,7 +38,15 @@ const list = createCatalogList({
   },
   noun: "ingredient",
   url: ingredientUrl,
-  details: (ingredient) => [createElement("span", "entry-unit", ingredient.unit)],
+  details: (ingredient) => [
+    createElement(
+      "span",
+      "entry-unit",
+      ingredient.measures.length === 0
+        ? ingredient.unit
+        : `${ingredient.unit} · ${ingredient.measures.map((measure) => measure.name).join(", ")}`,
+    ),
+  ],
   onEdit: openEditor,
 });
 

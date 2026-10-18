@@ -296,6 +296,7 @@ button {
   font-size: 1rem;
 }
 
+.measure-name,
 .name-field,
 .quantity-field,
 .unit-field {
@@ -334,6 +335,20 @@ button {
   width: 5.5rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.measure-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-hint {
+  margin: 0;
+  color: #666;
+}
+
+.add-measure {
+  align-self: flex-start;
 }
 
 .unit {
@@ -509,6 +524,7 @@ button {
   gap: 0.5rem;
 }
 
+.row-hint,
 .row-message {
   flex-basis: 100%;
 }
