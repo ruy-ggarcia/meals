@@ -6,10 +6,19 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { assertFocus, fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
 
-const EGG = { id: "egg", name: "Egg", unit: "pcs", archived: false };
-const MILK = { id: "milk", name: "Milk", unit: "ml", archived: false };
-const ONION = { id: "onion", name: "Onion", unit: "g", archived: false };
-const SALT = { id: "salt", name: "Salt", unit: "g", archived: true };
+const EGG = { id: "egg", name: "Egg", unit: "pcs", measures: [], archived: false };
+const MILK = { id: "milk", name: "Milk", unit: "ml", measures: [], archived: false };
+const ONION = {
+  id: "onion",
+  name: "Onion",
+  unit: "g",
+  measures: [
+    { id: "medium", name: "medium", amount: 150 },
+    { id: "large", name: "large", amount: 250 },
+  ],
+  archived: false,
+};
+const SALT = { id: "salt", name: "Salt", unit: "g", measures: [], archived: true };
 const CATALOG = [ONION, SALT, EGG, MILK];
 
 const SOUP = {
@@ -135,7 +144,7 @@ test("an existing recipe opens with its name and ingredients, and focus on the t
   );
   assert.deepEqual(
     [...document.querySelectorAll(".ingredient-row .unit")].map((unit) => unit.textContent),
-    ["g", "g"],
+    ["g"],
   );
   assert.equal(quantityFields()[0].getAttribute("inputmode"), "decimal");
   assert.equal(quantityFields()[0].getAttribute("aria-label"), "Quantity of Onion per serving");
@@ -457,4 +466,148 @@ test("an ingredient name with HTML renders as text", () => {
 
   assert.deepEqual(optionTexts(), ["<b>Bold</b> (g)"]);
   assert.equal(query(".options b"), null);
+});
+
+function measureFields() {
+  return [...document.querySelectorAll("select.measure-field")];
+}
+
+test("a row offers the unit and then each measure, as medium (150 g)", () => {
+  openEditor({ recipe: SOUP });
+
+  const [select] = measureFields();
+  assert.equal(select.getAttribute("aria-label"), "Measure of Onion");
+  assert.deepEqual(
+    [...select.options].map((option) => [option.value, option.textContent]),
+    [
+      ["", "g"],
+      ["medium", "medium (150 g)"],
+      ["large", "large (250 g)"],
+    ],
+  );
+});
+
+test("a new row starts on the unit", () => {
+  openEditor();
+  addIngredient("onion");
+
+  const [select] = measureFields();
+  assert.equal(select.value, "");
+  assert.equal(select.options[select.selectedIndex].textContent, "g");
+});
+
+test("an existing line opens on its measure", () => {
+  const recipe = {
+    ...SOUP,
+    ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
+  };
+  openEditor({ recipe });
+
+  assert.equal(measureFields()[0].value, "large");
+  assert.equal(editor.hasChanges(), false);
+});
+
+test("Done sends measureId for a line in a measure and leaves it out for the unit", async () => {
+  openEditor();
+  setValue(nameField(), "Stew");
+  addIngredient("onion");
+  setValue(quantityFields()[0], "2");
+  measureFields()[0].value = "medium";
+  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+  addIngredient("egg");
+  setValue(quantityFields()[1], "3");
+
+  query(".done").click();
+
+  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
+  const { ingredients } = server.requestFor("POST", "/api/recipes").body;
+  assert.deepEqual(ingredients, [
+    { ingredientId: "onion", quantity: 2, measureId: "medium" },
+    { ingredientId: "egg", quantity: 3 },
+  ]);
+  assert.equal("measureId" in ingredients[1], false);
+  await respondTo("POST", "/api/recipes", 201, { id: "stew", name: "Stew", ingredients });
+});
+
+test("changing only the measure counts as a change and is sent", async () => {
+  openEditor({ recipe: SOUP });
+  assert.equal(editor.hasChanges(), false);
+  measureFields()[0].value = "large";
+  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(editor.hasChanges(), true);
+
+  query(".done").click();
+
+  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, {
+    ingredients: [
+      { ingredientId: "onion", quantity: 150, measureId: "large" },
+      { ingredientId: "salt", quantity: 0.5 },
+    ],
+  });
+  await respondTo("PATCH", "/api/recipes/soup", 200, SOUP);
+});
+
+test("an ingredient without measures shows its unit as text", () => {
+  openEditor({ recipe: SOUP });
+
+  const rows = [...document.querySelectorAll(".ingredient-row")];
+  assert.equal(rows[1].querySelector("select.measure-field"), null);
+  assert.equal(rows[1].querySelector(".unit").textContent, "g");
+  assert.equal(rows[0].querySelector(".unit"), null);
+});
+
+test("switching an existing measure line back to the unit is a change and drops measureId", async () => {
+  const recipe = {
+    ...SOUP,
+    ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
+  };
+  openEditor({ recipe });
+  measureFields()[0].value = "";
+  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(editor.hasChanges(), true);
+
+  query(".done").click();
+
+  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+  const { ingredients } = server.requestFor("PATCH", "/api/recipes/soup").body;
+  assert.deepEqual(ingredients, [{ ingredientId: "onion", quantity: 2 }]);
+  assert.equal("measureId" in ingredients[0], false);
+  await respondTo("PATCH", "/api/recipes/soup", 200, { ...recipe, ingredients });
+});
+
+test("a measure choice survives the re-render when another ingredient is added", () => {
+  openEditor();
+  addIngredient("onion");
+  measureFields()[0].value = "large";
+  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+
+  addIngredient("egg");
+
+  assert.equal(measureFields()[0].value, "large");
+});
+
+test("an archived ingredient with measures still shows its measure select", () => {
+  const archived = { ...ONION, archived: true };
+  const recipe = {
+    ...SOUP,
+    ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
+  };
+  openEditor({ recipe, ingredients: [archived] });
+
+  assert.equal(measureFields().length, 1);
+  assert.equal(measureFields()[0].value, "large");
+  assert.equal(document.querySelector(".ingredient-name").textContent, "Onion (archived)");
+});
+
+test("a measure choice survives the re-render after an invalid quantity", () => {
+  openEditor({ recipe: SOUP });
+  measureFields()[0].value = "large";
+  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+  setValue(quantityFields()[0], "1.255");
+
+  query(".done").click();
+
+  assert.equal(document.querySelectorAll(".row-message").length, 1);
+  assert.equal(measureFields()[0].value, "large");
 });

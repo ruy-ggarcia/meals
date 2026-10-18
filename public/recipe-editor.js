@@ -21,7 +21,9 @@ function sameIngredients(a, b) {
     a.length === b.length &&
     a.every(
       (entry, index) =>
-        entry.ingredientId === b[index].ingredientId && entry.quantity === b[index].quantity,
+        entry.ingredientId === b[index].ingredientId &&
+        entry.quantity === b[index].quantity &&
+        (entry.measureId ?? "") === (b[index].measureId ?? ""),
     )
   );
 }
@@ -38,8 +40,8 @@ export function createRecipeEditor(dialog) {
   /**
    * What the editor last opened with: { recipe, catalog, rows }. `recipe` is
    * undefined for a new recipe, and `catalog` holds every ingredient by ID.
-   * Each row is { ingredientId, text, message }, where `text` is what its
-   * quantity field holds.
+   * Each row is { ingredientId, measureId, text, message }, where `text` is
+   * what its quantity field holds and `measureId` is "" for the unit.
    */
   let session = null;
 
@@ -71,8 +73,9 @@ export function createRecipeEditor(dialog) {
 
   // The rows that `recipe` starts with.
   function rowsOf(recipe) {
-    return (recipe?.ingredients ?? []).map(({ ingredientId, quantity }) => ({
+    return (recipe?.ingredients ?? []).map(({ ingredientId, quantity, measureId }) => ({
       ingredientId,
+      measureId: measureId ?? "",
       text: String(quantity),
       message: "",
     }));
@@ -104,9 +107,31 @@ export function createRecipeEditor(dialog) {
       session.rows.length !== original.length ||
       session.rows.some(
         (row, index) =>
-          row.ingredientId !== original[index].ingredientId || row.text !== original[index].text,
+          row.ingredientId !== original[index].ingredientId ||
+          row.measureId !== original[index].measureId ||
+          row.text !== original[index].text,
       )
     );
+  }
+
+  // The select that picks the unit or a measure of the ingredient for `row`.
+  function measureSelect(row, ingredient) {
+    const select = createElement("select", "measure-field");
+    select.setAttribute("aria-label", `Measure of ${ingredient.name}`);
+    const options = [{ id: "", text: ingredient.unit }];
+    for (const { id, name, amount } of ingredient.measures) {
+      options.push({ id, text: `${name} (${amount} ${ingredient.unit})` });
+    }
+    for (const { id, text } of options) {
+      const option = createElement("option", "", text);
+      option.value = id;
+      select.append(option);
+    }
+    select.value = row.measureId;
+    select.addEventListener("change", () => {
+      row.measureId = select.value;
+    });
+    return select;
   }
 
   function rowElement(row, index) {
@@ -122,12 +147,13 @@ export function createRecipeEditor(dialog) {
     field.addEventListener("input", () => {
       row.text = field.value;
     });
+    const measure = ingredient?.measures?.length ? measureSelect(row, ingredient) : null;
     const remove = createButton("Remove", `Remove ${name}`, "remove");
     remove.addEventListener("click", () => removeRow(index));
     item.append(
       createElement("span", "ingredient-name", ingredient?.archived ? `${name} (archived)` : name),
       field,
-      createElement("span", "unit", ingredient?.unit ?? ""),
+      measure ?? createElement("span", "unit", ingredient?.unit ?? ""),
       remove,
     );
     if (row.message) {
@@ -156,7 +182,7 @@ export function createRecipeEditor(dialog) {
 
   // Adds a row with an empty quantity, and focuses its field.
   function add(ingredientId) {
-    session.rows.push({ ingredientId, text: "", message: "" });
+    session.rows.push({ ingredientId, measureId: "", text: "", message: "" });
     renderRows();
     combobox.reset();
     rowList.lastElementChild.querySelector(".quantity-field").focus();
@@ -180,7 +206,10 @@ export function createRecipeEditor(dialog) {
     for (const row of session.rows) {
       const quantity = parseQuantity(row.text);
       row.message = quantity === null ? QUANTITY_MESSAGE : "";
-      if (quantity !== null) ingredients.push({ ingredientId: row.ingredientId, quantity });
+      if (quantity === null) continue;
+      const line = { ingredientId: row.ingredientId, quantity };
+      if (row.measureId !== "") line.measureId = row.measureId;
+      ingredients.push(line);
     }
     renderRows();
     return ingredients.length === session.rows.length ? ingredients : null;

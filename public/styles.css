@@ -299,7 +299,8 @@ button {
 .measure-name,
 .name-field,
 .quantity-field,
-.unit-field {
+.unit-field,
+select.measure-field {
   padding: 0.4rem;
   border: 1px solid var(--border);
   border-radius: 0.3rem;
@@ -355,7 +356,8 @@ button {
   min-width: 2rem;
 }
 
-.unit-field {
+.unit-field,
+select.measure-field {
   background: #fff;
 }
 
@@ -744,7 +746,8 @@ button {
   .measure-name,
   .name-field,
   .quantity-field,
-  .unit-field {
+  .unit-field,
+  select.measure-field {
     font-size: 16px;
   }
 
