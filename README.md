@@ -400,7 +400,8 @@ except merge commits follow
 commit type decides releases.
 
 Changes reach `main` only through pull requests that pass the three checks.
-Each pull request merges with a merge commit.
+Each pull request merges by rebase, without a merge commit, so
+release-please lists each change only once.
 
 On every push to `main`, `.github/workflows/release.yml` keeps a release
 pull request up to date, and publishes a release when you merge it. See
