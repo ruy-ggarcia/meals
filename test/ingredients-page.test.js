@@ -24,6 +24,8 @@ let page;
 let server;
 let document;
 let window;
+/** The catalog and the recipes that the page loaded with: { ingredients, recipes }. */
+let served;
 
 async function openIngredientsPage(ingredients = [], recipes = []) {
   server = fakeFetch();
@@ -33,9 +35,32 @@ async function openIngredientsPage(ingredients = [], recipes = []) {
     fetch: server.fetch,
   });
   ({ document, window } = page);
+  served = { ingredients, recipes };
   await tick();
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients });
   server.requestFor("GET", "/api/recipes").respond(200, { recipes });
+  await tick();
+}
+
+// Waits for the reload that New ingredient and Edit send before the editor
+// opens.
+async function reloadRequests() {
+  await waitFor(
+    () => server.requests.filter((request) => request.url === "/api/ingredients").length === 2,
+  );
+  return {
+    ingredients: server.requestFor("GET", "/api/ingredients"),
+    recipes: server.requestFor("GET", "/api/recipes"),
+  };
+}
+
+// Clicks New ingredient or Edit, and answers the reload with `fresh`, or else
+// with the data that the page loaded with.
+async function clickAndReload(button, fresh = served) {
+  button.click();
+  const reload = await reloadRequests();
+  reload.ingredients.respond(200, { ingredients: fresh.ingredients });
+  reload.recipes.respond(200, { recipes: fresh.recipes });
   await tick();
 }
 
@@ -123,7 +148,7 @@ test("a measure used by two recipes, one archived, has Remove disabled with Used
     ],
   );
 
-  buttonLabeled("Edit Onion").click();
+  await clickAndReload(buttonLabeled("Edit Onion"));
 
   const dialog = document.getElementById("ingredient-editor");
   assert.equal(dialog.querySelector(".measure-row .remove").disabled, true);
@@ -133,7 +158,7 @@ test("a measure used by two recipes, one archived, has Remove disabled with Used
 test("New ingredient opens the editor, and a saved one appears in its sorted place with its Edit focused", async () => {
   await openIngredientsPage([ingredient("1", "Onion")]);
 
-  newButton().click();
+  await clickAndReload(newButton());
   const dialog = document.getElementById("ingredient-editor");
   assert.equal(dialog.open, true);
   assert.equal(dialog.querySelector(".dialog-title").textContent, "New ingredient");
@@ -157,7 +182,7 @@ test("New ingredient opens the editor, and a saved one appears in its sorted pla
 test("Cancel on a new ingredient returns focus to New ingredient", async () => {
   await openIngredientsPage();
 
-  newButton().click();
+  await clickAndReload(newButton());
   const dialog = document.getElementById("ingredient-editor");
   dialog.querySelector(".cancel").click();
 
@@ -168,7 +193,7 @@ test("Cancel on a new ingredient returns focus to New ingredient", async () => {
 test("Edit opens the editor, and a saved name updates the row and focuses its Edit button", async () => {
   await openIngredientsPage([ingredient("1", "Onion")]);
 
-  buttonLabeled("Edit Onion").click();
+  await clickAndReload(buttonLabeled("Edit Onion"));
   const dialog = document.getElementById("ingredient-editor");
   assert.equal(dialog.open, true);
   setValue(document.getElementById("ingredient-name"), "Red onion");
@@ -183,7 +208,7 @@ test("Edit opens the editor, and a saved name updates the row and focuses its Ed
 test("Cancel after Edit returns focus to the ingredient's Edit button", async () => {
   await openIngredientsPage([ingredient("1", "Onion")]);
 
-  buttonLabeled("Edit Onion").click();
+  await clickAndReload(buttonLabeled("Edit Onion"));
   const dialog = document.getElementById("ingredient-editor");
   dialog.querySelector(".cancel").click();
 
@@ -194,7 +219,7 @@ test("Cancel after Edit returns focus to the ingredient's Edit button", async ()
 test("Escape after Edit returns focus to the ingredient's Edit button", async () => {
   await openIngredientsPage([ingredient("1", "Onion")]);
 
-  buttonLabeled("Edit Onion").click();
+  await clickAndReload(buttonLabeled("Edit Onion"));
   document.getElementById("ingredient-editor").close(); // what Escape does to a modal dialog
 
   assertFocus(document, buttonLabeled("Edit Onion"));
@@ -203,7 +228,7 @@ test("Escape after Edit returns focus to the ingredient's Edit button", async ()
 test("a backdrop click with no changes after Edit returns focus to the ingredient's Edit button", async () => {
   await openIngredientsPage([ingredient("1", "Onion")]);
 
-  buttonLabeled("Edit Onion").click();
+  await clickAndReload(buttonLabeled("Edit Onion"));
   const dialog = document.getElementById("ingredient-editor");
   pointerdownOn(dialog);
   dialog.click();
@@ -215,7 +240,7 @@ test("a backdrop click with no changes after Edit returns focus to the ingredien
 test("Edit keeps Unit enabled for an ingredient that recipes use", async () => {
   await openIngredientsPage([ingredient("1", "Onion")], [recipe("r1", "Soup", ["1"])]);
 
-  buttonLabeled("Edit Onion").click();
+  await clickAndReload(buttonLabeled("Edit Onion"));
 
   assert.equal(document.getElementById("ingredient-unit").disabled, false);
 });
@@ -274,4 +299,152 @@ test("a load failure shows the error, and Retry loads again", async () => {
 
   assert.equal(document.getElementById("load-error").hidden, true);
   assert.deepEqual(activeNames(), ["Onion"]);
+});
+
+function editorDialog() {
+  return document.getElementById("ingredient-editor");
+}
+
+test("Edit opens the editor with the ingredient and its usage from a reload, not from the first load", async () => {
+  await openIngredientsPage(
+    [ingredient("carrot", "Carrot", "pcs")],
+    [recipe("r1", "Soup", ["carrot"])],
+  );
+  // Meanwhile, another device converted Carrot to g.
+  const piece = { id: "piece", name: "pcs", amount: 120 };
+  const line = { ingredientId: "carrot", quantity: 1, measureId: "piece" };
+
+  await clickAndReload(buttonLabeled("Edit Carrot"), {
+    ingredients: [ingredient("carrot", "Carrot", "g", false, [piece])],
+    recipes: [{ id: "r1", name: "Soup", archived: false, ingredients: [line] }],
+  });
+
+  assert.equal(editorDialog().open, true);
+  assert.equal(document.getElementById("ingredient-unit").value, "g");
+  assert.equal(editorDialog().querySelector(".measure-name").value, "pcs");
+  assert.equal(editorDialog().querySelector(".measure-amount").value, "120");
+  assert.equal(editorDialog().querySelector(".measure-row .remove").disabled, true);
+  assert.equal(
+    editorDialog().querySelector(".measure-row .row-hint").textContent,
+    "Used in 1 recipe.",
+  );
+  assert.deepEqual(activeRows(), [["Carrot", "g · pcs"]]);
+});
+
+test("New ingredient refreshes the list from a reload before it opens", async () => {
+  await openIngredientsPage([ingredient("1", "Onion")]);
+
+  await clickAndReload(newButton(), {
+    ingredients: [ingredient("1", "Onion"), ingredient("2", "Milk", "ml")],
+    recipes: [],
+  });
+
+  assert.equal(editorDialog().open, true);
+  assert.equal(editorDialog().querySelector(".dialog-title").textContent, "New ingredient");
+  assert.deepEqual(activeNames(), ["Milk", "Onion"]);
+});
+
+test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async () => {
+  await openIngredientsPage([ingredient("1", "Onion")]);
+
+  for (const button of [buttonLabeled("Edit Onion"), newButton()]) {
+    const count = server.requests.length;
+    button.click();
+    await waitFor(() => server.requests.length === count + 2);
+    server.requestFor("GET", "/api/ingredients").fail();
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
+    await tick();
+
+    assert.equal(editorDialog().open, false);
+    assert.equal(document.getElementById("load-error").hidden, false);
+    assertFocus(document, document.getElementById("retry-load"));
+
+    document.getElementById("retry-load").click();
+    await waitFor(() => server.requests.length === count + 4);
+    server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: served.ingredients });
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
+    await tick();
+    assert.equal(document.getElementById("load-error").hidden, true);
+  }
+});
+
+test("Edit on an ingredient that the reload no longer has refreshes the list and doesn't open the editor", async () => {
+  await openIngredientsPage([ingredient("1", "Onion")]);
+
+  await clickAndReload(buttonLabeled("Edit Onion"), {
+    ingredients: [ingredient("2", "Milk", "ml")],
+    recipes: [],
+  });
+
+  assert.equal(editorDialog().open, false);
+  assert.deepEqual(activeNames(), ["Milk"]);
+  assertFocus(document, document.getElementById("search"));
+});
+
+test("a second click while the reload runs sends no second reload", async () => {
+  await openIngredientsPage([ingredient("1", "Onion")]);
+
+  buttonLabeled("Edit Onion").click();
+  newButton().click();
+  const reload = await reloadRequests();
+  reload.ingredients.respond(200, { ingredients: served.ingredients });
+  reload.recipes.respond(200, { recipes: served.recipes });
+  await tick();
+
+  assert.equal(server.requests.length, 4);
+  assert.equal(editorDialog().querySelector(".dialog-title").textContent, "Edit ingredient");
+});
+
+function chooseUnit(value) {
+  const unit = document.getElementById("ingredient-unit");
+  unit.value = value;
+  unit.dispatchEvent(new window.Event("change", { bubbles: true }));
+}
+
+test("a unit change on an ingredient that a recipe has in its unit saves that unit as a measure", async () => {
+  await openIngredientsPage(
+    [ingredient("carrot", "Carrot", "pcs")],
+    [recipe("r1", "Soup", ["carrot"])],
+  );
+  await clickAndReload(buttonLabeled("Edit Carrot"));
+
+  chooseUnit("g");
+
+  const measureField = editorDialog().querySelector(".conversion-measure");
+  assert.equal(measureField.hidden, false);
+  assert.match(measureField.textContent, /Saved as measure/);
+  assert.equal(editorDialog().querySelector(".conversion-measure-name").value, "pcs");
+
+  setValue(editorDialog().querySelector(".conversion-to"), "120");
+  editorDialog().querySelector(".done").click();
+  await waitFor(() => server.requestFor("PATCH", "/api/ingredients/carrot") !== undefined);
+  assert.deepEqual(server.requestFor("PATCH", "/api/ingredients/carrot").body, {
+    unit: "g",
+    conversion: { from: 1, to: 120, measureName: "pcs" },
+  });
+  const piece = { id: "piece", name: "pcs", amount: 120 };
+  await respondTo(
+    "PATCH",
+    "/api/ingredients/carrot",
+    200,
+    ingredient("carrot", "Carrot", "g", false, [piece]),
+  );
+
+  assert.equal(editorDialog().open, false);
+  assert.deepEqual(activeRows(), [["Carrot", "g · pcs"]]);
+});
+
+test("a unit change on an ingredient that recipes have only in a measure asks for no measure name", async () => {
+  const medium = { id: "m1", name: "medium", amount: 150 };
+  const line = { ingredientId: "onion", quantity: 1, measureId: "m1" };
+  await openIngredientsPage(
+    [ingredient("onion", "Onion", "g", false, [medium])],
+    [{ id: "r1", name: "Soup", archived: false, ingredients: [line] }],
+  );
+  await clickAndReload(buttonLabeled("Edit Onion"));
+
+  chooseUnit("pcs");
+
+  assert.equal(editorDialog().querySelector(".conversion").hidden, false);
+  assert.equal(editorDialog().querySelector(".conversion-measure").hidden, true);
 });

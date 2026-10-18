@@ -11,7 +11,6 @@ import { createIngredientEditor } from "./ingredient-editor.js";
 const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
 const catalog = document.getElementById("ingredient-catalog");
-const newIngredientButton = document.getElementById("new-ingredient");
 const editor = createIngredientEditor(document.getElementById("ingredient-editor"));
 
 /**
@@ -34,6 +33,8 @@ const list = createCatalogList({
     archived: document.getElementById("archived"),
     archivedCount: document.getElementById("archived-count"),
     archivedList: document.getElementById("archived-ingredients"),
+    newButton: document.getElementById("new-ingredient"),
+    retryButton: retryLoadButton,
   },
   noun: "ingredient",
   url: ingredientUrl,
@@ -46,7 +47,14 @@ const list = createCatalogList({
         : `${ingredient.unit} · ${ingredient.measures.map((measure) => measure.name).join(", ")}`,
     ),
   ],
-  onEdit: openEditor,
+  // The editor shows the current usage, from the reload.
+  reload: load,
+  open: (ingredient, focus) =>
+    editor.open({
+      ingredient,
+      usage: (ingredient && usage.get(ingredient.id)) ?? unused(),
+      ...focus,
+    }),
 });
 
 function unused() {
@@ -66,22 +74,10 @@ function countUsage(recipes) {
   return counts;
 }
 
-// Opens the editor on `ingredient`, or on a new ingredient when it's undefined.
-function openEditor(ingredient) {
-  list.resetMessages();
-  editor.open({
-    ingredient,
-    usage: (ingredient && usage.get(ingredient.id)) ?? unused(),
-    // By ID: the rows re-render, which replaces the Edit button that was clicked.
-    restoreFocus: () => (ingredient ? list.focusEdit(ingredient.id) : newIngredientButton.focus()),
-    onSaved: (saved) => {
-      list.remember(saved);
-      list.focusEdit(saved.id);
-    },
-  });
-}
-
+// Loads the catalog and the recipes, and shows the catalog. Resolves to true
+// when the load succeeds.
 async function load() {
+  let loaded = false;
   await withLoadState({
     loadError,
     retryButton: retryLoadButton,
@@ -94,13 +90,14 @@ async function load() {
       ]);
       usage = countUsage(recipeBook.recipes);
       list.setEntries(ingredientCatalog.ingredients);
+      loaded = true;
     },
   });
+  return loaded;
 }
 
 // ---------- Events ----------
 
-newIngredientButton.addEventListener("click", () => openEditor());
 retryLoadButton.addEventListener("click", load);
 // Unconfirmed changes in the editor would be lost: ask before leaving.
 window.addEventListener("beforeunload", (event) => {
