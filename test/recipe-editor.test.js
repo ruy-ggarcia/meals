@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { assertFocus, fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
 
+const QUANTITY_MESSAGE = "Enter a quantity from 0.01 to 10000, with up to two decimals.";
 const EGG = { id: "egg", name: "Egg", unit: "pcs", measures: [], archived: false };
 const MILK = { id: "milk", name: "Milk", unit: "ml", measures: [], archived: false };
 const ONION = {
@@ -202,6 +203,35 @@ test("Done with an invalid quantity shows a message under its row, focuses it, a
   assert.equal(quantityFields()[1].value, "1.255");
   assertFocus(document, quantityFields()[1]);
   assert.equal(server.requests.length, 0);
+});
+
+test("editing an invalid quantity clears its message and aria-invalid, and keeps focus in it", () => {
+  openEditor({ recipe: SOUP });
+  setValue(quantityFields()[0], "1.255");
+  setValue(quantityFields()[1], "0");
+  query(".done").click();
+  const [first, second] = [...document.querySelectorAll(".ingredient-row")];
+
+  setValue(quantityFields()[0], "1.25");
+  assert.equal(first.querySelector(".row-message"), null);
+  assert.equal(quantityFields()[0].hasAttribute("aria-invalid"), false);
+  assertFocus(document, quantityFields()[0]);
+  assert.equal(second.querySelector(".row-message")?.textContent, QUANTITY_MESSAGE);
+  assert.equal(quantityFields()[1].getAttribute("aria-invalid"), "true");
+});
+
+test("a valid Done doesn't re-render the rows, so focus stays in the field", async () => {
+  openEditor({ recipe: SOUP });
+  const field = quantityFields()[0];
+  field.focus();
+  setValue(field, "160");
+
+  query(".done").click();
+
+  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+  assert.equal(field.isConnected, true);
+  assertFocus(document, field);
+  await respondTo("PATCH", "/api/recipes/soup", 200, SOUP);
 });
 
 test("Done with an empty name shows a message under Name and sends nothing", () => {

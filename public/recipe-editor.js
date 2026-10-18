@@ -144,8 +144,14 @@ export function createRecipeEditor(dialog) {
     field.setAttribute("autocomplete", "off");
     field.setAttribute("inputmode", "decimal");
     field.setAttribute("aria-label", `Quantity of ${name} per serving`);
+    // Editing the field clears the row's message, without a re-render, which
+    // would take the focus away.
     field.addEventListener("input", () => {
       row.text = field.value;
+      if (row.message === "") return;
+      row.message = "";
+      field.removeAttribute("aria-invalid");
+      item.querySelector(".row-message")?.remove();
     });
     const measure = ingredient?.measures?.length ? measureSelect(row, ingredient) : null;
     const remove = createButton("Remove", `Remove ${name}`, "remove");
@@ -202,6 +208,7 @@ export function createRecipeEditor(dialog) {
   // Reads every quantity and shows a message under each invalid one. Returns
   // the recipe's ingredients, or null when any quantity is invalid.
   function readIngredients() {
+    const hadMessages = session.rows.some((row) => row.message !== "");
     const ingredients = [];
     for (const row of session.rows) {
       const quantity = parseQuantity(row.text);
@@ -211,8 +218,11 @@ export function createRecipeEditor(dialog) {
       if (row.measureId !== "") line.measureId = row.measureId;
       ingredients.push(line);
     }
-    renderRows();
-    return ingredients.length === session.rows.length ? ingredients : null;
+    const valid = ingredients.length === session.rows.length;
+    // Rendering replaces the fields, so it runs only when a message shows or
+    // goes away, and a valid Done keeps the focus where it was.
+    if (hadMessages || !valid) renderRows();
+    return valid ? ingredients : null;
   }
 
   // The request body: the whole recipe when it's new, else only the fields
