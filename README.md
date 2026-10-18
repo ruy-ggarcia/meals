@@ -193,7 +193,8 @@ in one of its measures. Names are unique, ignoring case and accents, so
 
 - To add a recipe, click **New recipe**. To change a recipe, click its
   **Edit** button. Both open the recipe editor:
-  - Type the name in **Name**.
+  - Type the name in **Name**. If an archived recipe has the name, restore
+    it from **Archived** instead.
   - To add an ingredient, type part of its name in **Add ingredient**, and
     then click it, or select it with the arrow keys and press `Enter`. A
     recipe holds up to 50 ingredients, and the list offers only active
@@ -208,12 +209,11 @@ in one of its measures. Names are unique, ignoring case and accents, so
   - To remove an ingredient, click **Remove**.
   - To save, click **Done** or press `Enter`. To close the editor without
     saving, click **Cancel** or press `Escape`.
-- A recipe without ingredients shows a warning icon. You can save a
-  recipe without ingredients, but the shopping list can't count it.
+- A recipe without ingredients shows a warning icon. You can save it, but
+  the shopping list can't count it.
 - To find a recipe, type part of its name in **Search**.
-- To archive a recipe that you no longer use, click **Archive**. Archived
-  recipes are listed under **Archived**. To bring one back, click
-  **Restore**.
+- To archive a recipe that you no longer use, click **Archive**. To bring
+  one back, click **Restore** under **Archived**.
 
 You can't delete recipes.
 
@@ -289,7 +289,7 @@ The server reads the following environment variables:
 
 | Variable   | Default  | Description                           |
 |------------|----------|---------------------------------------|
-| `DATA_DIR` | `./data` | The directory that stores the meal plan and the recipe book. |
+| `DATA_DIR` | `./data` | The data directory. See [Data files](#data-files). |
 | `PORT`     | `3000`   | The port that the server listens on.  |
 
 For example, to store data in `/srv/meals` and listen on port 8080, run the
@@ -326,13 +326,10 @@ overwrite the file. To recover, do the following:
 1. Restore a backup copy of the file, or fix the JSON by hand.
 1. In the app, click **Retry**.
 
-If you restore an older `recipes.json`, menu items whose recipe it doesn't
-have disappear from the grid. They come back when you restore a recipe book
-that has them.
-
-If you restore an older `ingredients.json`, recipe ingredients that it
-doesn't have disappear from the recipes and the shopping list. They come
-back when you restore an ingredient catalog that has them.
+If you restore an older `recipes.json` or `ingredients.json`, the app hides
+what the restored file doesn't have: menu items whose recipe is missing, and
+recipe ingredients whose ingredient or measure is missing. They come back
+when you restore a file that has them.
 
 ### Plans from earlier versions
 
@@ -442,7 +439,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   ingredients.html     # Ingredients page.
   ingredients.js       # Ingredients page logic.
   menus.js             # Menu functions.*
-  messages.js          # Recipe book message text.*
+  messages.js          # Message text shared by the recipe and ingredient pages.*
   name-search.js       # Name matching and sorting.*
   quantities.js        # Quantity parsing and shopping list arithmetic.*
   recipe-editor.js     # The recipe editor dialog.
@@ -501,6 +498,10 @@ have the shape `{ "error": "MESSAGE" }`. Any other path under `/api` returns
 `404`. If a data file contains invalid JSON, the requests that read it return
 `500`.
 
+The server cleans every name that it receives, of a recipe, an ingredient,
+or a measure: it trims the name and collapses runs of whitespace. A valid
+name is a string with 1 to 100 characters after cleaning.
+
 A recipe has the shape `{ "id", "name", "archived", "ingredients" }`,
 where `ingredients` is a list of `{ "ingredientId", "quantity" }`, with
 `"measureId"` too for a quantity in a measure. An ingredient has the shape
@@ -543,8 +544,8 @@ where `ingredients` is optional and defaults to `[]`. A line can also have
 
 | Status | Meaning |
 |--------|---------|
-| `201`  | The body is the new recipe. The server trims the name and collapses runs of whitespace. |
-| `400`  | `name` is missing, isn't a string, is empty, or is longer than 100 characters, the body has other fields, or `ingredients` breaks the rules below. |
+| `201`  | The body is the new recipe. |
+| `400`  | `name` is missing or invalid, the body has other fields, or `ingredients` breaks the rules below. |
 | `409`  | Another recipe, active or archived, has the same name, ignoring case and accents. The body is `{ "error", "recipe" }`, where `recipe` is that recipe. |
 
 ### Change a recipe

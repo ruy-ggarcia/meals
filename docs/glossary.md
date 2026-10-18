@@ -8,8 +8,8 @@ interface, and the documentation. Don't use synonyms, such as *cell* for
 |------|------------|
 | Active ingredient | An ingredient that isn't archived. Only active ingredients can be added to a recipe. |
 | Active recipe | A recipe that isn't archived. Only active recipes can be added to a menu. |
-| Archived ingredient | An ingredient that's as if it didn't exist when you add ingredients to a recipe: it isn't offered, but it stays in the recipes that already use it. You can restore it. |
-| Archived recipe | A recipe that's as if it didn't exist when you add recipes to a menu: it isn't offered, but it stays in the menus that already use it. You can restore it. |
+| Archived ingredient | An ingredient that the recipe editor no longer offers, but that stays in the recipes that already use it. You can restore it. |
+| Archived recipe | A recipe that the slot editor no longer offers, but that stays in the menus that already use it. You can restore it. |
 | Day | One of the seven days of a week: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, or `sun`. |
 | Ingredient | Something you buy and use in recipes. The ingredient catalog holds it with a stable ID, a unique name, a unit, and its measures. In a recipe, it has a quantity. |
 | Ingredient catalog | All the ingredients, active and archived. |
@@ -18,7 +18,7 @@ interface, and the documentation. Don't use synonyms, such as *cell* for
 | Measure | A named amount of one ingredient in its unit, such as `medium` or `handful`, with a stable ID. The amount is a number from 0.01 to 10000 with at most two decimals, and the name is unique within the ingredient by name key. |
 | Menu | The content of a slot: an ordered list of menu items, possibly empty. |
 | Menu item | A recipe in a menu, with its servings. |
-| Name key | The form of a recipe or ingredient name that decides uniqueness and order: without accents and in lowercase. `Café` and `cafe` have the same name key. |
+| Name key | The form of a name that decides uniqueness, and the order of recipes and ingredients: without accents and in lowercase. `Café` and `cafe` have the same name key. |
 | Quantity | How much of an ingredient one serving of a recipe needs, in the ingredient's unit or in one of its measures: a number from 0.01 to 10000 with at most two decimals. |
 | Recipe | An entry of the recipe book, with a stable ID and a unique name. |
 | Recipe book | All the recipes, active and archived. |

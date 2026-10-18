@@ -34,8 +34,7 @@ every other test.
 ## Set up a test server
 
 The test server uses its own empty data directory, so the tests don't change
-your real meal plan or recipe book. To set up the test server, do the
-following:
+your real data. To set up the test server, do the following:
 
 1. If a development server is running on port `3001`, stop it. In its
    terminal, press `Control+C`. A deployed Meals on port `3000` can keep
