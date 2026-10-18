@@ -20,8 +20,8 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.14",
+    "@biomejs/biome": "2.5.15",
     "happy-dom": "21.0.1",
-    "supertest": "^7.3.0"
+    "supertest": "^7.3.1"
   }
 }
