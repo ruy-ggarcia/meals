@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { NameConflictError, NotFoundError, ValidationError } from "./errors.js";
 import { dataPath, readJson, writeJson } from "./files.js";
 import { byNameKey, holderOf, validName } from "./names.js";
-import { cleanQuantity, MAX_QUANTITY, MIN_QUANTITY } from "./quantities.js";
+import { cleanQuantity, requireQuantity } from "./quantities.js";
 
 export const MAX_INGREDIENTS = 50;
 
@@ -39,12 +39,7 @@ function validIngredients(ingredients) {
       throw new ValidationError(`${where} repeats ingredient ${entry.ingredientId}.`);
     }
     seen.add(entry.ingredientId);
-    const quantity = cleanQuantity(entry.quantity);
-    if (quantity === undefined) {
-      throw new ValidationError(
-        `${where}.quantity must be from ${MIN_QUANTITY} to ${MAX_QUANTITY}, with at most two decimals.`,
-      );
-    }
+    const quantity = requireQuantity(entry.quantity, `${where}.quantity`);
     if ("measureId" in entry) {
       if (typeof entry.measureId !== "string") {
         throw new ValidationError(`${where}.measureId must be a string.`);
