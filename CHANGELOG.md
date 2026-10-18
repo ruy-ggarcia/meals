@@ -10,7 +10,6 @@
 * **ui:** check names and quantities in the editors as you type ([578cb8a](https://github.com/ruy-ggarcia/meals/commit/578cb8aa08aeebc3238ef54fa1b2ed2a7be278bd))
 * **ui:** open recipes and ingredients from their rows, and archive in the editor ([6628fdd](https://github.com/ruy-ggarcia/meals/commit/6628fdddee5fa8b799f795663f0fdf68606cdd57))
 * **ui:** pick the unit of an ingredient in a segmented control ([d558743](https://github.com/ruy-ggarcia/meals/commit/d558743d34d883c4300e8ccdf6fea16058e43d77))
-* **ui:** redesign the app with a sidebar, sheets, and a dark mode ([933035b](https://github.com/ruy-ggarcia/meals/commit/933035b848af2ee0e8d4ef1ced05a7c711febc97))
 * **ui:** redesign the week grid, the day view, and the save status ([0159c2d](https://github.com/ruy-ggarcia/meals/commit/0159c2dcf309849e6d98db5390e842fef2dac963))
 * **ui:** restyle the pages with a sidebar, a tab bar, and a dark mode ([43c5495](https://github.com/ruy-ggarcia/meals/commit/43c5495d587140b0576f0188118edddf1f9c036d))
 * **ui:** say that there is nothing to buy in an empty week ([2a38b00](https://github.com/ruy-ggarcia/meals/commit/2a38b002ec394ee759d0d2cebc45dad3b680e170))
@@ -19,9 +18,7 @@
 
 ### Bug Fixes
 
-* **deps:** bump node from `0a7108b` to `fe4f6d7` ([683ee14](https://github.com/ruy-ggarcia/meals/commit/683ee1420fbce06135d6117241d00d80ec6afbc2))
 * **deps:** bump node from `0a7108b` to `fe4f6d7` ([12ff71d](https://github.com/ruy-ggarcia/meals/commit/12ff71d33b19d3066e01badb9d8aeeea2e52e5fc))
-* **deps:** bump node from `fe4f6d7` to `0e17547` ([a95f9a7](https://github.com/ruy-ggarcia/meals/commit/a95f9a7d828fb1e2fca7d64a2f78735a5039204b))
 * **deps:** bump node from `fe4f6d7` to `0e17547` ([fa9d5ac](https://github.com/ruy-ggarcia/meals/commit/fa9d5ace1e2da3c5e64cdf4b2f570019edb1c102))
 * **host:** report an unreadable data directory instead of a shell error ([ea87819](https://github.com/ruy-ggarcia/meals/commit/ea878190c52573462e03f8765c3f410c13a38fbe))
 * **server:** register the signal handlers before logging the start ([0d4923c](https://github.com/ruy-ggarcia/meals/commit/0d4923c91ddef6c792b85807906c31f6348de1df))
@@ -32,7 +29,6 @@
 
 ### Features
 
-* measure ingredients in named measures ([03fc05b](https://github.com/ruy-ggarcia/meals/commit/03fc05b4826b8eb5381ce3cbfacd6817c7a026cf))
 * **server:** add measures to ingredients ([701a8db](https://github.com/ruy-ggarcia/meals/commit/701a8db6230581b6ac01785ea154f5e2422ebe84))
 * **server:** change the unit of an ingredient in use with a conversion ([1e622bf](https://github.com/ruy-ggarcia/meals/commit/1e622bf3b6b8935ffc264292bf110928be27d1b3))
 * **server:** measure recipe ingredients in a measure ([a070b37](https://github.com/ruy-ggarcia/meals/commit/a070b371f191337526016c2ecf7eeb342fa51911))
@@ -46,7 +42,6 @@
 ### Bug Fixes
 
 * **deps:** bump express ([00e0ac0](https://github.com/ruy-ggarcia/meals/commit/00e0ac01f3b5cab24b3cf1bd51c25313cafff324))
-* **deps:** bump express from 5.2.1 to 5.3.0 in the npm-production group across 1 directory ([55bb0aa](https://github.com/ruy-ggarcia/meals/commit/55bb0aa54041abcac98445913078cc76bdf57809))
 * **ui:** clear row errors as you type and keep focus on Done ([45f24df](https://github.com/ruy-ggarcia/meals/commit/45f24df0bf03ae6f6a49d5ef705dc44323acf4f0))
 * **ui:** load the latest recipes and ingredients before editing ([056cf24](https://github.com/ruy-ggarcia/meals/commit/056cf24401a736289f58bef2879e4545147c0e17))
 * **ui:** wrap long amounts in the shopping list ([1d2b6ff](https://github.com/ruy-ggarcia/meals/commit/1d2b6ff394b52b54407ad63b4ad795e19468c70e))
