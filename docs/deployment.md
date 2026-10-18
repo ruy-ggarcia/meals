@@ -51,12 +51,13 @@ To set up GitHub, do the following once, before the first release:
 
    Replace `CLIENT_ID` with the client ID and `PEM_FILE` with the path of the
    `.pem` file. Then delete the `.pem` file.
-1. Require the `image` check before a pull request can merge into `main`:
+1. Require the `conventional` and `image` checks before a pull request can
+   merge into `main`:
 
    ```bash
    gh api --method POST \
      repos/ruy-ggarcia/meals/branches/main/protection/required_status_checks/contexts \
-     -f 'contexts[]=image'
+     -f 'contexts[]=conventional' -f 'contexts[]=image'
    ```
 
 After the first release, make the image public, so the host can pull it
