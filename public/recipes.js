@@ -30,8 +30,17 @@ const list = createCatalogList({
   },
   noun: "recipe",
   url: (id) => `/api/recipes/${encodeURIComponent(id)}`,
+  // The names of its ingredients, or a warning that it has none.
   details: (recipe) =>
-    recipe.ingredients.length === 0 ? [createWarningIcon("No ingredients")] : [],
+    recipe.ingredients.length === 0
+      ? [createWarningIcon(), "No ingredients · not in shopping list"]
+      : [
+          recipe.ingredients
+            .map(({ ingredientId }) => ingredients.find(({ id }) => id === ingredientId)?.name)
+            .filter(Boolean)
+            .join(", "),
+        ],
+  onChange: (recipes) => showCounts({ recipes }),
   // The editor gets the catalog from the reload, with the current units.
   reload: load,
   open: (recipe, focus) => editor.open({ recipe, ingredients, ...focus }),
@@ -51,7 +60,7 @@ function load() {
         getJson("/api/ingredients"),
       ]);
       ingredients = catalog.ingredients;
-      showCounts({ recipes: recipeBook.recipes, ingredients });
+      showCounts({ ingredients });
       list.setEntries(recipeBook.recipes);
     },
   });

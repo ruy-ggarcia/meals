@@ -651,3 +651,102 @@ test("a measure choice survives the re-render after an invalid quantity", () => 
   assert.equal(document.querySelectorAll(".row-message").length, 1);
   assert.equal(measureFields()[0].value, "large");
 });
+
+test("Archive shows only for a recipe that exists and isn't archived", () => {
+  openEditor();
+  assert.equal(query(".archive").hidden, true);
+  query(".cancel").click();
+
+  openEditor({ recipe: { ...SOUP, archived: true } });
+  assert.equal(query(".archive").hidden, true);
+  query(".cancel").click();
+
+  openEditor({ recipe: SOUP });
+  assert.equal(query(".archive").hidden, false);
+});
+
+test("Archive without changes sends only archived: true, then closes with the archived recipe", async () => {
+  const { saved } = openEditor({ recipe: SOUP });
+
+  query(".archive").click();
+  assert.equal(query(".archive").disabled, true);
+  await respondTo("PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+
+  assert.equal(document.querySelector('[role="alertdialog"]'), null);
+  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
+  assert.equal(dialog.open, false);
+  assert.deepEqual(saved, [{ ...SOUP, archived: true }]);
+});
+
+// Changes the name, chooses Archive, and returns the alert that asks first.
+async function archiveWithChanges() {
+  openEditor({ recipe: SOUP });
+  setValue(nameField(), "Changed, but not saved");
+  query(".archive").click();
+  await tick();
+  return document.querySelector('[role="alertdialog"]');
+}
+
+test("Archive with changes asks first, with Keep Editing focused", async () => {
+  const alert = await archiveWithChanges();
+
+  assert.equal(alert.open, true);
+  assert.equal(alert.querySelector(".alert-title").textContent, "Archive without saving?");
+  assert.equal(
+    alert.querySelector(".alert-message").textContent,
+    "Your changes aren't saved. If you archive now, they're lost.",
+  );
+  assert.equal(alert.getAttribute("aria-labelledby"), alert.querySelector(".alert-title").id);
+  assert.equal(alert.getAttribute("aria-describedby"), alert.querySelector(".alert-message").id);
+  assertFocus(document, alert.querySelector(".keep"));
+  assert.equal(alert.querySelector(".keep").textContent, "Keep Editing");
+  assert.equal(alert.querySelector(".lose").textContent, "Archive Without Saving");
+  alert.querySelector(".keep").click();
+  await tick();
+});
+
+test("Keep Editing keeps the editor and its changes, and sends nothing", async () => {
+  const alert = await archiveWithChanges();
+
+  alert.querySelector(".keep").click();
+  await tick();
+
+  assert.equal(document.querySelector('[role="alertdialog"]'), null);
+  assert.equal(dialog.open, true);
+  assert.equal(nameField().value, "Changed, but not saved");
+  assert.equal(server.requests.length, 0);
+  assertFocus(document, query(".archive"));
+});
+
+test("Escape in the alert keeps the editor, the same as Keep Editing", async () => {
+  const alert = await archiveWithChanges();
+
+  alert.close(); // what Escape and Android's Back do to a modal dialog
+  await tick();
+
+  assert.equal(dialog.open, true);
+  assert.equal(server.requests.length, 0);
+});
+
+test("Archive Without Saving archives the recipe without the changes", async () => {
+  const alert = await archiveWithChanges();
+
+  alert.querySelector(".lose").click();
+  await respondTo("PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+
+  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
+  assert.equal(dialog.open, false);
+});
+
+test("a failed archive keeps the editor open and says so", async () => {
+  openEditor({ recipe: SOUP });
+
+  query(".archive").click();
+  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+  server.requestFor("PATCH", "/api/recipes/soup").fail();
+  await tick();
+
+  assert.equal(dialog.open, true);
+  assert.equal(query(".save-message").textContent, "Couldn't archive the recipe. Try again.");
+  assert.equal(query(".archive").disabled, false);
+});

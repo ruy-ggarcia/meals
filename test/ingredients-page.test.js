@@ -87,7 +87,7 @@ function pointerdownOn(element) {
 function activeRows() {
   return [...document.querySelectorAll("#active-ingredients .catalog-row")].map((row) => [
     row.querySelector(".entry-name").textContent,
-    row.querySelector(".entry-unit").textContent,
+    row.querySelector(".entry-detail").textContent,
   ]);
 }
 
@@ -250,14 +250,21 @@ test("Edit keeps Unit enabled for an ingredient that recipes use", async () => {
   assert.equal(document.getElementById("ingredient-unit").disabled, false);
 });
 
-test("Archive moves an ingredient to Archived", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("Archive in the editor moves an ingredient to Archived, and updates the counts", async () => {
+  await openIngredientsPage([ingredient("1", "Onion"), ingredient("2", "Salt")]);
+  const counts = () =>
+    [...document.querySelectorAll('[data-count="ingredients"]')].map((count) => count.textContent);
+  assert.deepEqual(counts(), ["2", "2"]);
 
-  buttonLabeled("Archive Onion").click();
+  await clickAndReload(buttonLabeled("Edit Onion"));
+  editorDialog().querySelector(".archive").click();
   await respondTo("PATCH", "/api/ingredients/1", 200, ingredient("1", "Onion", "g", true));
 
-  assert.deepEqual(activeNames(), []);
+  assert.deepEqual(server.requestFor("PATCH", "/api/ingredients/1").body, { archived: true });
+  assert.deepEqual(activeNames(), ["Salt"]);
   assert.deepEqual(archivedNames(), ["Onion"]);
+  assert.deepEqual(counts(), ["1", "1"]);
+  assertFocus(document, buttonLabeled("Edit Salt"));
 });
 
 test("the empty catalog and a search with no matches show their messages", async () => {

@@ -21,6 +21,7 @@ export function createButton(text, label, className) {
 
 // Line icons, drawn with currentColor.
 const ICONS = {
+  chevron: '<path d="M9 5l7 7-7 7"/>',
   minus: '<path d="M5 12h14"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
 };

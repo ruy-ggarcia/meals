@@ -56,10 +56,15 @@
       <button type="button" class="show-sidebar glass icon-button" aria-label="Show sidebar">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="14" rx="3.5"/><path d="M9.5 5v14"/></svg>
       </button>
+      <span class="toolbar-spacer"></span>
+      <button type="button" id="new-recipe" class="tint-button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="button-text">New recipe</span>
+      </button>
     </header>
 
     <div class="page">
-      <h1 class="page-title">Recipes</h1>
+      <h1 class="page-title">Recipes <span class="title-count" data-count="recipes"></span></h1>
 
       <div id="load-error" class="load-error" role="alert" hidden>
         <span>Couldn't load the recipes.</span>
@@ -67,17 +72,21 @@
       </div>
 
       <main id="recipe-book" class="catalog" hidden>
-        <button type="button" id="new-recipe" class="primary new-entry-button">New recipe</button>
-
-        <label for="search">Search</label>
-        <input id="search" type="search" autocomplete="off">
+        <div class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+          <label class="visually-hidden" for="search">Search</label>
+          <input id="search" type="search" autocomplete="off" placeholder="Search">
+        </div>
 
         <p id="empty-book" class="hint" hidden>No recipes yet. Add your first one with New recipe.</p>
         <p id="no-matches" class="hint" hidden></p>
         <ul id="active-recipes" class="catalog-list" aria-label="Recipes"></ul>
 
         <details id="archived" class="archived" hidden>
-          <summary>Archived (<span id="archived-count">0</span>)</summary>
+          <summary>
+            Archived <span id="archived-count" class="archived-count">0</span>
+            <svg class="disclosure" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>
+          </summary>
           <ul id="archived-recipes" class="catalog-list" aria-label="Archived recipes"></ul>
         </details>
       </main>
@@ -125,6 +134,7 @@
           <ul id="ingredient-options" class="options" role="listbox" aria-label="Ingredients" hidden></ul>
           <p class="no-match" hidden>No active ingredients match. Add them on the Ingredients page.</p>
           <p class="field-message save-message" role="status"></p>
+          <button type="button" class="archive" hidden>Archive</button>
         </div>
       </div>
     </dialog>

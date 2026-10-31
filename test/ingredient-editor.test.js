@@ -978,3 +978,45 @@ test("Unit is disabled while the save is pending, and the conversion row stays a
   assert.equal(query(".conversion-from").disabled, false);
   assert.equal(query(".conversion-to").disabled, false);
 });
+
+test("Archive shows only for an ingredient that exists and isn't archived", () => {
+  openNewEditor();
+  assert.equal(query(".archive").hidden, true);
+  query(".cancel").click();
+
+  openEditor({ ingredient: { ...MILK, archived: true } });
+  assert.equal(query(".archive").hidden, true);
+  query(".cancel").click();
+
+  openEditor();
+  assert.equal(query(".archive").hidden, false);
+});
+
+test("Archive with changes asks first, and Archive Without Saving sends only archived: true", async () => {
+  const { saved } = openEditor();
+  setName("Changed, but not saved");
+
+  query(".archive").click();
+  await tick();
+  const alert = document.querySelector('[role="alertdialog"]');
+  assert.equal(alert.querySelector(".alert-title").textContent, "Archive without saving?");
+  assert.equal(server.requests.length, 0);
+  alert.querySelector(".lose").click();
+  await respondToPatch(200, { ...MILK, archived: true });
+
+  assert.deepEqual(server.requestFor("PATCH", "/api/ingredients/milk").body, { archived: true });
+  assert.equal(dialog.open, false);
+  assert.deepEqual(saved, [{ ...MILK, archived: true }]);
+});
+
+test("a failed archive keeps the editor open and says so", async () => {
+  openEditor();
+
+  query(".archive").click();
+  await waitFor(() => server.requestFor("PATCH", "/api/ingredients/milk") !== undefined);
+  server.requestFor("PATCH", "/api/ingredients/milk").fail();
+  await tick();
+
+  assert.equal(dialog.open, true);
+  assert.equal(query(".save-message").textContent, "Couldn't archive the ingredient. Try again.");
+});

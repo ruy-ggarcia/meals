@@ -203,14 +203,16 @@ test("archived recipes have Edit and Restore", async () => {
   assert.equal(buttonLabeled("Archive Café"), null);
 });
 
-test("a recipe without ingredients shows a warning icon, and one with ingredients doesn't", async () => {
+test("each row shows the recipe's ingredients, or a warning when it has none", async () => {
   await openRecipesPage([recipe("1", "Coffee"), recipe("2", "Soup", false, WITH_ONION)]);
 
-  const icon = rowById("1").querySelector(".warning-icon");
-  assert.equal(icon.getAttribute("role"), "img");
-  assert.equal(icon.getAttribute("aria-label"), "No ingredients");
-  assert.equal(icon.title, "No ingredients");
-  assert.equal(rowById("2").querySelector(".warning-icon"), null);
+  const detail = (id) => rowById(id).querySelector(".entry-detail");
+  assert.equal(detail("1").textContent.trim(), "No ingredients · not in shopping list");
+  assert.ok(detail("1").querySelector(".warning-icon"));
+  assert.equal(detail("2").textContent, "Onion");
+  assert.equal(detail("2").querySelector(".warning-icon"), null);
+  // A screen reader reads the detail after the row's name.
+  assert.equal(buttonLabeled("Edit Coffee").getAttribute("aria-describedby"), detail("1").id);
 });
 
 test("saving ingredients for a recipe removes its warning icon", async () => {
@@ -243,33 +245,66 @@ test("beforeunload prevents leaving only while the editor has changes", async ()
   assert.equal(dispatchBeforeUnload().defaultPrevented, false);
 });
 
-test("Archive and Restore move a recipe between the lists", async () => {
-  await openRecipesPage([recipe("1", "Omelette"), recipe("2", "Café", true)]);
+// Opens the editor on the recipe named `name`, chooses Archive, and answers
+// the request with the recipe, archived.
+async function archiveWithEditor(id, name) {
+  await clickAndReload(buttonLabeled(`Edit ${name}`));
+  editorDialog().querySelector(".archive").click();
+  await respondTo("PATCH", `/api/recipes/${id}`, 200, recipe(id, name, true));
+}
 
-  buttonLabeled("Archive Omelette").click();
-  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Omelette", true));
-  assert.deepEqual(activeNames(), []);
+test("Archive in the editor moves a recipe to Archived, and focus to the row in its place", async () => {
+  await openRecipesPage([
+    recipe("1", "Omelette"),
+    recipe("2", "Pancakes"),
+    recipe("3", "Café", true),
+  ]);
+
+  await archiveWithEditor("1", "Omelette");
+
+  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/1").body, { archived: true });
+  assert.equal(editorDialog().open, false);
+  assert.deepEqual(activeNames(), ["Pancakes"]);
   assert.deepEqual(archivedNames(), ["Café", "Omelette"]);
+  assertFocus(document, buttonLabeled("Edit Pancakes"));
+});
+
+test("Restore moves a recipe back to the active list, and focus to the row in its place", async () => {
+  await openRecipesPage([recipe("1", "Omelette", true), recipe("2", "Café", true)]);
 
   buttonLabeled("Restore Café").click();
   await respondTo("PATCH", "/api/recipes/2", 200, recipe("2", "Café", false));
+
+  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/2").body, { archived: false });
   assert.deepEqual(activeNames(), ["Café"]);
   assert.deepEqual(archivedNames(), ["Omelette"]);
+  assertFocus(document, buttonLabeled("Restore Omelette"));
 });
 
-test("a failed archive shows its message and leaves the recipe in place", async () => {
-  await openRecipesPage([recipe("1", "Omelette")]);
+test("a failed restore shows its message and leaves the recipe in Archived", async () => {
+  await openRecipesPage([recipe("1", "Omelette", true)]);
 
-  buttonLabeled("Archive Omelette").click();
+  buttonLabeled("Restore Omelette").click();
   await waitFor(() => server.requestFor("PATCH", "/api/recipes/1") !== undefined);
   server.requestFor("PATCH", "/api/recipes/1").fail();
   await tick();
 
   assert.equal(
     rowById("1").querySelector(".row-message").textContent,
-    "Couldn't archive the recipe. Try again.",
+    "Couldn't restore the recipe. Try again.",
   );
-  assert.deepEqual(activeNames(), ["Omelette"]);
+  assert.deepEqual(archivedNames(), ["Omelette"]);
+});
+
+test("the title and the sidebar count the active recipes, also after an archive", async () => {
+  await openRecipesPage([recipe("1", "Omelette"), recipe("2", "Soup"), recipe("3", "Café", true)]);
+  const counts = () =>
+    [...document.querySelectorAll('[data-count="recipes"]')].map((count) => count.textContent);
+  assert.deepEqual(counts(), ["2", "2"]);
+
+  await archiveWithEditor("1", "Omelette");
+
+  assert.deepEqual(counts(), ["1", "1"]);
 });
 
 test("shows the empty-book message when there are no recipes", async () => {
@@ -317,8 +352,7 @@ test("the Archived count reflects the archived recipes", async () => {
   assert.equal(document.getElementById("archived").hidden, false);
   assert.equal(document.getElementById("archived-count").textContent, "1");
 
-  buttonLabeled("Archive Omelette").click();
-  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Omelette", true));
+  await archiveWithEditor("1", "Omelette");
 
   assert.equal(document.getElementById("archived-count").textContent, "2");
 });

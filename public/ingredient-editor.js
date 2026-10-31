@@ -7,7 +7,7 @@
 // - Clicking the backdrop closes the editor only when nothing changed.
 
 import { createElement, createIconButton } from "./dom.js";
-import { createEditorDialog } from "./editor-dialog.js";
+import { createEditorDialog, sendArchive } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
 import { cleanName, nameKey } from "./name-search.js";
@@ -84,6 +84,11 @@ export function createIngredientEditor(dialog) {
     dialog,
     hasChanges,
     onDone: save,
+    onArchive: () => {
+      saveMessage.textContent = "";
+      const url = `/api/ingredients/${encodeURIComponent(session.ingredient.id)}`;
+      lifecycle.submit(() => sendArchive(url, "ingredient", saveMessage));
+    },
     // The dialog disables the radio buttons one by one. Their group follows.
     onBusy: (busy) => {
       unitField.disabled = busy;
@@ -261,7 +266,12 @@ export function createIngredientEditor(dialog) {
     renderRows();
     // The title of an existing ingredient, not a field: on a phone, focusing a
     // field opens the keyboard.
-    lifecycle.open({ focus: ingredient ? title : nameField, restoreFocus, onSaved });
+    lifecycle.open({
+      focus: ingredient ? title : nameField,
+      restoreFocus,
+      onSaved,
+      canArchive: ingredient?.archived === false,
+    });
   }
 
   /** True when the fields differ from the ingredient. */

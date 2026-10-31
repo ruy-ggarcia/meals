@@ -8,7 +8,7 @@
 
 import { createCombobox } from "./combobox.js";
 import { createElement, createIconButton } from "./dom.js";
-import { createEditorDialog } from "./editor-dialog.js";
+import { createEditorDialog, sendArchive } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
 import { filterByName, sortByName } from "./name-search.js";
@@ -50,6 +50,11 @@ export function createRecipeEditor(dialog) {
     dialog,
     hasChanges,
     onDone: save,
+    onArchive: () => {
+      saveMessage.textContent = "";
+      const url = `/api/recipes/${encodeURIComponent(session.recipe.id)}`;
+      lifecycle.submit(() => sendArchive(url, "recipe", saveMessage));
+    },
     onBusy: (busy) => {
       search.disabled = busy || isFull();
     },
@@ -96,7 +101,12 @@ export function createRecipeEditor(dialog) {
     combobox.reset();
     // A new recipe starts with its name. An existing one starts on the
     // title: on a phone, focusing a field opens the keyboard.
-    lifecycle.open({ focus: recipe ? title : nameField, restoreFocus, onSaved });
+    lifecycle.open({
+      focus: recipe ? title : nameField,
+      restoreFocus,
+      onSaved,
+      canArchive: recipe?.archived === false,
+    });
   }
 
   /** True when the fields differ from what the editor opened with. */

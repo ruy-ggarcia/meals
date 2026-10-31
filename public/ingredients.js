@@ -4,7 +4,7 @@
 // leaving a field never discards changes.
 
 import { createCatalogList } from "./catalog-list.js";
-import { createElement, withLoadState } from "./dom.js";
+import { withLoadState } from "./dom.js";
 import { getJson } from "./http.js";
 import { createIngredientEditor } from "./ingredient-editor.js";
 import { setUpShell, showCounts } from "./shell.js";
@@ -39,15 +39,13 @@ const list = createCatalogList({
   },
   noun: "ingredient",
   url: ingredientUrl,
+  // Its unit, then the names of its measures.
   details: (ingredient) => [
-    createElement(
-      "span",
-      "entry-unit",
-      ingredient.measures.length === 0
-        ? ingredient.unit
-        : `${ingredient.unit} · ${ingredient.measures.map((measure) => measure.name).join(", ")}`,
-    ),
+    ingredient.measures.length === 0
+      ? ingredient.unit
+      : `${ingredient.unit} · ${ingredient.measures.map((measure) => measure.name).join(", ")}`,
   ],
+  onChange: (entries) => showCounts({ ingredients: entries }),
   // The editor shows the current usage, from the reload.
   reload: load,
   open: (ingredient, focus) =>
@@ -89,7 +87,7 @@ function load() {
         getJson("/api/recipes"),
       ]);
       usage = countUsage(recipeBook.recipes);
-      showCounts({ recipes: recipeBook.recipes, ingredients: ingredientCatalog.ingredients });
+      showCounts({ recipes: recipeBook.recipes });
       list.setEntries(ingredientCatalog.ingredients);
     },
   });

@@ -861,14 +861,16 @@ svg {
   font-size: 17px;
 }
 
-.alert .stay {
+.alert .stay,
+.alert .keep {
   background: var(--tint-fill);
   box-shadow: var(--tint-ring);
   color: #fff;
   font-weight: 600;
 }
 
-.alert .leave {
+.alert .leave,
+.alert .lose {
   background: var(--fill);
   color: var(--red);
   font-weight: 500;
@@ -1453,10 +1455,28 @@ svg {
   padding: 8px 12px 8px 0;
 }
 
-.menu-item + .menu-item,
-.ingredient-row + .ingredient-row,
-.ingredient-rows:not(:empty) + .add-measure {
-  background: linear-gradient(var(--sep), var(--sep)) 48px 0 / calc(100% - 48px) 0.5px no-repeat;
+.menu-item,
+.ingredient-row,
+.add-measure,
+.catalog-row {
+  position: relative;
+}
+
+/* A border, unlike a background, never rounds a hairline away. */
+.menu-item + .menu-item::before,
+.ingredient-row + .ingredient-row::before,
+.ingredient-rows:not(:empty) + .add-measure::before,
+.catalog-row + .catalog-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 48px;
+  border-top: 0.5px solid var(--sep);
+}
+
+.catalog-row + .catalog-row::before {
+  left: 16px;
 }
 
 .remove {
@@ -1957,31 +1977,36 @@ select.measure-field {
 
 /* ---------- Recipe book and ingredient catalog ---------- */
 
+.toolbar-spacer {
+  flex: 1;
+}
+
+.title-count {
+  margin-left: 4px;
+  color: var(--label2);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
 .catalog {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   margin-top: 14px;
 }
 
-.catalog label {
-  padding: 0 6px;
-  font-weight: 600;
+.catalog .search-field {
+  margin-bottom: 18px;
 }
 
-.catalog input {
-  width: 100%;
-  min-width: 0;
-  height: 44px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--fill);
-  font-size: 17px;
-}
-
-.new-entry-button {
-  align-self: flex-start;
+.catalog .hint {
+  margin: 0 0 10px;
+  padding: 18px 16px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  color: var(--label2);
 }
 
 .catalog-list {
@@ -2000,23 +2025,26 @@ select.measure-field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  margin-left: 16px;
-  padding: 8px 8px 8px 0;
-  box-shadow: inset 0 -0.5px 0 var(--sep);
 }
 
-.catalog-row:last-child {
-  box-shadow: none;
-}
-
+/* A row: a button that opens the editor, with the name, its details, and a
+   chevron. */
 .entry {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+  min-height: 50px;
+  margin: 0;
+  padding: 8px 14px 8px 16px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.entry:hover {
+  background: var(--fill);
 }
 
 .entry-name {
@@ -2026,34 +2054,129 @@ select.measure-field {
   overflow-wrap: anywhere;
 }
 
-.entry-unit {
+.entry-detail {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--label2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  display: flex;
+  flex: none;
+  color: var(--label3);
+}
+
+.chevron svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.6;
+}
+
+/* Recipes show their ingredients under the name. */
+#recipe-book .entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  min-height: 58px;
+  padding-block: 10px;
+}
+
+#recipe-book .entry-detail {
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: none;
+  font-size: 13px;
+}
+
+#recipe-book .chevron {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+#recipe-book .entry-detail:has(.warning-icon) {
+  color: var(--warn);
+  font-weight: 500;
+}
+
+.entry-detail .warning-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+#archived-recipes .entry-name,
+#archived-ingredients .entry-name {
   color: var(--label2);
 }
 
-.row-actions {
-  display: flex;
-  gap: 8px;
+.restore {
+  flex: none;
+  height: 36px;
+  margin: 0 8px 0 0;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--tint-soft);
+  color: var(--tint);
+  font-weight: 600;
 }
 
-.row-actions {
-  display: flex;
-  gap: 8px;
+.restore:disabled {
+  opacity: 0.4;
 }
 
-.warning-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-  color: var(--warn-icon);
-}
-
-.warning-icon svg {
-  width: 1.1em;
-  height: 1.1em;
-  stroke-width: 2.2;
+.catalog-row .row-message {
+  padding: 0 16px 10px;
 }
 
 .archived summary {
-  padding: 14px 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 6px 8px;
   font-weight: 600;
+  list-style: none;
   cursor: pointer;
+}
+
+.archived summary::-webkit-details-marker {
+  display: none;
+}
+
+.archived-count {
+  color: var(--label2);
+  font-weight: 500;
+}
+
+.archived .disclosure {
+  width: 12px;
+  height: 12px;
+  color: var(--label2);
+  stroke-width: 3;
+  transition: transform 0.2s;
+}
+
+.archived[open] .disclosure {
+  transform: rotate(90deg);
+}
+
+/* Archive, at the end of an editor. */
+.archive {
+  width: 100%;
+  height: 52px;
+  margin: 24px 0 0;
+  border: 0;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  color: var(--red);
+  font-size: 17px;
+}
+
+.archive:disabled {
+  opacity: 0.4;
 }
