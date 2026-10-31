@@ -6,6 +6,8 @@
 import { askBeforeLosing } from "./alert.js";
 import { onBackdropClick } from "./dom.js";
 import { sendJson } from "./http.js";
+import { conflictText } from "./messages.js";
+import { cleanName, nameKey } from "./name-search.js";
 
 /**
  * Sends the request that archives the entry at `url`, a "recipe" or an
@@ -37,12 +39,17 @@ export async function sendArchive(url, noun, message) {
  * set its other controls. `confirms(target)` is true for the fields besides
  * Name where Enter means Done.
  *
- * Returns { close, isBusy, isOpen, open, submit }:
- * - open({ focus, restoreFocus, onSaved, canArchive }) shows the dialog and
- *   focuses `focus`, with Archive only when `canArchive` is true. After a
- *   save, `onSaved` gets the saved entry and moves focus. After any other
- *   close, `restoreFocus` returns focus to the control that opened the
- *   editor.
+ * As you type in Name, the message under it says when another entry has the
+ * name, the same as the server would.
+ *
+ * Returns { close, isBusy, isOpen, nameProblem, open, submit }:
+ * - open({ focus, restoreFocus, onSaved, canArchive, others }) shows the
+ *   dialog and focuses `focus`, with Archive only when `canArchive` is true.
+ *   `others` are the entries that Name is checked against, active and
+ *   archived, without the entry being edited. After a save, `onSaved` gets
+ *   the saved entry and moves focus. After any other close, `restoreFocus`
+ *   returns focus to the control that opened the editor.
+ * - nameProblem() is what's wrong with the name, or "" when nothing is.
  * - submit(send) runs `send()`, which returns the saved entry, or undefined
  *   after showing why the save failed. The editor closes only after a save.
  * - close() closes the editor without a save.
@@ -61,11 +68,11 @@ export function createEditorDialog({
   const doneButton = dialog.querySelector(".done");
   const archiveButton = dialog.querySelector(".archive");
 
-  /** The open session, or null: { restoreFocus, onSaved, busy }. */
+  /** The open session, or null: { restoreFocus, onSaved, others, busy }. */
   let session = null;
 
-  function open({ focus, restoreFocus, onSaved, canArchive }) {
-    session = { restoreFocus, onSaved, busy: false };
+  function open({ focus, restoreFocus, onSaved, canArchive, others = [] }) {
+    session = { restoreFocus, onSaved, others, busy: false };
     archiveButton.hidden = !canArchive;
     setBusy(false);
     dialog.showModal();
@@ -74,6 +81,19 @@ export function createEditorDialog({
 
   function isOpen() {
     return session !== null;
+  }
+
+  // What the server would answer if another entry has the name, or "".
+  function nameClash() {
+    const key = nameKey(cleanName(nameField.value));
+    const holder = session.others.find((other) => nameKey(other.name) === key);
+    if (!holder) return "";
+    const text = conflictText(holder);
+    return holder.archived ? `${text} To use it, restore it from Archived.` : text;
+  }
+
+  function nameProblem() {
+    return cleanName(nameField.value) === "" ? "The name can't be empty." : nameClash();
   }
 
   function isBusy() {
@@ -155,5 +175,11 @@ export function createEditorDialog({
     }
   });
 
-  return { close, isBusy, isOpen, open, submit };
+  // The message under Name follows the name as you type. An empty name says
+  // nothing until Done.
+  nameField.addEventListener("input", () => {
+    nameMessage.textContent = nameClash();
+  });
+
+  return { close, isBusy, isOpen, nameProblem, open, submit };
 }

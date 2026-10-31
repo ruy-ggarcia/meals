@@ -43,7 +43,7 @@ const list = createCatalogList({
   onChange: (recipes) => showCounts({ recipes }),
   // The editor gets the catalog from the reload, with the current units.
   reload: load,
-  open: (recipe, focus) => editor.open({ recipe, ingredients, ...focus }),
+  open: (recipe, options) => editor.open({ recipe, ingredients, ...options }),
 });
 
 // Loads the recipes and the catalog, and shows them. Resolves to true when

@@ -1,5 +1,7 @@
 // DOM helpers shared by the pages.
 
+import { parseQuantity } from "./quantities.js";
+
 /**
  * A new element with an optional class and text. The text is set with
  * textContent, so recipe names never run as HTML.
@@ -17,6 +19,18 @@ export function createButton(text, label, className) {
   button.type = "button";
   button.setAttribute("aria-label", label);
   return button;
+}
+
+/**
+ * Marks `field` as invalid while it holds text that isn't a quantity or an
+ * amount. An empty field isn't marked: Done says that it needs a number.
+ */
+export function markQuantity(field) {
+  if (field.value.trim() !== "" && parseQuantity(field.value) === null) {
+    field.setAttribute("aria-invalid", "true");
+  } else {
+    field.removeAttribute("aria-invalid");
+  }
 }
 
 // Line icons, drawn with currentColor.

@@ -33,13 +33,14 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-function openEditor({ ingredient = MILK, usage = noUsage() } = {}) {
+function openEditor({ ingredient = MILK, usage = noUsage(), others = [] } = {}) {
   const opener = document.createElement("button");
   document.body.append(opener);
   const saved = [];
   editor.open({
     ingredient,
     usage,
+    others,
     restoreFocus: () => opener.focus(),
     onSaved: (entry) => saved.push(entry),
   });
@@ -1019,4 +1020,35 @@ test("a failed archive keeps the editor open and says so", async () => {
 
   assert.equal(dialog.open, true);
   assert.equal(query(".save-message").textContent, "Couldn't archive the ingredient. Try again.");
+});
+
+test("a measure amount that isn't valid is marked as you type, and Done stays enabled", () => {
+  openEditor({ ingredient: SIZED_MILK });
+  const amount = measureRows()[0].querySelector(".measure-amount");
+
+  setField(amount, "0");
+  assert.equal(amount.getAttribute("aria-invalid"), "true");
+  assert.equal(measureRows()[0].querySelector(".row-message"), null);
+  assert.equal(query(".done").disabled, false);
+
+  setField(amount, "160");
+  assert.equal(amount.hasAttribute("aria-invalid"), false);
+});
+
+test("a name that another ingredient has shows its message as you type, and Done sends nothing", () => {
+  openEditor({
+    others: [
+      { id: "flour", name: "Flour", archived: false },
+      { id: "milk", name: "Milk", archived: false }, // the ingredient being edited
+    ],
+  });
+
+  setName("flour");
+  assert.equal(query(".name-message").textContent, '"Flour" already exists.');
+  query(".done").click();
+  assert.equal(server.requests.length, 0);
+  assertFocus(document, query(".name-field"));
+
+  setName("Milk");
+  assert.equal(query(".name-message").textContent, "");
 });

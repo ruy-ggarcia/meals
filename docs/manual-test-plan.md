@@ -222,6 +222,7 @@ Run these tests on desktop unless a test says otherwise.
 | 8.18 | On mobile, open the recipe book from the tab bar, and tap `+` in the toolbar. | The editor rises from the bottom and fills the screen, the keyboard opens for **Name**, and the page doesn't zoom or scroll sideways. |
 | 8.19 | On mobile, add an ingredient to the recipe, and tap its quantity field. | The keyboard offers digits and a decimal separator. `0,25` is accepted when you tap **Done**. |
 | 8.20 | On desktop, open `Tortilla`, change its name, and click **Archive**. Click **Keep Editing**. Then click **Archive** again, and click **Archive Without Saving**. | An alert titled `Archive without saving?` appears over the editor, with focus on **Keep Editing**. **Keep Editing** closes the alert and keeps the new name in the editor. **Archive Without Saving** archives `Tortilla` with its old name. Click **Restore** under **Archived**. |
+| 8.21 | Click **New recipe**, and type `russian SALAD` in **Name**. Add `Egg`, and type `abc` as its quantity. Click **Done**. Click **Cancel**. | `"Russian salad" already exists.` appears under **Name** as you type, before **Done**. The quantity gets a red outline as you type, and **Done** stays enabled. **Done** keeps the editor open, with the message under **Name** and the quantity message under its row. |
 
 ## 9. Ingredients
 

@@ -48,11 +48,11 @@ const list = createCatalogList({
   onChange: (entries) => showCounts({ ingredients: entries }),
   // The editor shows the current usage, from the reload.
   reload: load,
-  open: (ingredient, focus) =>
+  open: (ingredient, options) =>
     editor.open({
       ingredient,
       usage: (ingredient && usage.get(ingredient.id)) ?? unused(),
-      ...focus,
+      ...options,
     }),
 });
 

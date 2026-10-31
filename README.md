@@ -212,8 +212,9 @@ in one of its measures. Names are unique, ignoring case and accents, so
 
 - To add a recipe, click **New recipe** in the toolbar. To change a recipe,
   click its row. Both open the recipe editor:
-  - Type the name in **Name**. If an archived recipe has the name, restore
-    it from **Archived** instead.
+  - Type the name in **Name**. As you type, a message says when another
+    recipe has the name. If an archived recipe has it, restore that recipe
+    from **Archived** instead.
   - To add an ingredient, click it in the list under **Add ingredient**. To
     narrow the list, type part of the ingredient's name, and then click the
     ingredient or select it with the arrow keys and press `Enter`. A recipe
@@ -221,7 +222,8 @@ in one of its measures. Names are unique, ignoring case and accents, so
     that aren't in the recipe. To add ingredients to the catalog, use the
     **Ingredients** page.
   - Type each quantity from `0.01` to `10000` with at most two decimals,
-    such as `0.25`. You can type `.` or `,` as the decimal separator.
+    such as `0.25`. You can type `.` or `,` as the decimal separator. A
+    quantity that isn't valid gets a red outline as you type.
   - To use a measure of the ingredient instead of its unit, choose the
     measure in the list after the quantity, such as `medium (150 g)`. The
     list starts on the unit. An ingredient without measures shows only its
@@ -258,13 +260,15 @@ differently.
 
 - To add an ingredient, click **New ingredient** in the toolbar. To change
   an ingredient, click its row. Both open the ingredient editor:
-  - Type the name in **Name**. If an archived ingredient has the name,
-    restore it from **Archived** instead.
+  - Type the name in **Name**. As you type, a message says when another
+    ingredient has the name. If an archived ingredient has it, restore
+    that ingredient from **Archived** instead.
   - Choose the unit in **Unit**: `g`, `ml`, or `pcs`. To change the unit of
     an existing ingredient, see
     [Change the unit of an ingredient](#change-the-unit-of-an-ingredient).
   - To add a measure, click **Add measure**, and type its name and its
     amount in the unit. You can type `.` or `,` as the decimal separator.
+    An amount that isn't valid gets a red outline as you type.
   - To rename a measure or change its amount, edit its row. The recipes that
     use the measure follow the change.
   - To remove a measure, click the red button before its name. While a

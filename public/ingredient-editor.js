@@ -6,7 +6,7 @@
 // - Cancel, Escape, and Android's Back discard the changes.
 // - Clicking the backdrop closes the editor only when nothing changed.
 
-import { createElement, createIconButton } from "./dom.js";
+import { createElement, createIconButton, markQuantity } from "./dom.js";
 import { createEditorDialog, sendArchive } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
@@ -162,6 +162,8 @@ export function createIngredientEditor(dialog) {
     if (needsConversion()) {
       nameInput.readOnly = true;
       amountInput.readOnly = true;
+    } else {
+      markQuantity(amountInput);
     }
     amountInput.setAttribute("autocomplete", "off");
     amountInput.setAttribute("inputmode", "decimal");
@@ -179,9 +181,11 @@ export function createIngredientEditor(dialog) {
       amountInput.setAttribute("aria-label", amountLabel(row));
       clearMessage("name", nameInput);
     });
+    // As you type, the amount shows whether it's valid.
     amountInput.addEventListener("input", () => {
       row.amountText = amountInput.value;
       clearMessage("amount", amountInput);
+      markQuantity(amountInput);
     });
     const remove = createIconButton("minus", `Remove ${row.name}`, "remove");
     remove.addEventListener("click", () => removeRow(index));
@@ -253,7 +257,7 @@ export function createIngredientEditor(dialog) {
     conversionMeasure.hidden = !(needed && session.usage.inUnit);
   }
 
-  function open({ ingredient, usage, restoreFocus, onSaved }) {
+  function open({ ingredient, usage, others = [], restoreFocus, onSaved }) {
     session = { ingredient, usage, rows: rowsOf(ingredient) };
     title.textContent = ingredient ? "Edit ingredient" : "New ingredient";
     nameField.value = ingredient?.name ?? "";
@@ -271,6 +275,7 @@ export function createIngredientEditor(dialog) {
       restoreFocus,
       onSaved,
       canArchive: ingredient?.archived === false,
+      others: others.filter((other) => other.id !== ingredient?.id),
     });
   }
 
@@ -381,7 +386,7 @@ export function createIngredientEditor(dialog) {
   // Checks the name and the measures, then saves what changed, or closes when
   // nothing did.
   function save() {
-    nameMessage.textContent = nameField.value.trim() === "" ? "The name can't be empty." : "";
+    nameMessage.textContent = lifecycle.nameProblem();
     saveMessage.textContent = "";
     const converting = needsConversion();
     const measures = converting ? [] : readMeasures();

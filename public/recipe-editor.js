@@ -7,7 +7,7 @@
 //   stray click never throws work away.
 
 import { createCombobox } from "./combobox.js";
-import { createElement, createIconButton } from "./dom.js";
+import { createElement, createIconButton, markQuantity } from "./dom.js";
 import { createEditorDialog, sendArchive } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
@@ -87,7 +87,7 @@ export function createRecipeEditor(dialog) {
     }));
   }
 
-  function open({ recipe, ingredients, restoreFocus, onSaved }) {
+  function open({ recipe, ingredients, others = [], restoreFocus, onSaved }) {
     session = {
       recipe,
       catalog: new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
@@ -106,6 +106,7 @@ export function createRecipeEditor(dialog) {
       restoreFocus,
       onSaved,
       canArchive: recipe?.archived === false,
+      others: others.filter((other) => other.id !== recipe?.id),
     });
   }
 
@@ -155,13 +156,15 @@ export function createRecipeEditor(dialog) {
     field.setAttribute("autocomplete", "off");
     field.setAttribute("inputmode", "decimal");
     field.setAttribute("aria-label", `Quantity of ${name} per serving`);
-    // Editing the field clears the row's message, without a re-render, which
-    // would take the focus away.
+    // As you type, the field shows whether it holds a quantity. Editing it
+    // also clears the row's message, without a re-render, which would take
+    // the focus away.
+    markQuantity(field);
     field.addEventListener("input", () => {
       row.text = field.value;
+      markQuantity(field);
       if (row.message === "") return;
       row.message = "";
-      field.removeAttribute("aria-invalid");
       item.querySelector(".row-message")?.remove();
     });
     const measure = ingredient?.measures?.length ? measureSelect(row, ingredient) : null;
@@ -280,7 +283,7 @@ export function createRecipeEditor(dialog) {
   // Checks the name and the quantities, then saves what changed, or closes
   // when nothing did.
   function save() {
-    nameMessage.textContent = nameField.value.trim() === "" ? "The name can't be empty." : "";
+    nameMessage.textContent = lifecycle.nameProblem();
     saveMessage.textContent = "";
     const ingredients = readIngredients();
     if (nameMessage.textContent !== "") {

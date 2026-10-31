@@ -57,13 +57,14 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-function openEditor({ recipe, ingredients = CATALOG } = {}) {
+function openEditor({ recipe, ingredients = CATALOG, others = [] } = {}) {
   const opener = document.createElement("button");
   document.body.append(opener);
   const saved = [];
   editor.open({
     recipe,
     ingredients,
+    others,
     restoreFocus: () => opener.focus(),
     onSaved: (entry) => saved.push(entry),
   });
@@ -228,6 +229,77 @@ test("editing an invalid quantity clears its message and aria-invalid, and keeps
   assertFocus(document, quantityFields()[0]);
   assert.equal(second.querySelector(".row-message")?.textContent, QUANTITY_MESSAGE);
   assert.equal(quantityFields()[1].getAttribute("aria-invalid"), "true");
+});
+
+test("a quantity that isn't valid is marked as you type, and Done stays enabled", () => {
+  openEditor({ recipe: SOUP });
+  const field = quantityFields()[0];
+
+  setValue(field, "1.255");
+  assert.equal(field.getAttribute("aria-invalid"), "true");
+  assert.equal(field.closest(".ingredient-row").querySelector(".row-message"), null);
+  assert.equal(query(".done").disabled, false);
+
+  setValue(field, "1,25");
+  assert.equal(field.hasAttribute("aria-invalid"), false);
+
+  setValue(field, "");
+  assert.equal(field.hasAttribute("aria-invalid"), false); // empty says nothing until Done
+});
+
+test("a quantity marked as you type stays marked when the rows render again", () => {
+  openEditor({ recipe: SOUP });
+  setValue(quantityFields()[0], "abc");
+
+  addIngredient("egg");
+
+  assert.equal(quantityFields()[0].getAttribute("aria-invalid"), "true");
+});
+
+const OTHERS = [
+  { id: "gazpacho", name: "Gazpacho", archived: false },
+  { id: "old", name: "Old stew", archived: true },
+  { id: "soup", name: "Onion soup", archived: false }, // the recipe being edited
+];
+
+test("a name that another recipe has shows its message as you type, ignoring case and accents", () => {
+  openEditor({ recipe: SOUP, others: OTHERS });
+
+  setValue(nameField(), "GAZPÁCHO");
+  assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
+
+  setValue(nameField(), "old  stew");
+  assert.equal(
+    query(".name-message").textContent,
+    '"Old stew" is archived. To use it, restore it from Archived.',
+  );
+
+  setValue(nameField(), "Gazpacho andaluz");
+  assert.equal(query(".name-message").textContent, "");
+
+  setValue(nameField(), "Onion soup"); // its own name
+  assert.equal(query(".name-message").textContent, "");
+});
+
+test("Done with a name that another recipe has keeps the message and sends nothing", () => {
+  openEditor({ others: OTHERS });
+  setValue(nameField(), "gazpacho");
+
+  query(".done").click();
+
+  assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
+  assertFocus(document, nameField());
+  assert.equal(server.requests.length, 0);
+});
+
+test("typing in Name clears the empty-name message", () => {
+  openEditor();
+  query(".done").click();
+  assert.equal(query(".name-message").textContent, "The name can't be empty.");
+
+  setValue(nameField(), "P");
+
+  assert.equal(query(".name-message").textContent, "");
 });
 
 test("a valid Done doesn't re-render the rows, so focus stays in the field", async () => {

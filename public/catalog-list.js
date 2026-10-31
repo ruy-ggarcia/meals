@@ -20,9 +20,9 @@ import { filterByName, sortByName } from "./name-search.js";
  * whenever the entries change, with all of them.
  *
  * `reload()` loads the entries again, calls setEntries(), and resolves to
- * true when the load succeeds. `open(entry, { restoreFocus, onSaved })` opens
- * the page's editor on `entry`, or on a new entry when it's undefined, and
- * passes the two callbacks on to it.
+ * true when the load succeeds. `open(entry, { restoreFocus, onSaved, others })`
+ * opens the page's editor on `entry`, or on a new entry when it's undefined,
+ * and passes the two callbacks and every entry, `others`, on to it.
  *
  * Returns { setEntries }.
  */
@@ -179,6 +179,8 @@ export function createCatalogList({ elements, noun, url, details, onChange, relo
       return;
     }
     open(entry, {
+      // Every entry of the reload, which the editor checks the name against.
+      others: entries,
       // By ID: the rows re-render, which replaces the button that was clicked.
       restoreFocus: () => (entry ? focusEdit(entry.id) : newButton.focus()),
       onSaved: (saved) => {

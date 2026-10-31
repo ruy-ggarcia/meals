@@ -195,6 +195,21 @@ test("a backdrop click with no changes after Edit returns focus to the recipe's 
   assertFocus(document, buttonLabeled("Edit Soup"));
 });
 
+test("the editor checks the name against the recipes of the reload as you type", async () => {
+  await openRecipesPage([recipe("1", "Soup")]);
+
+  await clickAndReload(document.getElementById("new-recipe"), {
+    recipes: [recipe("1", "Soup"), recipe("2", "Stew", true)],
+    ingredients: [ONION],
+  });
+  setValue(document.getElementById("recipe-name"), "stew");
+
+  assert.equal(
+    editorDialog().querySelector(".name-message").textContent,
+    '"Stew" is archived. To use it, restore it from Archived.',
+  );
+});
+
 test("archived recipes have Edit and Restore", async () => {
   await openRecipesPage([recipe("1", "Café", true)]);
 
