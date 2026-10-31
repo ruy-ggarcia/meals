@@ -238,7 +238,9 @@ in one of its measures. Names are unique, ignoring case and accents, so
   **Archive** at the end of the editor. If you changed something in the
   editor, the app asks first: **Keep Editing** keeps your changes, and
   **Archive Without Saving** archives the recipe without them. To bring a
-  recipe back, click **Restore** under **Archived**.
+  recipe back, click **Restore** under **Archived**. An archived recipe
+  still opens when you click its row, so you can change it, for example
+  for the menus that still use it. Its editor has no **Archive**.
 
 You can't delete recipes.
 
@@ -279,7 +281,8 @@ differently.
 - To find an ingredient, type part of its name in **Search**.
 - To archive an ingredient, open it, and then click **Archive** at the end of
   the editor. As with a recipe, the app asks first if you changed something.
-  To bring an ingredient back, click **Restore** under **Archived**.
+  To bring an ingredient back, click **Restore** under **Archived**. As
+  with a recipe, an archived ingredient still opens when you click its row.
 
 Each row of the list shows the unit and the names of the measures, such as
 `g · medium, large`.

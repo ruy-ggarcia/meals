@@ -223,6 +223,7 @@ Run these tests on desktop unless a test says otherwise.
 | 8.19 | On mobile, add an ingredient to the recipe, and tap its quantity field. | The keyboard offers digits and a decimal separator. `0,25` is accepted when you tap **Done**. |
 | 8.20 | On desktop, open `Tortilla`, change its name, and click **Archive**. Click **Keep Editing**. Then click **Archive** again, and click **Archive Without Saving**. | An alert titled `Archive without saving?` appears over the editor, with focus on **Keep Editing**. **Keep Editing** closes the alert and keeps the new name in the editor. **Archive Without Saving** archives `Tortilla` with its old name. Click **Restore** under **Archived**. |
 | 8.21 | Click **New recipe**, and type `russian SALAD` in **Name**. Add `Egg`, and type `abc` as its quantity. Click **Done**. Click **Cancel**. | `"Russian salad" already exists.` appears under **Name** as you type, before **Done**. The quantity gets a red outline as you type, and **Done** stays enabled. **Done** keeps the editor open, with the message under **Name** and the quantity message under its row. |
+| 8.22 | Under **Archived**, click the row of `Omelette`, not **Restore**. | The editor opens on `Omelette` without **Archive** at its end. Click **Cancel**: `Omelette` stays under **Archived**. |
 
 ## 9. Ingredients
 
