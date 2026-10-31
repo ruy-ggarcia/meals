@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatTotal, lineAmount, shoppingList } from "../public/shopping-list.js";
+import { formatTotal, lineAmount, lineParts, shoppingList } from "../public/shopping-list.js";
 
 function ingredient(id, name, unit, archived = false, measures = []) {
   return { id, name, unit, measures, archived };
@@ -339,6 +339,24 @@ test("formatTotal shows g and ml below 1000, and kg and l from 1000, rounded up 
   assert.equal(formatTotal(1001, "ml"), "1.1 l");
   assert.equal(formatTotal(5, "pcs"), "5 pcs");
   assert.equal(formatTotal(2000, "pcs"), "2000 pcs");
+});
+
+test("lineParts returns the total, and the breakdown in parentheses or nothing", () => {
+  assert.deepEqual(
+    lineParts({
+      unit: "g",
+      total: 1125,
+      breakdown: [
+        { measureId: null, name: "g", quantity: 300 },
+        { measureId: "medium", name: "medium", quantity: 3 },
+      ],
+    }),
+    { total: "1.2 kg", breakdown: "(300 g, 3 medium)" },
+  );
+  assert.deepEqual(lineParts({ unit: "g", total: 1400, breakdown: [] }), {
+    total: "1.4 kg",
+    breakdown: "",
+  });
 });
 
 test("lineAmount shows the total and the breakdown in parentheses", () => {

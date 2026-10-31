@@ -7,13 +7,14 @@
 //   stray click never throws work away.
 
 import { createCombobox } from "./combobox.js";
-import { createButton, createElement } from "./dom.js";
+import { createElement, createIconButton } from "./dom.js";
 import { createEditorDialog } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
 import { filterByName, sortByName } from "./name-search.js";
 import { MAX_INGREDIENTS, parseQuantity } from "./quantities.js";
 
+const SEARCH_HINT = "Type part of a name";
 const QUANTITY_MESSAGE = "Enter a quantity from 0.01 to 10000, with up to two decimals.";
 
 function sameIngredients(a, b) {
@@ -154,13 +155,13 @@ export function createRecipeEditor(dialog) {
       item.querySelector(".row-message")?.remove();
     });
     const measure = ingredient?.measures?.length ? measureSelect(row, ingredient) : null;
-    const remove = createButton("Remove", `Remove ${name}`, "remove");
+    const remove = createIconButton("minus", `Remove ${name}`, "remove");
     remove.addEventListener("click", () => removeRow(index));
     item.append(
+      remove,
       createElement("span", "ingredient-name", ingredient?.archived ? `${name} (archived)` : name),
       field,
       measure ?? createElement("span", "unit", ingredient?.unit ?? ""),
-      remove,
     );
     if (row.message) {
       field.setAttribute("aria-invalid", "true");
@@ -173,7 +174,9 @@ export function createRecipeEditor(dialog) {
     rowList.replaceChildren(...session.rows.map(rowElement));
     noIngredients.hidden = session.rows.length > 0;
     search.disabled = lifecycle.isBusy() || isFull();
-    search.placeholder = isFull() ? `A recipe holds up to ${MAX_INGREDIENTS} ingredients.` : "";
+    search.placeholder = isFull()
+      ? `A recipe holds up to ${MAX_INGREDIENTS} ingredients.`
+      : SEARCH_HINT;
   }
 
   // The active ingredients that aren't in the recipe yet and match `query`,

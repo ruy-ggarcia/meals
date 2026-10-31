@@ -96,14 +96,24 @@ export function formatTotal(total, unit) {
   return `${total} ${unit}`;
 }
 
-/** The text of a line: its total, and its breakdown in parentheses. */
-export function lineAmount({ unit, total, breakdown }) {
-  const amount = formatTotal(total, unit);
-  if (breakdown.length === 0) return amount;
+/**
+ * The texts of a line: its `total`, and its `breakdown` in parentheses, or ""
+ * when no measure adds to it.
+ */
+export function lineParts({ unit, total, breakdown }) {
   const parts = breakdown.map((part) =>
     part.measureId === null
       ? formatTotal(part.quantity, part.name)
       : `${part.quantity} ${part.name}`,
   );
-  return `${amount} (${parts.join(", ")})`;
+  return {
+    total: formatTotal(total, unit),
+    breakdown: parts.length === 0 ? "" : `(${parts.join(", ")})`,
+  };
+}
+
+/** The text of a line: its total, and its breakdown in parentheses. */
+export function lineAmount(line) {
+  const { total, breakdown } = lineParts(line);
+  return breakdown === "" ? total : `${total} ${breakdown}`;
 }

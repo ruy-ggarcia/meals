@@ -86,38 +86,52 @@
     <!-- Ingredient editor. Filled and opened by ingredient-editor.js. -->
     <dialog id="ingredient-editor" class="dialog" aria-labelledby="ingredient-editor-title">
       <div class="dialog-body">
-        <h2 id="ingredient-editor-title" class="dialog-title" tabindex="-1">Edit ingredient</h2>
-        <label class="field-label" for="ingredient-name">Name</label>
-        <input id="ingredient-name" class="name-field" type="text" autocomplete="off">
-        <p class="field-message name-message" role="status"></p>
-        <label class="field-label" for="ingredient-unit">Unit</label>
-        <select id="ingredient-unit" class="unit-field">
-          <option value="">Choose a unit</option>
-          <option value="g">g</option>
-          <option value="ml">ml</option>
-          <option value="pcs">pcs</option>
-        </select>
-        <div class="conversion" hidden>
-          <div class="conversion-line">
-            <input class="conversion-from quantity-field" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount in the old unit">
-            <span class="conversion-from-unit"></span>
-            =
-            <input class="conversion-to quantity-field" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount in the new unit">
-            <span class="conversion-to-unit"></span>
-          </div>
-          <label class="conversion-measure" hidden>
-            Saved as measure
-            <input class="conversion-measure-name" type="text" autocomplete="off">
-          </label>
-          <p class="field-message conversion-message" role="status"></p>
-        </div>
-        <h3 class="dialog-subtitle">Measures</h3>
-        <ul class="measure-rows ingredient-rows" aria-label="Measures"></ul>
-        <button type="button" class="add-measure">Add measure</button>
-        <p class="field-message save-message" role="status"></p>
-        <div class="dialog-actions">
+        <header class="sheet-header">
           <button type="button" class="cancel">Cancel</button>
-          <button type="button" class="done">Done</button>
+          <div class="sheet-heading">
+            <h2 id="ingredient-editor-title" class="dialog-title" tabindex="-1">Edit ingredient</h2>
+          </div>
+          <button type="button" class="done primary">Done</button>
+        </header>
+        <div class="sheet-content">
+          <label class="section-title" for="ingredient-name">Name</label>
+          <input id="ingredient-name" class="name-field" type="text" autocomplete="off" placeholder="Ingredient name">
+          <p class="field-message name-message" role="status"></p>
+          <label class="section-title" for="ingredient-unit">Unit</label>
+          <select id="ingredient-unit" class="unit-field">
+            <option value="">Choose a unit</option>
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="pcs">pcs</option>
+          </select>
+          <div class="conversion" hidden>
+            <h3 class="section-title">Conversion</h3>
+            <div class="card">
+              <div class="conversion-line">
+                <input class="conversion-from quantity-field" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount in the old unit">
+                <span class="conversion-from-unit"></span>
+                <span class="equals">=</span>
+                <input class="conversion-to quantity-field" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount in the new unit">
+                <span class="conversion-to-unit"></span>
+              </div>
+              <label class="conversion-measure" hidden>
+                <span class="conversion-measure-label">Saved as measure</span>
+                <input class="conversion-measure-name" type="text" autocomplete="off">
+              </label>
+            </div>
+            <p class="field-message conversion-message" role="status"></p>
+          </div>
+          <h3 class="section-title">Measures</h3>
+          <div class="card">
+            <ul class="measure-rows ingredient-rows" aria-label="Measures"></ul>
+            <button type="button" class="add-measure">
+              <span class="add-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+              </span>
+              Add measure
+            </button>
+          </div>
+          <p class="field-message save-message" role="status"></p>
         </div>
       </div>
     </dialog>

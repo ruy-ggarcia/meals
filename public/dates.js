@@ -75,6 +75,16 @@ export function formatShortWeekRange(id) {
   return `${month.format(monday)} ${monday.getDate()} – ${end}`;
 }
 
+/** For example, "Monday, Sep 21". */
+export function formatDayDate(date) {
+  const format = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+  return format.format(date);
+}
+
 /** For example, "September 21, 2026". */
 export function formatFullDate(date) {
   const format = new Intl.DateTimeFormat("en-US", {

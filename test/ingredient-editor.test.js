@@ -377,7 +377,10 @@ async function sentBody() {
 test("opens with a row per measure, in order, with the unit after each amount", () => {
   openEditor({ ingredient: SIZED_MILK });
 
-  assert.equal(query(".dialog-subtitle").textContent, "Measures");
+  assert.equal(
+    query(".measure-rows").closest(".card").previousElementSibling.textContent,
+    "Measures",
+  );
   assert.deepEqual(measureValues(), [
     ["medium", "150"],
     ["large", "250"],

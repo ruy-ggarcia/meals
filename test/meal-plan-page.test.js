@@ -386,6 +386,16 @@ test("Leave Without Saving shows the last saved menu, then the next week", async
   assert.equal(page.document.getElementById("grid").dataset.week, "2026-09-28");
 });
 
+test("a slot opens the editor titled with its meal, under the day and date", async () => {
+  await openWeek();
+
+  slotButton("wed", "snack_pm").click();
+
+  const editor = page.document.getElementById("slot-editor");
+  assert.equal(editor.querySelector(".dialog-title").textContent, "Afternoon snack");
+  assert.equal(editor.querySelector(".sheet-subtitle").textContent, "Wednesday, Sep 23");
+});
+
 test("a hash change while the editor is open is undone", async () => {
   await openWeek();
   slotButton("mon", "lunch").click();
@@ -576,6 +586,13 @@ test("the shopping list shows kilograms and a measure breakdown", async () => {
   shoppingButton().click();
 
   assert.deepEqual(lineTexts(), [["Onion", "1.2 kg (300 g, 3 medium, 1.5 large)"]]);
+  const amount = shoppingDialog().querySelector(".line-amount");
+  assert.equal(amount.querySelector(".line-total").textContent, "1.2 kg");
+  assert.equal(amount.querySelector(".line-breakdown").textContent, "(300 g, 3 medium, 1.5 large)");
+  assert.equal(
+    shoppingDialog().querySelector(".shopping-summary").textContent,
+    "1 ingredient · from A to Z · totals rounded up",
+  );
 });
 
 test("Shopping list shows the week's totals per ingredient, from A to Z", async () => {
@@ -608,9 +625,14 @@ test("Shopping list shows the week's totals per ingredient, from A to Z", async 
   shoppingButton().click();
 
   assert.equal(shoppingDialog().open, true);
+  assert.equal(shoppingDialog().querySelector(".dialog-title").textContent, "Shopping list");
   assert.equal(
-    shoppingDialog().querySelector(".dialog-title").textContent,
-    `Shopping list · ${formatWeekRange(WEEK)}`,
+    shoppingDialog().querySelector(".sheet-subtitle").textContent,
+    formatWeekRange(WEEK),
+  );
+  assert.equal(
+    shoppingDialog().querySelector(".shopping-summary").textContent,
+    "2 ingredients · from A to Z · totals rounded up",
   );
   assert.deepEqual(lineTexts(), [
     ["Egg", "4 pcs"],

@@ -6,7 +6,7 @@
 // - Cancel, Escape, and Android's Back discard the changes.
 // - Clicking the backdrop closes the editor only when nothing changed.
 
-import { createButton, createElement } from "./dom.js";
+import { createElement, createIconButton } from "./dom.js";
 import { createEditorDialog } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
@@ -168,14 +168,14 @@ export function createIngredientEditor(dialog) {
       row.amountText = amountInput.value;
       clearMessage("amount", amountInput);
     });
-    const remove = createButton("Remove", `Remove ${row.name}`, "remove");
+    const remove = createIconButton("minus", `Remove ${row.name}`, "remove");
     remove.addEventListener("click", () => removeRow(index));
     item.append(
+      remove,
       nameInput,
-      "=",
+      createElement("span", "equals", "="),
       amountInput,
       createElement("span", "unit", unitField.value),
-      remove,
     );
     if (usedBy(row) > 0) item.append(createElement("p", "row-hint", measureUsedText(usedBy(row))));
     if (row.message) {

@@ -1281,14 +1281,13 @@ svg {
   }
 }
 
-/* ---------- Dialogs ---------- */
+/* ---------- Sheets: the editors and the shopping list ---------- */
 
 /* No padding: onBackdropClick in dom.js treats a click whose target is the
-   dialog itself as a click on the backdrop. The body inside carries the
-   padding. */
+   dialog itself as a click on the backdrop. The body inside fills it. */
 .dialog {
   width: min(600px, calc(100% - 80px));
-  max-height: calc(100% - 80px);
+  max-height: calc(100% - var(--safe-top) - 80px);
   padding: 0;
   border: 0;
   border-radius: 28px;
@@ -1297,6 +1296,12 @@ svg {
   backdrop-filter: blur(40px) saturate(180%);
   box-shadow: var(--sheet-ring);
   color: var(--label);
+  overflow: hidden;
+}
+
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
 }
 
 .dialog::backdrop {
@@ -1305,16 +1310,66 @@ svg {
 
 .dialog-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 16px 24px;
+  min-height: 0;
+}
+
+/* Cancel on the left, the title in the middle, and Done on the right. */
+.sheet-header {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 6px;
+}
+
+.sheet-header > :first-child {
+  justify-self: start;
+}
+
+.sheet-header > :last-child {
+  justify-self: end;
+}
+
+.sheet-header button {
+  height: 40px;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-ring);
+  font-weight: 500;
+}
+
+.sheet-header .primary {
+  padding: 0 18px;
+  background: var(--tint-fill);
+  box-shadow: var(--tint-ring);
+  color: #fff;
+  font-weight: 600;
+}
+
+.sheet-header button:disabled {
+  opacity: 0.4;
+}
+
+.sheet-heading {
+  min-width: 0;
+  text-align: center;
 }
 
 .dialog-title {
   margin: 0;
+  overflow: hidden;
   font-size: 17px;
   font-weight: 600;
-  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The title takes focus when the dialog opens, only so a phone doesn't open
@@ -1324,47 +1379,61 @@ svg {
   outline: none;
 }
 
-.dialog button,
-.catalog button {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 18px;
-  background: var(--fill);
-  font-weight: 500;
+.sheet-subtitle {
+  margin: 1px 0 0;
+  color: var(--label2);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
-.dialog .done,
-.catalog .primary {
-  background: var(--tint-fill);
-  box-shadow: var(--tint-ring);
-  color: #fff;
-  font-weight: 600;
+.sheet-subtitle:empty {
+  display: none;
 }
 
-.dialog button:disabled,
-.catalog button:disabled {
-  opacity: 0.4;
-}
-
-.dialog-actions {
+.sheet-content {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 4px 16px 24px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.dialog-subtitle,
-.dialog label,
-.field-label {
+/* The content scrolls instead of squeezing its sections. */
+.sheet-content > * {
+  flex-shrink: 0;
+}
+
+.section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   margin: 0;
-  padding: 12px 6px 0;
+  padding: 22px 6px 8px;
   font-size: 15px;
   font-weight: 600;
 }
 
+.sheet-content > .section-title:first-child {
+  padding-top: 10px;
+}
+
+.section-note {
+  color: var(--label2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.card {
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
 .menu-items,
-.options,
 .ingredient-rows,
+.options,
 .shopping-lines,
 .not-included-recipes {
   margin: 0;
@@ -1372,40 +1441,98 @@ svg {
   list-style: none;
 }
 
-.menu-items:not(:empty),
-.ingredient-rows:not(:empty),
-.shopping-lines,
-.options {
-  border-radius: var(--card-radius);
-  background: var(--surface);
-  overflow: hidden;
-}
-
+/* Rows that start with a Remove button. The hairline between rows starts
+   after the button. */
 .menu-item,
-.ingredient-row,
-.shopping-line {
+.ingredient-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  min-height: 52px;
-  margin-left: 16px;
+  min-height: 56px;
   padding: 8px 12px 8px 0;
-  box-shadow: inset 0 -0.5px 0 var(--sep);
 }
 
-.menu-item:last-child,
-.ingredient-row:last-child,
-.shopping-line:last-child {
-  box-shadow: none;
+.menu-item + .menu-item,
+.ingredient-row + .ingredient-row,
+.ingredient-rows:not(:empty) + .add-measure {
+  background: linear-gradient(var(--sep), var(--sep)) 48px 0 / calc(100% - 48px) 0.5px no-repeat;
+}
+
+.remove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 40px;
+  margin: 0 -8px 0 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.remove .icon,
+.add-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--red-fill);
+  color: #fff;
+}
+
+.remove svg,
+.add-icon svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 3.6;
+}
+
+.remove:disabled {
+  opacity: 0.3;
 }
 
 .recipe-name,
-.ingredient-name,
-.line-name {
+.ingredient-name {
   flex: 1;
   min-width: 0;
+  font-size: 16px;
   overflow-wrap: anywhere;
+}
+
+/* − servings + */
+.stepper {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 36px;
+  border-radius: 18px;
+  background: var(--fill);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.step svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
+}
+
+.step:disabled {
+  opacity: 0.3;
 }
 
 .servings {
@@ -1415,12 +1542,41 @@ svg {
   text-align: center;
 }
 
-.option-search,
-.name-field,
+.empty-menu,
+.no-ingredients {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 16px;
+  color: var(--label2);
+}
+
+.no-ingredients {
+  color: var(--warn);
+}
+
+.no-ingredients svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  stroke-width: 2.2;
+}
+
+.name-field {
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  font-size: 17px;
+}
+
 .quantity-field,
 .measure-name,
-.unit-field,
 .conversion-measure-name,
+.unit-field,
 select.measure-field {
   height: 36px;
   padding: 0 10px;
@@ -1430,18 +1586,11 @@ select.measure-field {
   font-size: 16px;
 }
 
-.option-search,
-.name-field {
-  width: 100%;
-  height: 44px;
-  border-radius: 14px;
-  font-size: 17px;
-}
-
 .quantity-field {
-  width: 76px;
-  text-align: right;
+  flex: none;
+  width: 72px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .measure-name {
@@ -1449,63 +1598,169 @@ select.measure-field {
   min-width: 0;
 }
 
+select.measure-field {
+  max-width: 150px;
+  text-overflow: ellipsis;
+}
+
+[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1.5px var(--red);
+}
+
+.unit,
+.equals {
+  color: var(--label2);
+  font-size: 16px;
+}
+
+.unit {
+  min-width: 28px;
+}
+
+/* A search field with a magnifying glass, as wide as the sheet. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: var(--fill);
+  color: var(--label2);
+}
+
+.search-field:focus-within {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
+}
+
+.search-field svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2;
+}
+
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--label);
+  font-size: 17px;
+}
+
+.options,
+.no-match {
+  margin-top: 10px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+}
+
 .options {
   max-height: 300px;
   overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .option {
-  min-height: 46px;
-  margin-left: 16px;
-  padding: 12px 14px 12px 0;
-  box-shadow: inset 0 -0.5px 0 var(--sep);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 14px 8px 16px;
+  font-size: 16px;
   overflow-wrap: anywhere;
   cursor: pointer;
 }
 
-.option:last-child {
-  box-shadow: none;
+.option:not(:last-child) {
+  box-shadow: inset 0 -0.5px 0 var(--sep);
 }
 
-.option[aria-selected="true"] {
-  margin-left: 0;
-  padding-left: 16px;
+.options[data-filtered] .option[aria-selected="true"] {
   background: var(--tint-soft);
 }
 
-.no-match,
-.hint,
-.row-hint {
-  margin: 0;
-  padding: 0 6px;
+.option-add {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border-radius: 12px;
+  background: var(--tint-soft);
+  color: var(--tint);
+}
+
+.option-add svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 3;
+}
+
+.no-match {
+  padding: 14px 16px;
   color: var(--label2);
 }
 
 .field-message,
-.row-message {
+.row-message,
+.row-hint {
   flex-basis: 100%;
   margin: 0;
-  padding: 0 6px;
-  color: var(--red);
   font-size: 13px;
+}
+
+.field-message,
+.row-message {
+  color: var(--red);
+}
+
+.field-message {
+  padding: 7px 6px 0;
 }
 
 .field-message:empty {
   display: none;
 }
 
+.row-message,
 .row-hint {
-  flex-basis: 100%;
+  padding-left: 48px;
+}
+
+.row-hint {
+  color: var(--label2);
   font-size: 12px;
 }
 
-.unit {
-  min-width: 28px;
-  color: var(--label2);
+.add-measure {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--tint);
+  font-size: 17px;
+  text-align: left;
 }
 
-.add-measure {
-  align-self: flex-start;
+.add-icon {
+  background: var(--tint-fill);
+}
+
+.add-measure:disabled {
+  opacity: 0.4;
 }
 
 .conversion-line,
@@ -1514,54 +1769,135 @@ select.measure-field {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 0;
   padding: 10px 16px;
-  border-radius: var(--card-radius);
-  background: var(--surface);
-  font-weight: 400;
+  font-size: 16px;
 }
 
-.conversion {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.conversion-measure {
+  padding-top: 8px;
+  box-shadow: inset 0 0.5px 0 var(--sep);
 }
 
-/* ---------- Shopping list ---------- */
+.conversion-measure-label {
+  flex: 1;
+}
+
+.conversion-measure-name {
+  width: 120px;
+}
+
+/* The shopping list. */
+.shopping-summary {
+  margin: 0;
+  padding: 4px 6px 10px;
+  color: var(--label2);
+  font-size: 13px;
+}
 
 .shopping-line {
-  flex-wrap: nowrap;
-  justify-content: space-between;
+  display: flex;
+  align-items: center;
   gap: 12px;
+  min-height: 48px;
+  margin-left: 16px;
+  padding: 9px 16px 9px 0;
+  font-size: 16px;
+}
+
+.shopping-line:not(:last-child) {
+  box-shadow: inset 0 -0.5px 0 var(--sep);
+}
+
+.line-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .line-amount {
-  max-width: 70%;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 60%;
   font-variant-numeric: tabular-nums;
-  text-align: end;
+  text-align: right;
+}
+
+.line-total {
+  font-weight: 600;
+}
+
+.line-breakdown {
+  color: var(--label2);
+  font-size: 12px;
+}
+
+.empty-week {
+  margin: 0;
+  padding: 18px 16px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  color: var(--label2);
 }
 
 .not-included {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 16px;
   padding: 14px 16px;
-  border-radius: var(--card-radius);
-  background: var(--surface);
 }
 
 .not-included-title {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
   font-weight: 600;
 }
 
 .not-included-recipes li {
   min-width: 0;
+  padding-left: 30px;
   overflow-wrap: anywhere;
+}
+
+.warning-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--warn-icon);
+}
+
+.warning-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
+}
+
+/* Phones: sheets rise from the bottom and fill the screen below the status
+   bar, with a grabber on top. */
+@media (max-width: 699.98px) {
+  .dialog {
+    width: 100%;
+    max-width: none;
+    height: calc(100% - var(--safe-top) - 10px);
+    max-height: none;
+    margin: auto 0 0;
+    border-radius: 38px 38px 0 0;
+  }
+
+  .dialog-body::before {
+    content: "";
+    flex: none;
+    width: 36px;
+    height: 5px;
+    margin: 7px auto 0;
+    border-radius: 3px;
+    background: var(--label3);
+  }
+
+  .sheet-content {
+    padding-bottom: calc(var(--safe-bottom) + 24px);
+  }
 }
 
 /* ---------- Recipe book and ingredient catalog ---------- */
@@ -1644,6 +1980,11 @@ select.measure-field {
   gap: 8px;
 }
 
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .warning-icon {
   display: inline-flex;
   flex-shrink: 0;
@@ -1660,23 +2001,4 @@ select.measure-field {
   padding: 14px 6px 8px;
   font-weight: 600;
   cursor: pointer;
-}
-
-/* Phones: dialogs are sheets that rise from the bottom. */
-@media (max-width: 699.98px) {
-  .dialog {
-    width: 100%;
-    max-width: none;
-    height: calc(100% - var(--safe-top) - 10px);
-    max-height: none;
-    margin: auto 0 0;
-    border-radius: 38px 38px 0 0;
-  }
-
-  /* Fills the dialog, so a tap below the actions still lands inside it
-     instead of on the dialog's own (backdrop) box. */
-  .dialog-body {
-    min-height: 100%;
-    padding-bottom: calc(var(--safe-bottom) + 24px);
-  }
 }

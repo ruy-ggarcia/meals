@@ -5,6 +5,7 @@ import {
   addDays,
   addWeeks,
   dayIndex,
+  formatDayDate,
   formatFullDate,
   formatLongDate,
   formatShortWeekRange,
@@ -255,7 +256,8 @@ function openEditor(slot) {
   const dayIndexInWeek = DAYS.findIndex((entry) => entry.id === day);
   const mealLabel = MEALS.find((entry) => entry.id === meal).label;
   editor.open({
-    title: `${formatLongDate(addDays(weekStart(week), dayIndexInWeek))} · ${mealLabel}`,
+    title: mealLabel,
+    subtitle: formatDayDate(addDays(weekStart(week), dayIndexInWeek)),
     menu: menus.get(key),
     recipes: [...recipesById.values()],
     opener: slot.querySelector(".slot-menu"),
@@ -294,7 +296,8 @@ function openShoppingList() {
     })),
   );
   shopping.open({
-    title: `Shopping list · ${formatWeekRange(week)}`,
+    title: "Shopping list",
+    subtitle: formatWeekRange(week),
     list: shoppingList(slots, [...recipesById.values()], ingredients),
     isEmpty: slots.every((slot) => slot.menu.items.length === 0),
     slotLabel,

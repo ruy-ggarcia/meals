@@ -125,26 +125,39 @@
     <!-- Slot editor. Filled and opened by slot-editor.js. -->
     <dialog id="slot-editor" class="dialog" aria-labelledby="slot-editor-title">
       <div class="dialog-body">
-        <!-- biome-ignore lint/a11y/useHeadingContent: slot-editor.js sets the text when it opens. -->
-        <h2 id="slot-editor-title" class="dialog-title" tabindex="-1"></h2>
-        <ul class="menu-items" aria-label="Recipes in this menu"></ul>
-        <label for="recipe-search">Add recipe</label>
-        <input
-          id="recipe-search"
-          class="option-search"
-          type="text"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-controls="recipe-options"
-          aria-expanded="false"
-          autocomplete="off"
-        >
-        <!-- biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the combobox pattern needs a listbox. -->
-        <ul id="recipe-options" class="options" role="listbox" aria-label="Recipes" hidden></ul>
-        <p class="no-match" hidden>No matching recipes. To add recipes, use the Recipes page.</p>
-        <div class="dialog-actions">
+        <header class="sheet-header">
           <button type="button" class="cancel">Cancel</button>
-          <button type="button" class="done">Done</button>
+          <div class="sheet-heading">
+            <!-- biome-ignore lint/a11y/useHeadingContent: slot-editor.js sets the text when it opens. -->
+            <h2 id="slot-editor-title" class="dialog-title" tabindex="-1"></h2>
+            <p class="sheet-subtitle"></p>
+          </div>
+          <button type="button" class="done primary">Done</button>
+        </header>
+        <div class="sheet-content">
+          <h3 class="section-title">Menu <span class="section-note">Servings</span></h3>
+          <div class="card">
+            <ul class="menu-items" aria-label="Recipes in this menu"></ul>
+            <p class="empty-menu">Nothing planned. Add a recipe below.</p>
+          </div>
+          <label class="section-title" for="recipe-search">Add recipe</label>
+          <div class="search-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+            <input
+              id="recipe-search"
+              class="option-search"
+              type="text"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-controls="recipe-options"
+              aria-expanded="false"
+              autocomplete="off"
+              placeholder="Type part of a name"
+            >
+          </div>
+          <!-- biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: the combobox pattern needs a listbox. -->
+          <ul id="recipe-options" class="options" role="listbox" aria-label="Recipes" hidden></ul>
+          <p class="no-match" hidden>No active recipes match. Add recipes on the Recipes page.</p>
         </div>
       </div>
     </dialog>
@@ -152,16 +165,23 @@
     <!-- Shopping list. Filled and opened by shopping-dialog.js. -->
     <dialog id="shopping-dialog" class="dialog" aria-labelledby="shopping-dialog-title">
       <div class="dialog-body">
-        <!-- biome-ignore lint/a11y/useHeadingContent: shopping-dialog.js sets the text when it opens. -->
-        <h2 id="shopping-dialog-title" class="dialog-title" tabindex="-1"></h2>
-        <p class="hint empty-week" hidden>This week has no menus yet.</p>
-        <ul class="shopping-lines" aria-label="Ingredients to buy"></ul>
-        <section class="not-included" aria-labelledby="not-included-title" hidden>
-          <p id="not-included-title" class="not-included-title">Not included: these recipes have no ingredients.</p>
-          <ul class="not-included-recipes"></ul>
-        </section>
-        <div class="dialog-actions">
-          <button type="button" class="close-dialog">Close</button>
+        <header class="sheet-header">
+          <span></span>
+          <div class="sheet-heading">
+            <!-- biome-ignore lint/a11y/useHeadingContent: shopping-dialog.js sets the text when it opens. -->
+            <h2 id="shopping-dialog-title" class="dialog-title" tabindex="-1"></h2>
+            <p class="sheet-subtitle"></p>
+          </div>
+          <button type="button" class="close-dialog primary">Close</button>
+        </header>
+        <div class="sheet-content">
+          <p class="shopping-summary"></p>
+          <p class="hint empty-week" hidden>This week has no menus yet.</p>
+          <ul class="shopping-lines card" aria-label="Ingredients to buy"></ul>
+          <section class="not-included card" aria-labelledby="not-included-title" hidden>
+            <p id="not-included-title" class="not-included-title">Not included: these recipes have no ingredients.</p>
+            <ul class="not-included-recipes"></ul>
+          </section>
         </div>
       </div>
     </dialog>

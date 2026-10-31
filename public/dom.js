@@ -19,6 +19,27 @@ export function createButton(text, label, className) {
   return button;
 }
 
+// Line icons, drawn with currentColor.
+const ICONS = {
+  minus: '<path d="M5 12h14"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+};
+
+/** An icon of `ICONS`, which screen readers skip. */
+export function createIcon(name, className = "icon") {
+  const icon = createElement("span", className);
+  // static markup, never user text
+  icon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
+  return icon;
+}
+
+/** A `<button type="button">` that shows the icon `name` and has the accessible name `label`. */
+export function createIconButton(name, label, className) {
+  const button = createButton("", label, className);
+  button.append(createIcon(name));
+  return button;
+}
+
 /**
  * Calls `onClick` for a click on the backdrop of `dialog`, a <dialog> with no
  * padding, so that a click whose target is the dialog itself landed on the

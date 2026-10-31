@@ -183,8 +183,18 @@ test("with no matches, Add ingredient points to the Ingredients page", () => {
   assert.equal(query(".no-match").hidden, false);
   assert.equal(
     query(".no-match").textContent,
-    "No matching ingredients. To add ingredients, use the Ingredients page.",
+    "No active ingredients match. Add them on the Ingredients page.",
   );
+});
+
+test("a recipe without ingredients warns that the shopping list can't count it", () => {
+  openEditor();
+
+  assert.equal(
+    query(".no-ingredients").textContent.trim(),
+    "No ingredients yet. You can save it, but the shopping list can't count it.",
+  );
+  assert.equal(search().placeholder, "Type part of a name");
 });
 
 test("Done with an invalid quantity shows a message under its row, focuses it, and sends nothing", () => {
