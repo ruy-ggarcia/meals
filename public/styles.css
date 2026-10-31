@@ -33,7 +33,6 @@
   --segment: #fff;
   --segment-shadow: 0 1px 3px rgb(0 0 0 / 12%), 0 0 0 0.5px rgb(0 0 0 / 4%);
   --cell-ring: 0 0 0 0.5px rgb(0 0 0 / 5%), 0 1px 2px rgb(0 0 0 / 4%);
-  --today-ring: inset 0 0 0 2px rgb(46 125 50 / 55%);
   --edge: rgb(242 242 247 / 85%);
 
   --card-radius: 22px;
@@ -78,7 +77,6 @@
     --segment: #636366;
     --segment-shadow: 0 1px 3px rgb(0 0 0 / 30%);
     --cell-ring: none;
-    --today-ring: inset 0 0 0 2px rgb(111 207 120 / 60%);
     --edge: rgb(0 0 0 / 85%);
   }
 }
@@ -623,6 +621,56 @@ svg {
 
 /* ---------- Meal plan ---------- */
 
+.week-short {
+  display: none;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The save summary: a pill that says the week is saving or saved, or a
+   Retry button for the slots that weren't saved. */
+.save-summary {
+  display: flex;
+  align-items: center;
+}
+
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 0;
+  padding: 0 13px 0 11px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-ring);
+  color: var(--label2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.save-state[data-state="saved"] {
+  color: var(--tint);
+}
+
+.save-state[data-state="error"] {
+  background: var(--red-soft);
+  box-shadow: none;
+  color: var(--red);
+}
+
+.save-state svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.4;
+}
+
 .slot {
   position: relative;
   display: flex;
@@ -646,8 +694,6 @@ svg {
   font-size: 13px;
   line-height: 1.28;
   text-align: left;
-  /* A long name without spaces wraps instead of widening the grid. */
-  overflow-wrap: anywhere;
   transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.4, 1);
 }
 
@@ -655,55 +701,189 @@ svg {
   transform: scale(0.98);
 }
 
-.slot[data-today] .slot-menu {
-  box-shadow: var(--today-ring);
+.item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
-.slot-empty {
-  color: var(--label3);
+.item-name {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  /* A long name without spaces wraps instead of widening the grid. */
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
-/* Per-slot save status. It is a <button> so the error state is clickable;
-   it is disabled in every other state. */
+.item-servings {
+  flex: none;
+  color: var(--label2);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--tint);
+}
+
+.slot-add svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2;
+}
+
+/* A slot whose save failed: a red ring, and a Retry button in its corner. */
+.slot:has(.status[data-state="error"]) .slot-menu {
+  box-shadow: inset 0 0 0 1.5px var(--red);
+}
+
 .status {
   position: absolute;
   z-index: 3;
-  top: -6px;
-  right: -6px;
+  right: 4px;
+  bottom: 4px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
+  height: 32px;
+  margin: 0;
+  padding: 0 4px;
   border: 0;
-  border-radius: 11px;
-  background: #8e8e93;
-  box-shadow:
-    0 0 0 2.5px var(--bg),
-    0 2px 6px rgb(0 0 0 / 18%);
-  color: #fff;
+  background: transparent;
 }
 
-.status[data-state="idle"] {
+.status:not([data-state="error"]) {
   display: none;
 }
 
-.status[data-state="saved"] {
-  background: var(--tint-fill);
+.retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 11px 0 8px;
+  border-radius: 12px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.status[data-state="error"] {
-  background: var(--red-fill);
-}
-
-.status svg {
-  width: 13px;
-  height: 13px;
+.retry svg {
+  width: 12px;
+  height: 12px;
   stroke-width: 3;
 }
 
+/* A dot that marks a day with a slot that wasn't saved. */
+.failed-dot {
+  display: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--red-fill);
+}
+
+[data-failed] > .failed-dot {
+  display: block;
+}
+
+/* The leave alert. */
+.alert {
+  width: min(300px, calc(100% - 48px));
+  padding: 24px 18px 16px;
+  border: 0;
+  border-radius: 32px;
+  background: var(--sheet);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: var(--sheet-ring);
+  color: var(--label);
+  text-align: center;
+}
+
+.alert::backdrop {
+  background: var(--dim);
+}
+
+.alert-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 22px;
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.alert-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.8;
+}
+
+.alert-title {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.alert-message {
+  margin: 0;
+  color: var(--label2);
+  font-size: 14px;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.alert-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.alert-actions button {
+  height: 48px;
+  margin: 0;
+  border: 0;
+  border-radius: 24px;
+  font-size: 17px;
+}
+
+.alert .stay {
+  background: var(--tint-fill);
+  box-shadow: var(--tint-ring);
+  color: #fff;
+  font-weight: 600;
+}
+
+.alert .leave {
+  background: var(--fill);
+  color: var(--red);
+  font-weight: 500;
+}
+
+/* Wide screens: the week as a grid, one row per meal under its name. */
 @media (min-width: 700px) {
+  .week-bar {
+    flex: none;
+  }
+
+  .toolbar > .save-summary {
+    flex: 1;
+  }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -712,14 +892,20 @@ svg {
     align-content: start;
   }
 
+  .day-heading,
   .day-bar,
-  .corner,
   .slot-label {
     display: none;
   }
 
   .day-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 0 4px 6px;
+  }
+
+  .day-name {
     color: var(--label2);
     font-size: 12px;
     font-weight: 600;
@@ -727,8 +913,27 @@ svg {
     text-transform: uppercase;
   }
 
-  .day-header[data-today] {
+  .day-header .day-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 5px;
+    border-radius: 14px;
+    font-family: var(--rounded-font);
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .day-header[data-today] .day-name {
     color: var(--tint);
+  }
+
+  .day-header[data-today] .day-number {
+    background: var(--tint-fill);
+    color: #fff;
   }
 
   .meal-header {
@@ -740,13 +945,201 @@ svg {
   .slot-menu {
     min-height: 70px;
   }
+
+  /* Every header and slot has its own place, so that the shading of today's
+     column can span all the rows behind them. */
+  .grid {
+    grid-template-rows: repeat(11, auto);
+  }
+
+  .day-header {
+    grid-row: 1;
+  }
+
+  .grid[data-today-column]::before {
+    content: "";
+    grid-row: 1 / -1;
+    margin: -6px -4px;
+    border-radius: 18px;
+    background: var(--tint-soft);
+  }
+
+  .day-header[data-day="mon"],
+  .slot[data-day="mon"],
+  .grid[data-today-column="mon"]::before {
+    grid-column: 1;
+  }
+
+  .day-header[data-day="tue"],
+  .slot[data-day="tue"],
+  .grid[data-today-column="tue"]::before {
+    grid-column: 2;
+  }
+
+  .day-header[data-day="wed"],
+  .slot[data-day="wed"],
+  .grid[data-today-column="wed"]::before {
+    grid-column: 3;
+  }
+
+  .day-header[data-day="thu"],
+  .slot[data-day="thu"],
+  .grid[data-today-column="thu"]::before {
+    grid-column: 4;
+  }
+
+  .day-header[data-day="fri"],
+  .slot[data-day="fri"],
+  .grid[data-today-column="fri"]::before {
+    grid-column: 5;
+  }
+
+  .day-header[data-day="sat"],
+  .slot[data-day="sat"],
+  .grid[data-today-column="sat"]::before {
+    grid-column: 6;
+  }
+
+  .day-header[data-day="sun"],
+  .slot[data-day="sun"],
+  .grid[data-today-column="sun"]::before {
+    grid-column: 7;
+  }
+
+  .meal-header[data-meal="breakfast"] {
+    grid-row: 2;
+  }
+
+  .slot[data-meal="breakfast"] {
+    grid-row: 3;
+  }
+
+  .meal-header[data-meal="snack_am"] {
+    grid-row: 4;
+  }
+
+  .slot[data-meal="snack_am"] {
+    grid-row: 5;
+  }
+
+  .meal-header[data-meal="lunch"] {
+    grid-row: 6;
+  }
+
+  .slot[data-meal="lunch"] {
+    grid-row: 7;
+  }
+
+  .meal-header[data-meal="snack_pm"] {
+    grid-row: 8;
+  }
+
+  .slot[data-meal="snack_pm"] {
+    grid-row: 9;
+  }
+
+  .meal-header[data-meal="dinner"] {
+    grid-row: 10;
+  }
+
+  .slot[data-meal="dinner"] {
+    grid-row: 11;
+  }
+
+  /* An empty slot shows only a plus sign, in the middle. */
+  .slot:not([data-empty]) .slot-add {
+    display: none;
+  }
+
+  .slot[data-empty] .slot-add {
+    flex: 1;
+    justify-content: center;
+    color: var(--label3);
+    font-size: 0;
+  }
+
+  .slot[data-empty] .slot-add svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2;
+  }
+
+  .slot:has(.status[data-state="error"]) .slot-menu {
+    padding-bottom: 36px;
+  }
 }
 
+/* Phones: one day at a time, each meal as a card. */
 @media (max-width: 699.98px) {
+  .week-switcher {
+    padding: 0;
+  }
+
+  .week-short {
+    display: block;
+  }
+
+  .toolbar > .save-summary {
+    display: none;
+  }
+
+  .day-heading {
+    padding: 0 6px;
+  }
+
+  .day-title {
+    margin: 0;
+    font-family: var(--title-font);
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.12;
+  }
+
+  .day-subtitle {
+    display: flex;
+    align-items: center;
+    min-height: 30px;
+    margin: 3px 0 0;
+    color: var(--label2);
+    font-weight: 500;
+  }
+
+  .today-mark {
+    margin-left: 0.3em;
+    color: var(--tint);
+    font-weight: 600;
+  }
+
+  /* The save summary follows the date, on the right, or on its own line
+     when the date leaves no room. */
+  .day-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 8px;
+  }
+
+  .day-title {
+    flex-basis: 100%;
+  }
+
+  .day-subtitle {
+    white-space: nowrap;
+  }
+
+  .day-heading .save-summary {
+    margin-left: auto;
+  }
+
+  .day-heading .save-state {
+    height: 30px;
+  }
+
   .day-bar {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    margin-bottom: 6px;
+    margin-top: 16px;
     padding: 6px 2px;
     border-radius: var(--card-radius);
     background: var(--surface);
@@ -770,7 +1163,7 @@ svg {
     font-weight: 600;
   }
 
-  .day-number {
+  .day-bar .day-number {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -783,6 +1176,21 @@ svg {
     font-variant-numeric: tabular-nums;
   }
 
+  .day-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 2px;
+  }
+
+  /* :where() keeps this rule below the red dot of a failed day. */
+  .day-bar button[data-planned]:where(:not([aria-pressed="true"])) .day-dot {
+    background: var(--label3);
+  }
+
+  .day-bar button[data-failed] .day-dot {
+    background: var(--red-fill);
+  }
+
   .day-bar button[data-today] .day-letter,
   .day-bar button[data-today] .day-number {
     color: var(--tint);
@@ -790,7 +1198,7 @@ svg {
 
   .day-bar button[aria-pressed="true"] .day-number {
     background: var(--label);
-    color: var(--surface);
+    color: var(--bg);
   }
 
   .day-bar button[data-today][aria-pressed="true"] .day-number {
@@ -798,7 +1206,6 @@ svg {
     color: #fff;
   }
 
-  .corner,
   .day-header,
   .meal-header {
     display: none;
@@ -825,9 +1232,10 @@ svg {
   }
 
   .slot-menu {
-    min-height: 50px;
-    padding: 12px 16px;
+    gap: 0;
+    padding: 0 0 0 16px;
     border-radius: var(--card-radius);
+    box-shadow: none;
     font-size: 17px;
     line-height: 1.3;
   }
@@ -836,8 +1244,40 @@ svg {
     transform: none;
   }
 
-  .slot .status {
-    top: 38px;
+  .item {
+    align-items: center;
+    gap: 12px;
+    min-height: 50px;
+    padding: 12px 16px 12px 0;
+    box-shadow: inset 0 -0.5px 0 var(--sep);
+  }
+
+  .item-servings {
+    font-size: 15px;
+    font-weight: 400;
+  }
+
+  .slot-add {
+    min-height: 50px;
+  }
+
+  .status {
+    right: 9px;
+    bottom: 9px;
+    height: 32px;
+    padding: 0;
+  }
+
+  .retry {
+    height: 32px;
+    padding: 0 13px 0 10px;
+    border-radius: 16px;
+    font-size: 15px;
+  }
+
+  .retry svg {
+    width: 13px;
+    height: 13px;
   }
 }
 

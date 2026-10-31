@@ -8,10 +8,8 @@
 //
 // Known gap vs. real browsers: happy-dom doesn't implement `window.confirm`
 // at all (it's browser chrome, like the dialogs `alert()` and `prompt()`
-// open). loadPage() installs a stub that throws when a test doesn't expect
-// it to be called; a test that needs it replaces it with
-// `mock.method(window, "confirm", () => true)` (or `false`), same as it
-// would mock any other method.
+// open). The pages ask in their own dialogs instead, so loadPage() installs
+// a stub that throws if a page ever calls it.
 //
 // Known gap vs. real browsers: happy-dom's `history.replaceState` fires a
 // "hashchange" event when the new URL's hash differs from the old one; real

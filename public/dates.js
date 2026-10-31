@@ -62,6 +62,29 @@ export function formatWeekRange(id) {
   return format.formatRange(monday, addDays(monday, 6));
 }
 
+/** For example, "Sep 21 – 27", or "Sep 28 – Oct 4" across months, never with the year. */
+export function formatShortWeekRange(id) {
+  const monday = weekStart(id);
+  const sunday = addDays(monday, 6);
+  // Intl's formatRange adds the years when the week spans two of them.
+  const month = new Intl.DateTimeFormat("en-US", { month: "short" });
+  const end =
+    monday.getMonth() === sunday.getMonth()
+      ? sunday.getDate()
+      : `${month.format(sunday)} ${sunday.getDate()}`;
+  return `${month.format(monday)} ${monday.getDate()} – ${end}`;
+}
+
+/** For example, "September 21, 2026". */
+export function formatFullDate(date) {
+  const format = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  return format.format(date);
+}
+
 /** For example, "Monday, September 21". */
 export function formatLongDate(date) {
   const format = new Intl.DateTimeFormat("en-US", {

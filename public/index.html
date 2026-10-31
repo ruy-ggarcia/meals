@@ -61,6 +61,7 @@
           <button type="button" id="previous-week" aria-label="Previous week">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg>
           </button>
+          <span id="week-short" class="week-short" aria-hidden="true"></span>
           <button type="button" id="next-week" aria-label="Next week">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>
           </button>
@@ -69,6 +70,8 @@
         <!-- biome-ignore lint/a11y/useHeadingContent: app.js sets the week when it loads. -->
         <h1 id="week-range" class="week-range" aria-live="polite"></h1>
       </nav>
+      <!-- Wide screens. Filled by app.js. -->
+      <div class="save-summary"></div>
       <button type="button" id="shopping-list" class="tint-button">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg>
         <span class="button-text">Shopping list</span>
@@ -82,11 +85,42 @@
       </div>
 
       <!-- Only visible on phones. Filled by app.js. -->
+      <div id="day-heading" class="day-heading" hidden>
+        <!-- biome-ignore lint/a11y/useHeadingContent: app.js sets the day when a week loads. -->
+        <h2 class="day-title"></h2>
+        <p class="day-subtitle">
+          <span class="day-date"></span><span class="today-mark" hidden> · Today</span>
+        </p>
+        <div class="save-summary"></div>
+      </div>
       <nav id="day-bar" class="day-bar" aria-label="Day" hidden></nav>
 
       <!-- Wide screens: the 7 days side by side, one row per meal. Phones: one day, stacked. Filled by app.js. -->
       <main id="grid" class="grid" hidden></main>
     </div>
+
+    <!-- Says when a slot starts saving, saves, or fails to save. -->
+    <div id="save-announcement" class="visually-hidden" aria-live="polite"></div>
+
+    <!-- Asks before leaving a week with slots that weren't saved. Filled and opened by app.js. -->
+    <dialog
+      id="leave-alert"
+      class="alert"
+      role="alertdialog"
+      aria-labelledby="leave-alert-title"
+      aria-describedby="leave-alert-message"
+    >
+      <span class="alert-icon">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v9M12 19h.01"/></svg>
+      </span>
+      <!-- biome-ignore lint/a11y/useHeadingContent: app.js sets the text when it opens. -->
+      <h2 id="leave-alert-title" class="alert-title"></h2>
+      <p id="leave-alert-message" class="alert-message"></p>
+      <div class="alert-actions">
+        <button type="button" class="stay">Stay</button>
+        <button type="button" class="leave">Leave Without Saving</button>
+      </div>
+    </dialog>
 
     <!-- Slot editor. Filled and opened by slot-editor.js. -->
     <dialog id="slot-editor" class="dialog" aria-labelledby="slot-editor-title">
