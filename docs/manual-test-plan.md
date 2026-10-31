@@ -265,7 +265,7 @@ earlier sections, and section 10 builds on them.
 |-----|------|-----------------|
 | 10.1 | In the next week, add `Tortilla` to Tuesday's lunch with 2 servings. Click **Shopping list**. | The list is titled `Shopping list` over the week's range, reads `1 ingredient · from A to Z · totals rounded up`, and lists `Egg 3 pcs`. Below, a warning icon and `Not included: these recipes have no ingredients.` list the week's other recipes with their slots, such as `Red lentil soup`. |
 | 10.2 | Press `Escape`. | The dialog closes, and **Shopping list** has focus. |
-| 10.3 | Show a week with no menus, and click **Shopping list**. | The dialog reads `This week has no menus yet.` Click outside the dialog: it closes. |
+| 10.3 | Show a week with no menus, and click **Shopping list**. | The list reads `Nothing to buy. Plan some meals first.` Click outside the dialog: it closes. |
 | 10.4 | Stop the server. In the week from `10.1`, change `Tortilla` to 3 servings, and click **Done**. When **Retry** appears, click **Shopping list**. | The list shows `Egg 4 pcs`: 1.25 × 3 = 3.75, rounded up. Close it, start the server, and retry the save. |
 | 10.5 | With the shopping list open, change the week in the address bar, and press `Enter`. | The address goes back, and the dialog stays open on the same week. |
 | 10.6 | In the recipe book, edit `Red lentil soup`: add `Onion`, keep `g`, and type `220`. Edit `Gnocchi carbonara`: add `Onion`, choose `large (250 g)`, and type `1`. | Both recipes are saved. |

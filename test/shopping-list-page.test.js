@@ -194,14 +194,14 @@ test("recipes without ingredients are listed as not included, with their slots",
   assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
 });
 
-test("an empty week says it has no menus", async () => {
+test("an empty week says there is nothing to buy", async () => {
   await openWeek();
 
   shoppingButton().click();
 
   const empty = shoppingDialog().querySelector(".empty-week");
   assert.equal(empty.hidden, false);
-  assert.equal(empty.textContent, "This week has no menus yet.");
+  assert.equal(empty.textContent, "Nothing to buy. Plan some meals first.");
   assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
 });
 
