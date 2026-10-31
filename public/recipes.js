@@ -6,6 +6,7 @@ import { createCatalogList } from "./catalog-list.js";
 import { createWarningIcon, withLoadState } from "./dom.js";
 import { getJson } from "./http.js";
 import { createRecipeEditor } from "./recipe-editor.js";
+import { setUpShell, showCounts } from "./shell.js";
 
 const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
@@ -50,11 +51,13 @@ function load() {
         getJson("/api/ingredients"),
       ]);
       ingredients = catalog.ingredients;
+      showCounts({ recipes: recipeBook.recipes, ingredients });
       list.setEntries(recipeBook.recipes);
     },
   });
 }
 
+setUpShell();
 retryLoadButton.addEventListener("click", load);
 // Unconfirmed changes in the editor would be lost: ask before leaving.
 window.addEventListener("beforeunload", (event) => {

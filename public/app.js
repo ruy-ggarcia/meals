@@ -15,6 +15,7 @@ import { createElement, withLoadState } from "./dom.js";
 import { getJson, REQUEST_TIMEOUT_MS } from "./http.js";
 import { describeItem } from "./menus.js";
 import { createSaves } from "./saves.js";
+import { setUpShell, showCounts } from "./shell.js";
 import { createShoppingDialog } from "./shopping-dialog.js";
 import { shoppingList } from "./shopping-list.js";
 import { createSlotEditor } from "./slot-editor.js";
@@ -333,6 +334,7 @@ async function loadWeek(week) {
       ]);
       recipesById = new Map(recipeBook.recipes.map((recipe) => [recipe.id, recipe]));
       ingredients = catalog.ingredients;
+      showCounts({ recipes: recipeBook.recipes, ingredients });
       fillWeek(week, weekData);
       showDayDates(week);
       markToday();
@@ -402,6 +404,7 @@ async function goToWeek(week, { selectToday = false } = {}) {
   }
 }
 
+setUpShell();
 buildDayBar();
 buildGrid();
 selectDay(todayId());

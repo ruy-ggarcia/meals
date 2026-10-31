@@ -154,12 +154,20 @@ function installGlobals(window, fetch) {
  * the globals `script` (a file name under public/, such as "app.js") reads
  * at the top level, and imports `script` fresh. `fetch` stands in for the
  * network; a request the test doesn't expect rejects with a clear message.
+ * `beforeScript(window)` runs before the import, for state the script reads
+ * when it starts, such as localStorage.
  *
  * Returns `{ window, document, cleanup }`. Always call `cleanup()`, even if
  * the test throws (for example from `afterEach`), so globals and timers
  * never leak into the next test.
  */
-export async function loadPage({ html, script, fetch, url = "http://localhost/" }) {
+export async function loadPage({
+  html,
+  script,
+  fetch,
+  url = "http://localhost/",
+  beforeScript = () => {},
+}) {
   const markup = await readFile(path.join(PUBLIC_DIR, html), "utf8");
   // The page's own <script type="module"> tag is stripped: the test imports
   // the module itself, fresh, below, instead of letting happy-dom load it.
@@ -170,6 +178,7 @@ export async function loadPage({ html, script, fetch, url = "http://localhost/" 
   const { document } = window;
 
   const cleanup = installGlobals(window, fetch);
+  beforeScript(window);
   await import(`../public/${script}?instance=${nextInstanceId++}`);
 
   return { window, document, cleanup };

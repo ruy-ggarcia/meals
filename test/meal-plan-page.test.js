@@ -76,6 +76,25 @@ test("a loaded week renders NAME × SERVINGS lines, or + Add when the slot is em
   assert.equal(empty.querySelector(".slot-empty").textContent, "+ Add");
 });
 
+test("the sidebar counts the active recipes and the active ingredients", async () => {
+  await openWeek({
+    recipes: [
+      { id: "soup", name: "Lentil soup", archived: false },
+      { id: "pie", name: "Apple pie", archived: true },
+    ],
+    ingredients: [
+      { id: "onion", name: "Onion", unit: "g", archived: false, measures: [] },
+      { id: "milk", name: "Milk", unit: "ml", archived: false, measures: [] },
+    ],
+  });
+
+  const count = (href) =>
+    page.document.querySelector(`.page-links a[href="${href}"] .page-count`).textContent;
+  assert.equal(count("/"), "");
+  assert.equal(count("/recipes.html"), "1");
+  assert.equal(count("/ingredients.html"), "2");
+});
+
 test("a menu item whose recipe isn't in the recipe book falls back to Unknown recipe", async () => {
   const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "gone", servings: 2 },

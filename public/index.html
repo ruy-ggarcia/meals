@@ -2,8 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Meals">
     <meta name="mobile-web-app-capable" content="yes">
     <title>Weekly meal plan</title>
@@ -15,33 +19,74 @@
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <header class="page-header">
-      <div class="title-bar">
-        <h1>Weekly meal plan</h1>
-        <nav class="page-links" aria-label="Pages">
-          <a class="page-link" href="/recipes.html">Recipes</a>
-          <a class="page-link" href="/ingredients.html">Ingredients</a>
-        </nav>
+    <nav class="sidebar" aria-label="Sections">
+      <div class="sidebar-header">
+        <img class="app-icon" src="/icons/favicon.svg" alt="" width="28" height="28">
+        <span class="app-name">Meals</span>
+        <button type="button" class="hide-sidebar icon-button" aria-label="Hide sidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="14" rx="3.5"/><path d="M9.5 5v14"/></svg>
+        </button>
       </div>
+      <ul class="page-links">
+        <li>
+          <a class="page-link" href="/" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+            <span class="page-name">Meal plan</span>
+            <span class="page-count"></span>
+          </a>
+        </li>
+        <li>
+          <a class="page-link" href="/recipes.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 5.5a2 2 0 0 1 2-2h12v14H7a2 2 0 0 0-2 2z"/><path d="M5 19.5a2 2 0 0 0 2 2h12v-4"/></svg>
+            <span class="page-name">Recipes</span>
+            <span class="page-count" data-count="recipes"></span>
+          </a>
+        </li>
+        <li>
+          <a class="page-link" href="/ingredients.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 19c0-8 5-14 15-14 0 10-6 15-14 15"/><path d="M5 19l7-7"/></svg>
+            <span class="page-name">Ingredients</span>
+            <span class="page-count" data-count="ingredients"></span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <header class="toolbar">
+      <button type="button" class="show-sidebar glass icon-button" aria-label="Show sidebar">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="14" rx="3.5"/><path d="M9.5 5v14"/></svg>
+      </button>
       <nav id="week-bar" class="week-bar" aria-label="Week">
-        <button type="button" id="previous-week" aria-label="Previous week">‹</button>
-        <span id="week-range" class="week-range" aria-live="polite"></span>
-        <button type="button" id="next-week" aria-label="Next week">›</button>
-        <button type="button" id="today">Today</button>
-        <button type="button" id="shopping-list" class="shopping-list-button">Shopping list</button>
+        <span class="week-switcher glass">
+          <button type="button" id="previous-week" aria-label="Previous week">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7"/></svg>
+          </button>
+          <button type="button" id="next-week" aria-label="Next week">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </span>
+        <button type="button" id="today" class="glass">Today</button>
+        <!-- biome-ignore lint/a11y/useHeadingContent: app.js sets the week when it loads. -->
+        <h1 id="week-range" class="week-range" aria-live="polite"></h1>
       </nav>
+      <button type="button" id="shopping-list" class="tint-button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg>
+        <span class="button-text">Shopping list</span>
+      </button>
     </header>
 
-    <div id="load-error" class="load-error" role="alert" hidden>
-      <span>Couldn't load the meal plan.</span>
-      <button type="button" id="retry-load">Retry</button>
+    <div class="page">
+      <div id="load-error" class="load-error" role="alert" hidden>
+        <span>Couldn't load the meal plan.</span>
+        <button type="button" id="retry-load">Retry</button>
+      </div>
+
+      <!-- Only visible on phones. Filled by app.js. -->
+      <nav id="day-bar" class="day-bar" aria-label="Day" hidden></nav>
+
+      <!-- Wide screens: the 7 days side by side, one row per meal. Phones: one day, stacked. Filled by app.js. -->
+      <main id="grid" class="grid" hidden></main>
     </div>
-
-    <!-- Only visible on mobile (< 768px). Filled by app.js. -->
-    <nav id="day-bar" class="day-bar" aria-label="Day" hidden></nav>
-
-    <!-- Desktop: 8-column CSS grid (meal header + 7 days). Mobile: one day, stacked. Filled by app.js. -->
-    <main id="grid" class="grid" hidden></main>
 
     <!-- Slot editor. Filled and opened by slot-editor.js. -->
     <dialog id="slot-editor" class="dialog" aria-labelledby="slot-editor-title">

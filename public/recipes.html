@@ -2,8 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Meals">
     <meta name="mobile-web-app-capable" content="yes">
     <title>Recipes</title>
@@ -15,36 +19,69 @@
     <script type="module" src="recipes.js"></script>
   </head>
   <body>
-    <header class="page-header">
-      <div class="title-bar">
-        <h1>Recipes</h1>
-        <nav class="page-links" aria-label="Pages">
-          <a class="page-link" href="/">Meal plan</a>
-          <a class="page-link" href="/ingredients.html">Ingredients</a>
-        </nav>
+    <nav class="sidebar" aria-label="Sections">
+      <div class="sidebar-header">
+        <img class="app-icon" src="/icons/favicon.svg" alt="" width="28" height="28">
+        <span class="app-name">Meals</span>
+        <button type="button" class="hide-sidebar icon-button" aria-label="Hide sidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="14" rx="3.5"/><path d="M9.5 5v14"/></svg>
+        </button>
       </div>
+      <ul class="page-links">
+        <li>
+          <a class="page-link" href="/">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+            <span class="page-name">Meal plan</span>
+            <span class="page-count"></span>
+          </a>
+        </li>
+        <li>
+          <a class="page-link" href="/recipes.html" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 5.5a2 2 0 0 1 2-2h12v14H7a2 2 0 0 0-2 2z"/><path d="M5 19.5a2 2 0 0 0 2 2h12v-4"/></svg>
+            <span class="page-name">Recipes</span>
+            <span class="page-count" data-count="recipes"></span>
+          </a>
+        </li>
+        <li>
+          <a class="page-link" href="/ingredients.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 19c0-8 5-14 15-14 0 10-6 15-14 15"/><path d="M5 19l7-7"/></svg>
+            <span class="page-name">Ingredients</span>
+            <span class="page-count" data-count="ingredients"></span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <header class="toolbar">
+      <button type="button" class="show-sidebar glass icon-button" aria-label="Show sidebar">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="14" rx="3.5"/><path d="M9.5 5v14"/></svg>
+      </button>
     </header>
 
-    <div id="load-error" class="load-error" role="alert" hidden>
-      <span>Couldn't load the recipes.</span>
-      <button type="button" id="retry-load">Retry</button>
+    <div class="page">
+      <h1 class="page-title">Recipes</h1>
+
+      <div id="load-error" class="load-error" role="alert" hidden>
+        <span>Couldn't load the recipes.</span>
+        <button type="button" id="retry-load">Retry</button>
+      </div>
+
+      <main id="recipe-book" class="catalog" hidden>
+        <button type="button" id="new-recipe" class="primary new-entry-button">New recipe</button>
+
+        <label for="search">Search</label>
+        <input id="search" type="search" autocomplete="off">
+
+        <p id="empty-book" class="hint" hidden>No recipes yet. Add your first one with New recipe.</p>
+        <p id="no-matches" class="hint" hidden></p>
+        <ul id="active-recipes" class="catalog-list" aria-label="Recipes"></ul>
+
+        <details id="archived" class="archived" hidden>
+          <summary>Archived (<span id="archived-count">0</span>)</summary>
+          <ul id="archived-recipes" class="catalog-list" aria-label="Archived recipes"></ul>
+        </details>
+      </main>
     </div>
-
-    <main id="recipe-book" class="catalog" hidden>
-      <button type="button" id="new-recipe" class="primary new-entry-button">New recipe</button>
-
-      <label for="search">Search</label>
-      <input id="search" type="search" autocomplete="off">
-
-      <p id="empty-book" class="hint" hidden>No recipes yet. Add your first one with New recipe.</p>
-      <p id="no-matches" class="hint" hidden></p>
-      <ul id="active-recipes" class="catalog-list" aria-label="Recipes"></ul>
-
-      <details id="archived" class="archived" hidden>
-        <summary>Archived (<span id="archived-count">0</span>)</summary>
-        <ul id="archived-recipes" class="catalog-list" aria-label="Archived recipes"></ul>
-      </details>
-    </main>
 
     <!-- Recipe editor. Filled and opened by recipe-editor.js. -->
     <dialog id="recipe-editor" class="dialog" aria-labelledby="recipe-editor-title">

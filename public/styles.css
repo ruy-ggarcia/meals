@@ -1,11 +1,89 @@
+/* ---------- Design tokens ---------- */
+
 :root {
-  --accent: #2e7d32;
-  --border: #ccc;
-  --border-light: #ddd;
-  --error: #8a1c14;
-  --warning: #8a5a00;
-  --bg: #f6f6f6;
+  color-scheme: light dark;
+
+  --bg: #f2f2f7;
+  --surface: #fff;
+  --label: #000;
+  --label2: #6c6c70;
+  --label3: #aeaeb2;
+  --sep: rgb(60 60 67 / 20%);
+  --fill: rgb(118 118 128 / 12%);
+  --glass: rgb(255 255 255 / 62%);
+  --glass-blur: blur(24px) saturate(180%);
+  --glass-ring:
+    inset 0 1px 0 rgb(255 255 255 / 90%), inset 0 -0.5px 0 rgb(0 0 0 / 4%),
+    0 0 0 0.5px rgb(0 0 0 / 8%), 0 8px 28px rgb(0 0 0 / 9%);
+  --tint: #2e7d32;
+  --tint-fill: #2e7d32;
+  --tint-soft: rgb(46 125 50 / 12%);
+  --tint-ring:
+    inset 0 1px 0 rgb(255 255 255 / 28%), 0 0 0 0.5px rgb(0 0 0 / 10%),
+    0 6px 18px rgb(46 125 50 / 30%);
+  --red: #d70015;
+  --red-fill: #ff3b30;
+  --red-soft: rgb(255 59 48 / 12%);
+  --warn: #a84b00;
+  --warn-icon: #ff9500;
+  --dim: rgb(0 0 0 / 22%);
+  --sheet: rgb(242 242 247 / 94%);
+  --sheet-ring:
+    inset 0 1px 0 rgb(255 255 255 / 90%), 0 0 0 0.5px rgb(0 0 0 / 8%), 0 30px 80px rgb(0 0 0 / 25%);
+  --segment: #fff;
+  --segment-shadow: 0 1px 3px rgb(0 0 0 / 12%), 0 0 0 0.5px rgb(0 0 0 / 4%);
+  --cell-ring: 0 0 0 0.5px rgb(0 0 0 / 5%), 0 1px 2px rgb(0 0 0 / 4%);
+  --today-ring: inset 0 0 0 2px rgb(46 125 50 / 55%);
+  --edge: rgb(242 242 247 / 85%);
+
+  --card-radius: 22px;
+  --cell-radius: 14px;
+  --title-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --rounded-font: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, sans-serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The width the sidebar takes from the page: 0 while it's hidden. */
+  --sidebar-space: 0px;
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000;
+    --surface: #1c1c1e;
+    --label: #fff;
+    --label2: rgb(235 235 245 / 64%);
+    --label3: rgb(235 235 245 / 30%);
+    --sep: rgb(84 84 88 / 60%);
+    --fill: rgb(118 118 128 / 24%);
+    --glass: rgb(44 44 48 / 58%);
+    --glass-blur: blur(24px) saturate(160%);
+    --glass-ring:
+      inset 0 1px 0 rgb(255 255 255 / 14%), 0 0 0 0.5px rgb(255 255 255 / 10%),
+      0 8px 28px rgb(0 0 0 / 45%);
+    --tint: #6fcf78;
+    --tint-soft: rgb(111 207 120 / 16%);
+    --tint-ring:
+      inset 0 1px 0 rgb(255 255 255 / 22%), 0 0 0 0.5px rgb(255 255 255 / 12%),
+      0 6px 18px rgb(0 0 0 / 40%);
+    --red: #ff6961;
+    --red-fill: #ff453a;
+    --red-soft: rgb(255 69 58 / 18%);
+    --warn: #ffb340;
+    --warn-icon: #ff9f0a;
+    --dim: rgb(0 0 0 / 50%);
+    --sheet: rgb(28 28 30 / 94%);
+    --sheet-ring:
+      inset 0 1px 0 rgb(255 255 255 / 10%), 0 0 0 0.5px rgb(255 255 255 / 10%),
+      0 30px 80px rgb(0 0 0 / 60%);
+    --segment: #636366;
+    --segment-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+    --cell-ring: none;
+    --today-ring: inset 0 0 0 2px rgb(111 207 120 / 60%);
+    --edge: rgb(0 0 0 / 85%);
+  }
+}
+
+/* ---------- Base ---------- */
 
 *,
 *::before,
@@ -19,502 +97,59 @@
   display: none !important;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #222;
   background: var(--bg);
+  color: var(--label);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-size: 15px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 /* Tapping a button twice quickly must not zoom the page (iOS Safari). Pinch
    zoom still works. */
 button {
   touch-action: manipulation;
-}
-
-.page-header {
-  padding: 0.75rem 1rem;
-}
-
-.page-header h1 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
-.title-bar {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.page-link {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.page-links {
-  display: flex;
-  gap: 1rem;
-}
-
-.week-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.week-bar button,
-.catalog button,
-.dialog button {
-  padding: 0.4rem 0.8rem;
-  border: 1px solid var(--border);
-  border-radius: 0.4rem;
-  background: #fff;
-  font: inherit;
-}
-
-.week-bar button {
-  min-width: 2.5rem;
-}
-
-.week-range {
-  flex: 1;
-  font-weight: 600;
-  text-align: center;
-}
-
-.load-error {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin: 0 1rem 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid #f5c2c0;
-  border-radius: 0.4rem;
-  background: #fdecea;
-  color: var(--error);
-}
-
-.load-error button {
-  padding: 0.4rem 0.8rem;
-  font: inherit;
-}
-
-.slot {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-/* The slot's menu: a button that opens the slot editor. */
-.slot-menu {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  width: 100%;
-  min-height: 5rem;
-  padding: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  background: #fff;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  /* A long name without spaces wraps instead of widening the grid. */
-  overflow-wrap: anywhere;
-}
-
-.slot-menu:hover {
-  border-color: #999;
-}
-
-.slot-empty {
-  color: #888;
-}
-
-/* Per-slot save status. It is a <button> so the error state is clickable;
-   it is disabled in every other state. */
-.status {
-  align-self: flex-start;
-  min-height: 1.2rem;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 0.8rem;
-  color: #666;
-}
-
-.status[data-state="saved"] {
-  color: var(--accent);
-}
-
-.status[data-state="error"] {
-  color: #b00020;
   cursor: pointer;
 }
 
-/* Status icons: sized relative to the 0.8rem status font, one line tall. */
-.status svg {
-  display: block;
-  width: 1.2em;
-  height: 1.2em;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+button:disabled {
+  cursor: default;
 }
 
-/* ---------- Dialogs ---------- */
-
-/* No padding: onBackdropClick in dom.js treats a click whose target is the
-   dialog itself as a click on the backdrop. The body inside carries the
-   padding. */
-.dialog {
-  width: min(32rem, calc(100% - 2rem));
-  padding: 0;
-  border: 0;
-  border-radius: 0.5rem;
-  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 25%);
+a {
+  color: var(--tint);
+  text-decoration: none;
 }
 
-.dialog::backdrop {
-  background: rgb(0 0 0 / 40%);
+input::placeholder {
+  color: var(--label3);
+  opacity: 1;
 }
 
-.dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem;
+:focus-visible {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
 }
 
-.dialog-title {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-/* The title takes focus when the dialog opens, only so a phone doesn't open
-   its keyboard: that programmatic focus shows no ring. A keyboard user who
-   tabs back to the title still sees the browser's own focus ring. */
-.dialog-title:focus:not(:focus-visible) {
-  outline: none;
-}
-
-.menu-items,
-.options {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0;
-  border-bottom: 1px solid #eee;
-}
-
-.menu-item .recipe-name {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.servings {
-  min-width: 2.5rem;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.dialog .step {
-  min-width: 2.25rem;
-  padding: 0.4rem 0;
-}
-
-.dialog .done {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-}
-
-.option-search {
-  width: 100%;
-  padding: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  font: inherit;
-}
-
-.options {
-  max-height: 12rem;
-  overflow-y: auto;
-  border: 1px solid #eee;
-  border-radius: 0.3rem;
-}
-
-.option {
-  padding: 0.4rem;
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-
-.option:hover {
-  background: #f3f3f3;
-}
-
-.option[aria-selected="true"] {
-  background: #eef6ee;
-}
-
-.no-match {
-  margin: 0;
-  color: #666;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-/* ---------- Recipe and ingredient editors ---------- */
-
-.field-label {
-  font-weight: 600;
-}
-
-.dialog-subtitle {
-  margin: 0.5rem 0 0;
-  font-size: 1rem;
-}
-
-.measure-name,
-.name-field,
-.quantity-field,
-.unit-field,
-select.measure-field {
-  padding: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  font: inherit;
-}
-
-.name-field {
-  width: 100%;
-}
-
-.ingredient-rows {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ingredient-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0;
-  border-bottom: 1px solid #eee;
-}
-
-.ingredient-name {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.quantity-field {
-  width: 5.5rem;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.measure-name {
-  flex: 1;
-  min-width: 0;
-}
-
-.row-hint {
-  margin: 0;
-  color: #666;
-}
-
-.add-measure {
-  align-self: flex-start;
-}
-
-.unit {
-  min-width: 2rem;
-}
-
-.unit-field,
-select.measure-field {
-  background: #fff;
-}
-
-/* ---------- Shopping list ---------- */
-
-.shopping-lines,
-.not-included-recipes {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.shopping-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.3rem 0;
-  border-bottom: 1px solid #eee;
-}
-
-.line-name,
-.not-included-recipes li {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.line-amount {
-  max-width: 70%;
-  font-variant-numeric: tabular-nums;
-  text-align: end;
-}
-
-.not-included {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.not-included-title {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-  font-weight: 600;
-}
-
-/* ---------- Recipe book and ingredient catalog ---------- */
-
-.catalog {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-width: 40rem;
-  padding: 0 1rem 1rem;
-}
-
-.catalog label {
-  font-weight: 600;
-}
-
-.catalog input {
-  width: 100%;
-  min-width: 0;
-  padding: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  font: inherit;
-}
-
-.catalog select {
-  padding: 0.4rem;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  background: #fff;
-  font: inherit;
-}
-
-.catalog .primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
-}
-
-.new-entry {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin-bottom: 0.75rem;
-}
-
-.field-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.field-message,
-.row-message {
-  margin: 0;
-  color: var(--error);
-}
-
-.field-message:empty {
-  display: none;
-}
-
-.hint {
-  margin: 0.5rem 0;
-  color: #666;
-}
-
-.catalog-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.catalog-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.entry {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-}
-
-.entry-name {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.entry-unit {
-  color: #666;
-}
-
-.new-entry-button {
-  align-self: flex-start;
-  margin-bottom: 0.75rem;
-}
-
-.warning-icon {
-  display: inline-flex;
-  flex-shrink: 0;
-  color: var(--warning);
-}
-
-.warning-icon svg {
-  width: 1.1em;
-  height: 1.1em;
+/* Line icons, drawn with the text color. */
+svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -522,173 +157,645 @@ select.measure-field {
   stroke-linejoin: round;
 }
 
-.row-actions {
-  display: flex;
-  gap: 0.5rem;
+/* Hidden on screen, but read by screen readers. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.row-hint,
-.row-message {
-  flex-basis: 100%;
-}
+/* ---------- Buttons ---------- */
 
-.archived summary {
-  padding: 0.5rem 0;
+.glass,
+.tint-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 40px;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 20px;
   font-weight: 600;
-  cursor: pointer;
+  white-space: nowrap;
 }
 
-/* ---------- Desktop (>= 768px): 7 days x 5 meals ---------- */
-@media (min-width: 768px) {
-  body {
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-ring);
+}
+
+.tint-button {
+  padding: 0 16px 0 13px;
+  background: var(--tint-fill);
+  box-shadow: var(--tint-ring);
+  color: #fff;
+}
+
+.glass:disabled,
+.tint-button:disabled,
+.week-switcher button:disabled {
+  opacity: 0.4;
+}
+
+.icon-button {
+  width: 40px;
+  padding: 0;
+}
+
+.glass svg,
+.tint-button svg,
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Sections: a sidebar on wide screens, a tab bar on phones ---------- */
+
+.sidebar {
+  position: fixed;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-ring);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px 14px 6px;
+}
+
+.app-icon {
+  display: block;
+  border-radius: 7px;
+}
+
+.app-name {
+  flex: 1;
+  font-family: var(--title-font);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.hide-sidebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 17px;
+  background: transparent;
+  color: var(--label2);
+}
+
+.hide-sidebar svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.8;
+}
+
+.page-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: var(--label);
+  font-weight: 500;
+}
+
+.page-link svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0 1px;
+  stroke-width: 1.9;
+}
+
+.page-link:hover {
+  background: var(--fill);
+}
+
+.page-link[aria-current="page"] {
+  background: var(--tint-soft);
+  color: var(--tint);
+  font-weight: 600;
+}
+
+.page-name {
+  flex: 1;
+}
+
+.page-count {
+  color: var(--label2);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Toolbar and page ---------- */
+
+.toolbar {
+  position: fixed;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  left: var(--sidebar-space);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(var(--safe-top) + 12px) 16px 0 12px;
+  /* Only the controls take clicks: the page scrolls under the gaps. */
+  pointer-events: none;
+}
+
+.toolbar > * {
+  pointer-events: auto;
+}
+
+/* The page fades and blurs under the toolbar. */
+.toolbar::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: calc(var(--safe-top) + 64px);
+  background: linear-gradient(to bottom, var(--edge), transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent);
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+  pointer-events: none;
+}
+
+.week-bar {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.week-switcher {
+  padding: 0;
+  gap: 0;
+}
+
+.week-switcher button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+}
+
+.week-switcher svg {
+  stroke-width: 2.4;
+}
+
+.week-range {
+  min-width: 0;
+  margin: 0;
+  padding-left: 6px;
+  overflow: hidden;
+  font-family: var(--title-font);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page {
+  padding: calc(var(--safe-top) + 68px) 16px 28px calc(var(--sidebar-space) + 12px);
+}
+
+.page-title {
+  margin: 0;
+  padding: 0 6px;
+  font-family: var(--title-font);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+.page-title,
+.catalog {
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 720px;
+  margin: 14px auto;
+  padding: 12px 12px 12px 16px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  color: var(--red);
+}
+
+.load-error span {
+  flex: 1;
+}
+
+.load-error button {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--tint-soft);
+  color: var(--tint);
+  font-weight: 600;
+}
+
+/* Wide screens show the sidebar when there's room, or when the user shows it. */
+@media (min-width: 700px) {
+  .sidebar {
+    top: calc(var(--safe-top) + 10px);
+    bottom: 10px;
+    left: 10px;
+    display: none;
+    width: 236px;
+    padding: 12px 10px;
+    border-radius: 26px;
+  }
+
+  :root[data-sidebar="shown"] {
+    --sidebar-space: 246px;
+  }
+
+  :root[data-sidebar="shown"] .sidebar {
     display: flex;
-    flex-direction: column;
-    height: 100vh;
-    /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh is the fallback for browsers without dvh. */
-    height: 100dvh;
   }
 
-  /* The body is a fixed-height column on desktop, so the recipe book scrolls. */
-  .catalog {
+  :root[data-sidebar="shown"] .show-sidebar {
+    display: none;
+  }
+
+  #previous-week::after {
+    content: "";
+    position: absolute;
+    top: 11px;
+    right: 0;
+    width: 0.5px;
+    height: 18px;
+    background: var(--sep);
+  }
+}
+
+@media (min-width: 1000px) {
+  :root:not([data-sidebar="hidden"]) {
+    --sidebar-space: 246px;
+  }
+
+  :root:not([data-sidebar="hidden"]) .sidebar {
+    display: flex;
+  }
+
+  :root:not([data-sidebar="hidden"]) .show-sidebar {
+    display: none;
+  }
+}
+
+/* Phones: a floating tab bar at the bottom, and a smaller toolbar. */
+@media (max-width: 699.98px) {
+  .sidebar {
+    bottom: max(calc(var(--safe-bottom) - 10px), 14px);
+    left: 50%;
+    width: min(360px, calc(100% - 40px));
+    padding: 4px;
+    border-radius: 32px;
+    transform: translateX(-50%);
+  }
+
+  .sidebar-header,
+  .page-count,
+  .show-sidebar {
+    display: none;
+  }
+
+  .page-links {
+    flex-direction: row;
+  }
+
+  .page-links li {
     flex: 1;
-    min-height: 0;
-    overflow: auto;
   }
 
-  /* Fixed width, so the buttons don't move when the range text changes. */
+  .page-link {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    height: 56px;
+    padding: 0;
+    border-radius: 28px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .page-link svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .page-link:hover {
+    background: transparent;
+  }
+
+  .page-link[aria-current="page"] {
+    background: var(--fill);
+  }
+
+  .page-name {
+    flex: none;
+  }
+
+  /* The page fades and blurs under the tab bar too. */
+  body::after {
+    content: "";
+    position: fixed;
+    z-index: 4;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: calc(var(--safe-bottom) + 64px);
+    background: linear-gradient(to top, var(--edge), transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    -webkit-mask-image: linear-gradient(to top, #000 40%, transparent);
+    mask-image: linear-gradient(to top, #000 40%, transparent);
+    pointer-events: none;
+  }
+
+  .toolbar {
+    gap: 8px;
+    height: calc(var(--safe-top) + 52px);
+    padding: calc(var(--safe-top) + 4px) 16px 0;
+  }
+
+  .toolbar::before {
+    height: calc(var(--safe-top) + 56px);
+  }
+
+  .glass,
+  .tint-button {
+    height: 44px;
+    border-radius: 22px;
+  }
+
+  .icon-button,
+  .tint-button {
+    width: 44px;
+    padding: 0;
+  }
+
+  .tint-button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tint-button .button-text,
   .week-range {
-    flex: 0 0 14rem;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .week-bar {
+    gap: 8px;
+  }
+
+  .week-switcher button {
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+  }
+
+  /* Today goes to the right, next to the shopping list. */
+  #today {
+    margin-left: auto;
+  }
+
+  .page {
+    padding: calc(var(--safe-top) + 58px) 16px calc(var(--safe-bottom) + 110px);
+  }
+}
+
+/* ---------- Meal plan ---------- */
+
+.slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The slot's menu: a button that opens the slot editor. */
+.slot-menu {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--cell-radius);
+  background: var(--surface);
+  box-shadow: var(--cell-ring);
+  font-size: 13px;
+  line-height: 1.28;
+  text-align: left;
+  /* A long name without spaces wraps instead of widening the grid. */
+  overflow-wrap: anywhere;
+  transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+.slot-menu:active {
+  transform: scale(0.98);
+}
+
+.slot[data-today] .slot-menu {
+  box-shadow: var(--today-ring);
+}
+
+.slot-empty {
+  color: var(--label3);
+}
+
+/* Per-slot save status. It is a <button> so the error state is clickable;
+   it is disabled in every other state. */
+.status {
+  position: absolute;
+  z-index: 3;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: #8e8e93;
+  box-shadow:
+    0 0 0 2.5px var(--bg),
+    0 2px 6px rgb(0 0 0 / 18%);
+  color: #fff;
+}
+
+.status[data-state="idle"] {
+  display: none;
+}
+
+.status[data-state="saved"] {
+  background: var(--tint-fill);
+}
+
+.status[data-state="error"] {
+  background: var(--red-fill);
+}
+
+.status svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 3;
+}
+
+@media (min-width: 700px) {
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 780px;
+    align-content: start;
   }
 
   .day-bar,
+  .corner,
   .slot-label {
     display: none;
   }
 
-  /* The grid is its own scroll container so sticky headers work on both axes. */
-  .grid {
-    display: grid;
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-    grid-template-columns: 8rem repeat(7, minmax(9rem, 1fr));
-    align-content: start;
-    border-top: 1px solid var(--border-light);
-    background: #fff;
-  }
-
-  .corner,
-  .day-header,
-  .meal-header {
-    padding: 0.5rem;
-    border-right: 1px solid var(--border-light);
-    border-bottom: 1px solid var(--border-light);
-    background: #eee;
-    font-weight: 600;
-  }
-
-  .corner,
   .day-header {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-  }
-
-  .meal-header {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-  }
-
-  .corner {
-    left: 0;
-    z-index: 2;
-  }
-
-  .slot {
-    padding: 0.25rem;
-    border-right: 1px solid var(--border-light);
-    border-bottom: 1px solid var(--border-light);
+    padding: 0 4px 6px;
+    color: var(--label2);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .day-header[data-today] {
-    background: var(--accent);
-    color: #fff;
+    color: var(--tint);
   }
 
-  .slot[data-today] {
-    background: #eef6ee;
+  .meal-header {
+    grid-column: 1 / -1;
+    padding: 14px 4px 0;
+    font-weight: 600;
+  }
+
+  .slot-menu {
+    min-height: 70px;
   }
 }
 
-/* ---------- Mobile (< 768px): one day at a time ---------- */
-@media (max-width: 767.98px) {
-  /* Tighter than desktop so the longest range fits on one line at 390px. */
-  .week-bar {
-    gap: 0.35rem;
-  }
-
-  .week-bar button {
-    min-width: 2rem;
-    padding: 0.35rem 0.5rem;
-  }
-
-  .shopping-list-button {
-    flex: 1 0 100%;
-  }
-
-  .week-range {
-    min-width: 0; /* lets it shrink below its text width instead of overflowing */
-    font-size: 0.9rem;
-  }
-
+@media (max-width: 699.98px) {
   .day-bar {
-    display: flex;
-    gap: 0.25rem;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    padding: 0.5rem 1rem;
-    background: var(--bg);
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    margin-bottom: 6px;
+    padding: 6px 2px;
+    border-radius: var(--card-radius);
+    background: var(--surface);
   }
 
   .day-bar button {
-    flex: 1;
-    padding: 0.6rem 0;
-    border: 1px solid var(--border);
-    border-radius: 0.4rem;
-    background: #fff;
-    font: inherit;
-    font-weight: 600;
     display: flex;
     flex-direction: column;
     align-items: center;
-    line-height: 1.2;
+    gap: 4px;
+    min-height: 64px;
+    margin: 0;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
   }
 
-  .day-bar button[aria-pressed="true"] {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: #fff;
+  .day-letter {
+    color: var(--label2);
+    font-size: 12px;
+    font-weight: 600;
   }
 
   .day-number {
-    font-size: 0.8rem;
-    font-weight: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 19px;
+    font-family: var(--rounded-font);
+    font-size: 19px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 
-  /* Today: accent outline. Selected: filled accent. Both: filled with an inner white ring. */
-  .day-bar button[data-today] {
-    border-color: var(--accent);
-    box-shadow: inset 0 0 0 1px var(--accent);
+  .day-bar button[data-today] .day-letter,
+  .day-bar button[data-today] .day-number {
+    color: var(--tint);
   }
 
-  .day-bar button[data-today][aria-pressed="true"] {
-    box-shadow: inset 0 0 0 2px #fff;
+  .day-bar button[aria-pressed="true"] .day-number {
+    background: var(--label);
+    color: var(--surface);
   }
 
-  .grid {
-    padding: 0 1rem 1rem;
+  .day-bar button[data-today][aria-pressed="true"] .day-number {
+    background: var(--tint-fill);
+    color: #fff;
   }
 
   .corner,
@@ -699,7 +806,6 @@ select.measure-field {
 
   .slot {
     display: none;
-    margin-bottom: 0.75rem;
   }
 
   /* Show only the slots of the selected day (attribute set by app.js). */
@@ -714,49 +820,252 @@ select.measure-field {
   }
 
   .slot-label {
+    padding: 22px 6px 8px;
     font-weight: 600;
   }
 
   .slot-menu {
-    min-height: 3rem;
+    min-height: 50px;
+    padding: 12px 16px;
+    border-radius: var(--card-radius);
+    font-size: 17px;
+    line-height: 1.3;
   }
 
-  /* Dialogs fill the screen on phones. */
-  .dialog {
-    width: 100%;
-    max-width: none;
-    height: 100%;
-    max-height: none;
-    margin: 0;
-    border-radius: 0;
+  .slot-menu:active {
+    transform: none;
   }
 
-  /* Fills the dialog, so a tap below the actions still lands inside it
-     instead of on the dialog's own (backdrop) box. */
-  .dialog-body {
-    min-height: 100%;
+  .slot .status {
+    top: 38px;
   }
+}
 
-  /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .option-search {
-    font-size: 16px;
-  }
+/* ---------- Dialogs ---------- */
 
-  /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .conversion-measure-name,
-  .measure-name,
-  .name-field,
-  .quantity-field,
-  .unit-field,
-  select.measure-field {
-    font-size: 16px;
-  }
+/* No padding: onBackdropClick in dom.js treats a click whose target is the
+   dialog itself as a click on the backdrop. The body inside carries the
+   padding. */
+.dialog {
+  width: min(600px, calc(100% - 80px));
+  max-height: calc(100% - 80px);
+  padding: 0;
+  border: 0;
+  border-radius: 28px;
+  background: var(--sheet);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: var(--sheet-ring);
+  color: var(--label);
+}
 
-  /* >= 16px prevents iOS Safari from zooming in on focus. */
-  .catalog input,
-  .catalog select {
-    font-size: 16px;
-  }
+.dialog::backdrop {
+  background: var(--dim);
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 24px;
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* The title takes focus when the dialog opens, only so a phone doesn't open
+   its keyboard: that programmatic focus shows no ring. A keyboard user who
+   tabs back to the title still sees the focus ring. */
+.dialog-title:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.dialog button,
+.catalog button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--fill);
+  font-weight: 500;
+}
+
+.dialog .done,
+.catalog .primary {
+  background: var(--tint-fill);
+  box-shadow: var(--tint-ring);
+  color: #fff;
+  font-weight: 600;
+}
+
+.dialog button:disabled,
+.catalog button:disabled {
+  opacity: 0.4;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog-subtitle,
+.dialog label,
+.field-label {
+  margin: 0;
+  padding: 12px 6px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.menu-items,
+.options,
+.ingredient-rows,
+.shopping-lines,
+.not-included-recipes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-items:not(:empty),
+.ingredient-rows:not(:empty),
+.shopping-lines,
+.options {
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.menu-item,
+.ingredient-row,
+.shopping-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  margin-left: 16px;
+  padding: 8px 12px 8px 0;
+  box-shadow: inset 0 -0.5px 0 var(--sep);
+}
+
+.menu-item:last-child,
+.ingredient-row:last-child,
+.shopping-line:last-child {
+  box-shadow: none;
+}
+
+.recipe-name,
+.ingredient-name,
+.line-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.servings {
+  min-width: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.option-search,
+.name-field,
+.quantity-field,
+.measure-name,
+.unit-field,
+.conversion-measure-name,
+select.measure-field {
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--fill);
+  font-size: 16px;
+}
+
+.option-search,
+.name-field {
+  width: 100%;
+  height: 44px;
+  border-radius: 14px;
+  font-size: 17px;
+}
+
+.quantity-field {
+  width: 76px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.measure-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.options {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.option {
+  min-height: 46px;
+  margin-left: 16px;
+  padding: 12px 14px 12px 0;
+  box-shadow: inset 0 -0.5px 0 var(--sep);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.option:last-child {
+  box-shadow: none;
+}
+
+.option[aria-selected="true"] {
+  margin-left: 0;
+  padding-left: 16px;
+  background: var(--tint-soft);
+}
+
+.no-match,
+.hint,
+.row-hint {
+  margin: 0;
+  padding: 0 6px;
+  color: var(--label2);
+}
+
+.field-message,
+.row-message {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0 6px;
+  color: var(--red);
+  font-size: 13px;
+}
+
+.field-message:empty {
+  display: none;
+}
+
+.row-hint {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+.unit {
+  min-width: 28px;
+  color: var(--label2);
+}
+
+.add-measure {
+  align-self: flex-start;
 }
 
 .conversion-line,
@@ -764,6 +1073,170 @@ select.measure-field {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  margin: 0.5rem 0;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  font-weight: 400;
+}
+
+.conversion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------- Shopping list ---------- */
+
+.shopping-line {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.line-amount {
+  max-width: 70%;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.not-included {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+}
+
+.not-included-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.not-included-recipes li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Recipe book and ingredient catalog ---------- */
+
+.catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.catalog label {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.catalog input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--fill);
+  font-size: 17px;
+}
+
+.new-entry-button {
+  align-self: flex-start;
+}
+
+.catalog-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-list:not(:empty) {
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.catalog-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  margin-left: 16px;
+  padding: 8px 8px 8px 0;
+  box-shadow: inset 0 -0.5px 0 var(--sep);
+}
+
+.catalog-row:last-child {
+  box-shadow: none;
+}
+
+.entry {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.entry-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.entry-unit {
+  color: var(--label2);
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.warning-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--warn-icon);
+}
+
+.warning-icon svg {
+  width: 1.1em;
+  height: 1.1em;
+  stroke-width: 2.2;
+}
+
+.archived summary {
+  padding: 14px 6px 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Phones: dialogs are sheets that rise from the bottom. */
+@media (max-width: 699.98px) {
+  .dialog {
+    width: 100%;
+    max-width: none;
+    height: calc(100% - var(--safe-top) - 10px);
+    max-height: none;
+    margin: auto 0 0;
+    border-radius: 38px 38px 0 0;
+  }
+
+  /* Fills the dialog, so a tap below the actions still lands inside it
+     instead of on the dialog's own (backdrop) box. */
+  .dialog-body {
+    min-height: 100%;
+    padding-bottom: calc(var(--safe-bottom) + 24px);
+  }
 }
