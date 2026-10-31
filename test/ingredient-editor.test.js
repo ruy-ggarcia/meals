@@ -59,9 +59,19 @@ function setName(value) {
   query(".name-field").dispatchEvent(new window.Event("input", { bubbles: true }));
 }
 
+function unitRadio(value) {
+  return query(`.unit-field input[value="${value}"]`);
+}
+
+// Checks the unit's radio button, as a click or an arrow key does.
 function setUnit(value) {
-  query(".unit-field").value = value;
-  query(".unit-field").dispatchEvent(new window.Event("change", { bubbles: true }));
+  unitRadio(value).checked = true;
+  unitRadio(value).dispatchEvent(new window.Event("change", { bubbles: true }));
+}
+
+/** The checked unit, or "" when none is. */
+function unitValue() {
+  return query(".unit-field input:checked")?.value ?? "";
 }
 
 function pointerdownOn(element) {
@@ -85,7 +95,7 @@ test("opens with the name and the unit, focus on the title, and Unit enabled whe
 
   assert.equal(dialog.open, true);
   assert.equal(query(".name-field").value, "Milk");
-  assert.equal(query(".unit-field").value, "g");
+  assert.equal(unitValue(), "g");
   assert.equal(query(".unit-field").disabled, false);
   assertFocus(document, query(".dialog-title"));
 });
@@ -171,7 +181,7 @@ test("a unit in use (409 without an ingredient) shows the server's message", asy
     query(".save-message").textContent,
     '"Milk" is used in recipes. To change its unit, remove it from those recipes first.',
   );
-  assert.equal(query(".unit-field").value, "ml");
+  assert.equal(unitValue(), "ml");
 });
 
 test("Done with an empty name shows a message under Name and sends nothing", () => {
@@ -257,26 +267,44 @@ function openNewEditor() {
   return openEditor({ ingredient: null });
 }
 
-test("a new ingredient opens titled New ingredient, empty, with Choose a unit, and focus in Name", () => {
+test("Unit is a group of three choices: g, ml, and pcs", () => {
+  openEditor();
+
+  const group = query(".unit-field");
+  assert.equal(group.tagName, "FIELDSET");
+  assert.equal(group.querySelector("legend").textContent, "Unit");
+  assert.deepEqual(
+    [...group.querySelectorAll('input[type="radio"]')].map((radio) => [
+      radio.value,
+      radio.closest("label").textContent.trim(),
+    ]),
+    [
+      ["g", "g"],
+      ["ml", "ml"],
+      ["pcs", "pcs"],
+    ],
+  );
+});
+
+test("a new ingredient opens titled New ingredient, empty, with no unit chosen, and focus in Name", () => {
   openNewEditor();
 
   assert.equal(dialog.open, true);
   assert.equal(query(".dialog-title").textContent, "New ingredient");
   assert.equal(query(".name-field").value, "");
-  assert.equal(query(".unit-field").value, "");
-  assert.equal(query(".unit-field").selectedOptions[0].textContent, "Choose a unit");
+  assert.equal(unitValue(), "");
   assert.equal(query(".unit-field").disabled, false);
   assertFocus(document, query(".name-field"));
 });
 
-test("an existing ingredient opens titled Edit ingredient, without the Choose a unit option", () => {
+test("an existing ingredient opens titled Edit ingredient, with its unit chosen, also after a new one", () => {
   openNewEditor();
+  setUnit("pcs");
   query(".cancel").click();
   openEditor();
 
   assert.equal(query(".dialog-title").textContent, "Edit ingredient");
-  assert.equal(query('.unit-field option[value=""]').hidden, true);
-  assert.equal(query(".unit-field").value, "g");
+  assert.equal(unitValue(), "g");
 });
 
 test("Done on a new ingredient without a unit shows Choose a unit. and sends nothing", () => {
@@ -287,7 +315,7 @@ test("Done on a new ingredient without a unit shows Choose a unit. and sends not
 
   assert.equal(dialog.open, true);
   assert.equal(query(".save-message").textContent, "Choose a unit.");
-  assertFocus(document, query(".unit-field"));
+  assertFocus(document, unitRadio("g"));
   assert.equal(server.requests.length, 0);
 });
 
@@ -811,7 +839,7 @@ test("picking a unit that needs a conversion with unsaved measure changes keeps 
 
   setUnit("ml");
 
-  assert.equal(query(".unit-field").value, "g");
+  assert.equal(unitValue(), "g");
   assert.equal(conversion().hidden, true);
   assert.equal(
     query(".save-message").textContent,

@@ -48,7 +48,7 @@ export function createIngredientEditor(dialog) {
   const nameField = dialog.querySelector(".name-field");
   const nameMessage = dialog.querySelector(".name-message");
   const unitField = dialog.querySelector(".unit-field");
-  const noUnitOption = unitField.querySelector('option[value=""]');
+  const unitRadios = [...unitField.querySelectorAll('input[type="radio"]')];
   const conversionRow = dialog.querySelector(".conversion");
   const conversionFrom = conversionRow.querySelector(".conversion-from");
   const conversionFromUnit = conversionRow.querySelector(".conversion-from-unit");
@@ -70,11 +70,21 @@ export function createIngredientEditor(dialog) {
    */
   let session = null;
 
+  /** The checked unit, or "" while none is. */
+  function unitValue() {
+    return unitRadios.find((radio) => radio.checked)?.value ?? "";
+  }
+
+  /** Checks the radio button of `unit`, or none for "". */
+  function setUnit(unit) {
+    for (const radio of unitRadios) radio.checked = radio.value === unit;
+  }
+
   const lifecycle = createEditorDialog({
     dialog,
     hasChanges,
     onDone: save,
-    // The dialog disables inputs and buttons, not the select.
+    // The dialog disables the radio buttons one by one. Their group follows.
     onBusy: (busy) => {
       unitField.disabled = busy;
       syncControls();
@@ -99,7 +109,7 @@ export function createIngredientEditor(dialog) {
     const { ingredient, usage } = session;
     return (
       Boolean(ingredient) &&
-      unitField.value !== ingredient.unit &&
+      unitValue() !== ingredient.unit &&
       ((ingredient.measures ?? []).length > 0 || usage.inUnit)
     );
   }
@@ -131,7 +141,7 @@ export function createIngredientEditor(dialog) {
   }
 
   function amountLabel(row) {
-    return `Amount of ${row.name} in ${unitField.value}`;
+    return `Amount of ${row.name} in ${unitValue()}`;
   }
 
   function rowElement(row, index) {
@@ -175,7 +185,7 @@ export function createIngredientEditor(dialog) {
       nameInput,
       createElement("span", "equals", "="),
       amountInput,
-      createElement("span", "unit", unitField.value),
+      createElement("span", "unit", unitValue()),
     );
     if (usedBy(row) > 0) item.append(createElement("p", "row-hint", measureUsedText(usedBy(row))));
     if (row.message) {
@@ -233,7 +243,7 @@ export function createIngredientEditor(dialog) {
     conversionRow.hidden = !needed;
     if (needed) {
       conversionFromUnit.textContent = session.ingredient.unit;
-      conversionToUnit.textContent = unitField.value;
+      conversionToUnit.textContent = unitValue();
     }
     conversionMeasure.hidden = !(needed && session.usage.inUnit);
   }
@@ -243,8 +253,7 @@ export function createIngredientEditor(dialog) {
     title.textContent = ingredient ? "Edit ingredient" : "New ingredient";
     nameField.value = ingredient?.name ?? "";
     // Choosing a unit applies to a new ingredient only.
-    noUnitOption.hidden = Boolean(ingredient);
-    unitField.value = ingredient?.unit ?? "";
+    setUnit(ingredient?.unit ?? "");
     nameMessage.textContent = "";
     saveMessage.textContent = "";
     conversionRow.hidden = true;
@@ -260,7 +269,7 @@ export function createIngredientEditor(dialog) {
     return (
       lifecycle.isOpen() &&
       (nameField.value !== (session.ingredient?.name ?? "") ||
-        unitField.value !== (session.ingredient?.unit ?? "") ||
+        unitValue() !== (session.ingredient?.unit ?? "") ||
         measuresChanged())
     );
   }
@@ -377,14 +386,14 @@ export function createIngredientEditor(dialog) {
     const { ingredient } = session;
     const conversion = converting ? readConversion() : undefined;
     if (conversion === null) return;
-    if (!ingredient && unitField.value === "") {
+    if (!ingredient && unitValue() === "") {
       saveMessage.textContent = "Choose a unit.";
-      unitField.focus();
+      unitRadios[0].focus();
       return;
     }
     const body = {};
     if (nameField.value !== (ingredient?.name ?? "")) body.name = nameField.value;
-    if (unitField.value !== (ingredient?.unit ?? "")) body.unit = unitField.value;
+    if (unitValue() !== (ingredient?.unit ?? "")) body.unit = unitValue();
     if (conversion) body.conversion = conversion;
     else if (
       ingredient ? !sameMeasures(measures, ingredient.measures ?? []) : measures.length > 0
@@ -392,7 +401,7 @@ export function createIngredientEditor(dialog) {
       // The amounts are in the selected unit. If the stored unit changed
       // since the editor opened, the server sees a unit change and rejects
       // it, instead of reading the amounts in the wrong unit.
-      body.unit = unitField.value;
+      body.unit = unitValue();
       body.measures = measures;
     }
     if (Object.keys(body).length === 0) lifecycle.close();
@@ -405,7 +414,7 @@ export function createIngredientEditor(dialog) {
   unitField.addEventListener("change", () => {
     saveMessage.textContent = "";
     if (needsConversion() && measuresChanged()) {
-      unitField.value = session.ingredient.unit;
+      setUnit(session.ingredient.unit);
       saveMessage.textContent = "Save your changes to the measures before you change the unit.";
     }
     showConversion();

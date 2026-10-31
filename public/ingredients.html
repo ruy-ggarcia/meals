@@ -97,13 +97,14 @@
           <label class="section-title" for="ingredient-name">Name</label>
           <input id="ingredient-name" class="name-field" type="text" autocomplete="off" placeholder="Ingredient name">
           <p class="field-message name-message" role="status"></p>
-          <label class="section-title" for="ingredient-unit">Unit</label>
-          <select id="ingredient-unit" class="unit-field">
-            <option value="">Choose a unit</option>
-            <option value="g">g</option>
-            <option value="ml">ml</option>
-            <option value="pcs">pcs</option>
-          </select>
+          <fieldset id="ingredient-unit" class="unit-field">
+            <legend class="section-title">Unit</legend>
+            <div class="segmented">
+              <label><input type="radio" name="unit" value="g"><span>g</span></label>
+              <label><input type="radio" name="unit" value="ml"><span>ml</span></label>
+              <label><input type="radio" name="unit" value="pcs"><span>pcs</span></label>
+            </div>
+          </fieldset>
           <div class="conversion" hidden>
             <h3 class="section-title">Conversion</h3>
             <div class="card">

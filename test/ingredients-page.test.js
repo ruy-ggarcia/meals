@@ -73,6 +73,13 @@ function setValue(element, value) {
   element.dispatchEvent(new window.Event("input", { bubbles: true }));
 }
 
+// Checks the unit's radio button in the editor, as a click or an arrow key does.
+function chooseUnit(value) {
+  const radio = document.querySelector(`#ingredient-unit input[value="${value}"]`);
+  radio.checked = true;
+  radio.dispatchEvent(new window.Event("change", { bubbles: true }));
+}
+
 function pointerdownOn(element) {
   element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
 }
@@ -163,9 +170,7 @@ test("New ingredient opens the editor, and a saved one appears in its sorted pla
   assert.equal(dialog.open, true);
   assert.equal(dialog.querySelector(".dialog-title").textContent, "New ingredient");
   setValue(document.getElementById("ingredient-name"), "Milk");
-  const unit = document.getElementById("ingredient-unit");
-  unit.value = "ml";
-  unit.dispatchEvent(new window.Event("change", { bubbles: true }));
+  chooseUnit("ml");
   dialog.querySelector(".done").click();
   await waitFor(() => server.requestFor("POST", "/api/ingredients") !== undefined);
   assert.deepEqual(server.requestFor("POST", "/api/ingredients").body, {
@@ -320,7 +325,7 @@ test("Edit opens the editor with the ingredient and its usage from a reload, not
   });
 
   assert.equal(editorDialog().open, true);
-  assert.equal(document.getElementById("ingredient-unit").value, "g");
+  assert.equal(document.querySelector("#ingredient-unit input:checked").value, "g");
   assert.equal(editorDialog().querySelector(".measure-name").value, "pcs");
   assert.equal(editorDialog().querySelector(".measure-amount").value, "120");
   assert.equal(editorDialog().querySelector(".measure-row .remove").disabled, true);
@@ -394,12 +399,6 @@ test("a second click while the reload runs sends no second reload", async () => 
   assert.equal(server.requests.length, 4);
   assert.equal(editorDialog().querySelector(".dialog-title").textContent, "Edit ingredient");
 });
-
-function chooseUnit(value) {
-  const unit = document.getElementById("ingredient-unit");
-  unit.value = value;
-  unit.dispatchEvent(new window.Event("change", { bubbles: true }));
-}
 
 test("a unit change on an ingredient that a recipe has in its unit saves that unit as a measure", async () => {
   await openIngredientsPage(
