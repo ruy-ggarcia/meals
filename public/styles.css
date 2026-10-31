@@ -1375,9 +1375,10 @@ svg {
 }
 
 /* The title takes focus when the dialog opens, only so a phone doesn't open
-   its keyboard: that programmatic focus shows no ring. A keyboard user who
-   tabs back to the title still sees the focus ring. */
-.dialog-title:focus:not(:focus-visible) {
+   its keyboard. That focus never shows a ring: an editor opens after a
+   reload, so browsers treat its focus as if it came from the keyboard. The
+   title has tabindex="-1", so Tab never reaches it. */
+.dialog-title:focus {
   outline: none;
 }
 
