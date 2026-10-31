@@ -8,10 +8,8 @@
 //
 // Known gap vs. real browsers: happy-dom doesn't implement `window.confirm`
 // at all (it's browser chrome, like the dialogs `alert()` and `prompt()`
-// open). loadPage() installs a stub that throws when a test doesn't expect
-// it to be called; a test that needs it replaces it with
-// `mock.method(window, "confirm", () => true)` (or `false`), same as it
-// would mock any other method.
+// open). The pages ask in their own dialogs instead, so loadPage() installs
+// a stub that throws if a page ever calls it.
 //
 // Known gap vs. real browsers: happy-dom's `history.replaceState` fires a
 // "hashchange" event when the new URL's hash differs from the old one; real
@@ -154,12 +152,20 @@ function installGlobals(window, fetch) {
  * the globals `script` (a file name under public/, such as "app.js") reads
  * at the top level, and imports `script` fresh. `fetch` stands in for the
  * network; a request the test doesn't expect rejects with a clear message.
+ * `beforeScript(window)` runs before the import, for state the script reads
+ * when it starts, such as localStorage.
  *
  * Returns `{ window, document, cleanup }`. Always call `cleanup()`, even if
  * the test throws (for example from `afterEach`), so globals and timers
  * never leak into the next test.
  */
-export async function loadPage({ html, script, fetch, url = "http://localhost/" }) {
+export async function loadPage({
+  html,
+  script,
+  fetch,
+  url = "http://localhost/",
+  beforeScript = () => {},
+}) {
   const markup = await readFile(path.join(PUBLIC_DIR, html), "utf8");
   // The page's own <script type="module"> tag is stripped: the test imports
   // the module itself, fresh, below, instead of letting happy-dom load it.
@@ -170,6 +176,7 @@ export async function loadPage({ html, script, fetch, url = "http://localhost/" 
   const { document } = window;
 
   const cleanup = installGlobals(window, fetch);
+  beforeScript(window);
   await import(`../public/${script}?instance=${nextInstanceId++}`);
 
   return { window, document, cleanup };

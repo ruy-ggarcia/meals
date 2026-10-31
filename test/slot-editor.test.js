@@ -56,7 +56,8 @@ function openEditor({ menu: initialMenu = menu(), recipes = RECIPES } = {}) {
   document.body.append(opener);
   let done = "not called";
   editor.open({
-    title: "Monday, September 21 · Lunch",
+    title: "Lunch",
+    subtitle: "Monday, Sep 21",
     menu: initialMenu,
     recipes,
     opener,
@@ -81,6 +82,50 @@ function keydownOn(element, key) {
 function pointerdownOn(element) {
   element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
 }
+
+test("the editor shows its title and subtitle, and Cancel and Done above the menu", () => {
+  openEditor();
+
+  assert.equal(title().textContent, "Lunch");
+  assert.equal(document.querySelector(".sheet-subtitle").textContent, "Monday, Sep 21");
+  const header = document.querySelector(".sheet-header");
+  assert.ok(header.querySelector(".cancel"));
+  assert.ok(header.querySelector(".done"));
+});
+
+test("an empty menu says that nothing is planned, until a recipe is added", () => {
+  openEditor();
+  const empty = document.querySelector(".empty-menu");
+  assert.equal(empty.hidden, false);
+  assert.equal(empty.textContent, "Nothing planned. Add a recipe below.");
+
+  type("soup");
+  optionEls()[0].click();
+
+  assert.equal(empty.hidden, true);
+});
+
+test("Add recipe offers every addable recipe before you type, with a hint to type", () => {
+  openEditor({ menu: menu(["soup", 1]) });
+
+  assert.equal(search().placeholder, "Type part of a name");
+  assert.deepEqual(
+    optionEls().map((option) => option.textContent),
+    ["Green salad", "Omelette"],
+  );
+});
+
+test("with no matches, Add recipe points to the Recipes page", () => {
+  openEditor();
+
+  type("xyz");
+
+  assert.equal(document.querySelector(".options").hidden, true);
+  assert.equal(
+    document.querySelector(".no-match").textContent,
+    "No active recipes match. Add recipes on the Recipes page.",
+  );
+});
 
 test("Done saves the copy, closes the dialog, and returns focus to the opener", () => {
   const { opener, savedMenu } = openEditor();

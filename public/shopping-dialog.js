@@ -3,10 +3,12 @@
 // backdrop close it.
 
 import { createElement, createWarningIcon, onBackdropClick } from "./dom.js";
-import { lineAmount } from "./shopping-list.js";
+import { lineParts } from "./shopping-list.js";
 
 export function createShoppingDialog(dialog) {
   const title = dialog.querySelector(".dialog-title");
+  const subtitle = dialog.querySelector(".sheet-subtitle");
+  const summary = dialog.querySelector(".shopping-summary");
   const emptyWeek = dialog.querySelector(".empty-week");
   const lines = dialog.querySelector(".shopping-lines");
   const notIncluded = dialog.querySelector(".not-included");
@@ -16,23 +18,29 @@ export function createShoppingDialog(dialog) {
   /** The control that opened the dialog, or null while it's closed. */
   let opener = null;
 
+  // The total, and under it the breakdown by measure, if any.
   function line(entry) {
+    const { total, breakdown } = lineParts(entry);
+    const amount = createElement("span", "line-amount");
+    amount.append(createElement("span", "line-total", total));
+    if (breakdown !== "") amount.append(" ", createElement("span", "line-breakdown", breakdown));
     const item = createElement("li", "shopping-line");
-    item.append(
-      createElement("span", "line-name", entry.name),
-      createElement("span", "line-amount", lineAmount(entry)),
-    );
+    item.append(createElement("span", "line-name", entry.name), amount);
     return item;
   }
 
   /**
-   * Shows `list`, the result of shoppingList(). `isEmpty` tells that the week
-   * has no menu items, and `slotLabel({ day, meal })` names a slot, such as
-   * "Mon dinner".
+   * Shows `list`, the result of shoppingList(), under `title` and `subtitle`.
+   * `isEmpty` tells that the week has no menu items, and
+   * `slotLabel({ day, meal })` names a slot, such as "Mon dinner".
    */
-  function open({ title: text, list, isEmpty, slotLabel, opener: from }) {
+  function open({ title: text, subtitle: subtitleText, list, isEmpty, slotLabel, opener: from }) {
     opener = from;
     title.textContent = text;
+    subtitle.textContent = subtitleText;
+    const count = list.lines.length;
+    summary.textContent = `${count} ${count === 1 ? "ingredient" : "ingredients"} · from A to Z · totals rounded up`;
+    summary.hidden = count === 0;
     emptyWeek.hidden = !isEmpty;
     lines.replaceChildren(...list.lines.map(line));
     lines.hidden = list.lines.length === 0;

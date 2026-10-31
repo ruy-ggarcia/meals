@@ -1,5 +1,7 @@
 // DOM helpers shared by the pages.
 
+import { parseQuantity } from "./quantities.js";
+
 /**
  * A new element with an optional class and text. The text is set with
  * textContent, so recipe names never run as HTML.
@@ -16,6 +18,40 @@ export function createButton(text, label, className) {
   const button = createElement("button", className, text);
   button.type = "button";
   button.setAttribute("aria-label", label);
+  return button;
+}
+
+/**
+ * Marks `field` as invalid while it holds text that isn't a quantity or an
+ * amount. An empty field isn't marked: Done says that it needs a number.
+ */
+export function markQuantity(field) {
+  if (field.value.trim() !== "" && parseQuantity(field.value) === null) {
+    field.setAttribute("aria-invalid", "true");
+  } else {
+    field.removeAttribute("aria-invalid");
+  }
+}
+
+// Line icons, drawn with currentColor.
+const ICONS = {
+  chevron: '<path d="M9 5l7 7-7 7"/>',
+  minus: '<path d="M5 12h14"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+};
+
+/** An icon of `ICONS`, which screen readers skip. */
+export function createIcon(name, className = "icon") {
+  const icon = createElement("span", className);
+  // static markup, never user text
+  icon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
+  return icon;
+}
+
+/** A `<button type="button">` that shows the icon `name` and has the accessible name `label`. */
+export function createIconButton(name, label, className) {
+  const button = createButton("", label, className);
+  button.append(createIcon(name));
   return button;
 }
 

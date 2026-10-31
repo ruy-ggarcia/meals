@@ -196,6 +196,21 @@ test("static files aren't logged", async () => {
   assert.deepEqual(entries, []);
 });
 
+test("the web app manifest is served as a manifest, and every icon it names exists", async () => {
+  const response = await request(app).get("/manifest.webmanifest");
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers["content-type"], /^application\/manifest\+json/);
+  const manifest = JSON.parse(response.text);
+  assert.equal(manifest.name, "Meals");
+  assert.equal(manifest.display, "standalone");
+  for (const icon of manifest.icons) {
+    const file = await request(app).get(`/${icon.src}`);
+    assert.equal(file.status, 200, icon.src);
+    assert.equal(file.headers["content-type"], icon.type, icon.src);
+  }
+});
+
 // ---------- Health ----------
 
 test("GET /api/health returns 200 with the version when the data directory is writable", async () => {

@@ -1,10 +1,11 @@
 // The list logic that the recipe book and the ingredient catalog share:
-// search, the active and archived lists, archiving and restoring, row
-// messages, moving focus after a row leaves a list, and reloading before New
-// or Edit opens the editor. Each page supplies its elements, its texts, what a
-// row shows besides the name, its reload, and its editor.
+// search, the active and archived lists, restoring, row messages, moving
+// focus after a row leaves a list, and reloading before New or a row opens
+// the editor, where archiving happens. Each page supplies its elements, its
+// texts, what a row shows under or after the name, its reload, and its
+// editor.
 
-import { createButton, createElement, focusIsFree } from "./dom.js";
+import { createButton, createElement, createIcon, focusIsFree } from "./dom.js";
 import { sendJson } from "./http.js";
 import { quoted } from "./messages.js";
 import { filterByName, sortByName } from "./name-search.js";
@@ -14,17 +15,18 @@ import { filterByName, sortByName } from "./name-search.js";
  * `activeList`, `archived` (the <details>), `archivedCount`, `archivedList`,
  * the `newButton` that opens the editor on a new entry, and the
  * `retryButton` of the load error. `noun` is "recipe" or "ingredient", for
- * messages. `url(id)` is an entry's API URL, and `details(entry)` returns the
- * nodes a row shows after the name.
+ * messages and IDs. `url(id)` is an entry's API URL, and `details(entry)`
+ * returns the nodes a row shows with the name. `onChange(entries)` runs
+ * whenever the entries change, with all of them.
  *
  * `reload()` loads the entries again, calls setEntries(), and resolves to
- * true when the load succeeds. `open(entry, { restoreFocus, onSaved })` opens
- * the page's editor on `entry`, or on a new entry when it's undefined, and
- * passes the two callbacks on to it.
+ * true when the load succeeds. `open(entry, { restoreFocus, onSaved, others })`
+ * opens the page's editor on `entry`, or on a new entry when it's undefined,
+ * and passes the two callbacks and every entry, `others`, on to it.
  *
  * Returns { setEntries }.
  */
-export function createCatalogList({ elements, noun, url, details, reload, open }) {
+export function createCatalogList({ elements, noun, url, details, onChange, reload, open }) {
   const {
     search,
     emptyMessage,
@@ -41,9 +43,9 @@ export function createCatalogList({ elements, noun, url, details, reload, open }
   let entries = [];
   /** Error messages under rows, by entry ID. */
   const rowMessages = new Map();
-  /** Entry IDs with an archive or restore request running. */
+  /** Entry IDs with a restore request running. */
   const busy = new Set();
-  /** True while New or Edit reloads, so a second click opens no second editor. */
+  /** True while New or a row reloads, so a second click opens no second editor. */
   let opening = false;
 
   function rowElement(id) {
@@ -51,25 +53,30 @@ export function createCatalogList({ elements, noun, url, details, reload, open }
     return activeList.querySelector(selector) ?? archivedList.querySelector(selector);
   }
 
-  function button(text, label, onClick) {
-    const element = createButton(text, label);
-    element.addEventListener("click", onClick);
-    return element;
-  }
-
+  // A row: a button with the name and the details that opens the editor, and
+  // for an archived entry, Restore.
   function row(entry) {
     const item = createElement("li", "catalog-row");
     item.dataset.id = entry.id;
-    const label = createElement("span", "entry");
-    label.append(createElement("span", "entry-name", entry.name), ...details(entry));
-    const edit = button("Edit", `Edit ${entry.name}`, () => openEditor(entry.id));
-    const toggle = entry.archived
-      ? button("Restore", `Restore ${entry.name}`, () => setArchived(entry.id, false))
-      : button("Archive", `Archive ${entry.name}`, () => setArchived(entry.id, true));
-    const actions = createElement("span", "row-actions");
-    actions.append(edit, toggle);
-    for (const control of actions.children) control.disabled = busy.has(entry.id);
-    item.append(label, actions);
+    const detail = createElement("span", "entry-detail");
+    detail.id = `${noun}-detail-${entry.id}`;
+    detail.append(...details(entry));
+    const edit = createButton("", `Edit ${entry.name}`, "entry");
+    // A screen reader reads the details after the button's name.
+    edit.setAttribute("aria-describedby", detail.id);
+    edit.append(
+      createElement("span", "entry-name", entry.name),
+      detail,
+      createIcon("chevron", "chevron"),
+    );
+    edit.addEventListener("click", () => openEditor(entry.id));
+    item.append(edit);
+    if (entry.archived) {
+      const restoreButton = createButton("Restore", `Restore ${entry.name}`, "restore");
+      restoreButton.disabled = busy.has(entry.id);
+      restoreButton.addEventListener("click", () => restore(entry.id));
+      item.append(restoreButton);
+    }
     const message = rowMessages.get(entry.id);
     if (message) item.append(createElement("p", "row-message", message));
     return item;
@@ -89,6 +96,7 @@ export function createCatalogList({ elements, noun, url, details, reload, open }
     // hide the message, because it's as if it didn't exist.
     noMatches.hidden = entries.length === 0 || query === "" || activeMatches.length > 0;
     noMatches.textContent = `No ${noun}s match ${quoted(query)}.`;
+    onChange(entries);
   }
 
   function setEntries(list) {
@@ -109,28 +117,31 @@ export function createCatalogList({ elements, noun, url, details, reload, open }
     render();
   }
 
-  /** Focuses the Edit button of an entry's row, or Search when a search hides the row. */
+  /** Focuses an entry's row, or Search when a search hides the row. */
   function focusEdit(id) {
-    (rowElement(id)?.querySelector(".row-actions button") ?? search).focus();
+    (rowElement(id)?.querySelector(".entry") ?? search).focus();
+  }
+
+  function indexIn(list, id) {
+    return [...list.children].findIndex((element) => element.dataset.id === id);
   }
 
   // After a row leaves a list, focus moves to the row now in its place, the
-  // one before it, or the search field.
+  // one before it, or the search field: to the row itself in the active list,
+  // and to its Restore button in Archived.
   function focusNeighbor(list, index) {
     const target = list.children[Math.min(index, list.children.length - 1)];
-    (target?.querySelector(".row-actions button:last-child") ?? search).focus();
+    const control = list === activeList ? ".entry" : ".restore";
+    (target?.querySelector(control) ?? search).focus();
   }
 
-  async function setArchived(id, archive) {
-    const failure = archive
-      ? `Couldn't archive the ${noun}. Try again.`
-      : `Couldn't restore the ${noun}. Try again.`;
-    const list = archive ? activeList : archivedList;
-    const index = [...list.children].findIndex((element) => element.dataset.id === id);
+  async function restore(id) {
+    const failure = `Couldn't restore the ${noun}. Try again.`;
+    const index = indexIn(archivedList, id);
     busy.add(id);
     resetMessages();
     try {
-      const { status, body } = await sendJson("PATCH", url(id), { archived: archive });
+      const { status, body } = await sendJson("PATCH", url(id), { archived: false });
       if (status !== 200) throw new Error(`HTTP ${status}`);
       entries = [...entries.filter((entry) => entry.id !== id), body];
     } catch (error) {
@@ -141,9 +152,9 @@ export function createCatalogList({ elements, noun, url, details, reload, open }
     render();
     if (!focusIsFree()) return;
     if (rowMessages.has(id)) {
-      rowElement(id)?.querySelector(".row-actions button:last-child")?.focus();
+      rowElement(id)?.querySelector(".restore")?.focus();
     } else {
-      focusNeighbor(list, index);
+      focusNeighbor(archivedList, index);
     }
   }
 
@@ -168,11 +179,16 @@ export function createCatalogList({ elements, noun, url, details, reload, open }
       return;
     }
     open(entry, {
-      // By ID: the rows re-render, which replaces the Edit button that was clicked.
+      // Every entry of the reload, which the editor checks the name against.
+      others: entries,
+      // By ID: the rows re-render, which replaces the button that was clicked.
       restoreFocus: () => (entry ? focusEdit(entry.id) : newButton.focus()),
       onSaved: (saved) => {
+        // An entry that the editor archived leaves the active list.
+        const index = saved.archived ? indexIn(activeList, saved.id) : -1;
         remember(saved);
-        focusEdit(saved.id);
+        if (index >= 0) focusNeighbor(activeList, index);
+        else focusEdit(saved.id);
       },
     });
   }

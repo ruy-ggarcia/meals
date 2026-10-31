@@ -3,11 +3,35 @@
 // or confirm the editor. Each editor supplies its fields, what counts as a
 // change, and how it checks and sends its save request.
 
+import { askBeforeLosing } from "./alert.js";
 import { onBackdropClick } from "./dom.js";
+import { sendJson } from "./http.js";
+import { conflictText } from "./messages.js";
+import { cleanName, nameKey } from "./name-search.js";
+
+/**
+ * Sends the request that archives the entry at `url`, a "recipe" or an
+ * "ingredient" (`noun`). Returns the archived entry, or undefined after
+ * showing in `message` that the request failed.
+ */
+export async function sendArchive(url, noun, message) {
+  try {
+    const { status, body } = await sendJson("PATCH", url, { archived: true });
+    if (status === 200) return body;
+    throw new Error(`HTTP ${status}`);
+  } catch (error) {
+    console.error(`Couldn't archive the ${noun}:`, error);
+    message.textContent = `Couldn't archive the ${noun}. Try again.`;
+    return undefined;
+  }
+}
 
 /**
  * Wires `dialog`, which holds a `.dialog-title`, a `.name-field` with its
- * `.name-message`, and the `.cancel` and `.done` buttons.
+ * `.name-message`, the `.cancel` and `.done` buttons, and an `.archive`
+ * button. `onArchive()` runs when the user chooses Archive while no save
+ * runs, after an alert confirms it when the fields have changes: it calls
+ * submit() with the request that archives the entry, and drops the changes.
  * `hasChanges()` is true when the fields differ from what the editor opened
  * with. `onDone()` runs when the user chooses Done while no save runs: it
  * checks the fields, then calls submit() or close(). `onBusy(busy)` runs
@@ -15,26 +39,41 @@ import { onBackdropClick } from "./dom.js";
  * set its other controls. `confirms(target)` is true for the fields besides
  * Name where Enter means Done.
  *
- * Returns { close, isBusy, isOpen, open, submit }:
- * - open({ focus, restoreFocus, onSaved }) shows the dialog and focuses
- *   `focus`. After a save, `onSaved` gets the saved entry and moves focus.
- *   After any other close, `restoreFocus` returns focus to the control that
- *   opened the editor.
+ * As you type in Name, the message under it says when another entry has the
+ * name, the same as the server would.
+ *
+ * Returns { close, isBusy, isOpen, nameProblem, open, submit }:
+ * - open({ focus, restoreFocus, onSaved, canArchive, others }) shows the
+ *   dialog and focuses `focus`, with Archive only when `canArchive` is true.
+ *   `others` are the entries that Name is checked against, active and
+ *   archived, without the entry being edited. After a save, `onSaved` gets
+ *   the saved entry and moves focus. After any other close, `restoreFocus`
+ *   returns focus to the control that opened the editor.
+ * - nameProblem() is what's wrong with the name, or "" when nothing is.
  * - submit(send) runs `send()`, which returns the saved entry, or undefined
  *   after showing why the save failed. The editor closes only after a save.
  * - close() closes the editor without a save.
  */
-export function createEditorDialog({ dialog, hasChanges, onDone, onBusy, confirms = () => false }) {
+export function createEditorDialog({
+  dialog,
+  hasChanges,
+  onDone,
+  onArchive,
+  onBusy,
+  confirms = () => false,
+}) {
   const title = dialog.querySelector(".dialog-title");
   const nameField = dialog.querySelector(".name-field");
   const nameMessage = dialog.querySelector(".name-message");
   const doneButton = dialog.querySelector(".done");
+  const archiveButton = dialog.querySelector(".archive");
 
-  /** The open session, or null: { restoreFocus, onSaved, busy }. */
+  /** The open session, or null: { restoreFocus, onSaved, others, busy }. */
   let session = null;
 
-  function open({ focus, restoreFocus, onSaved }) {
-    session = { restoreFocus, onSaved, busy: false };
+  function open({ focus, restoreFocus, onSaved, canArchive, others = [] }) {
+    session = { restoreFocus, onSaved, others, busy: false };
+    archiveButton.hidden = !canArchive;
     setBusy(false);
     dialog.showModal();
     focus.focus();
@@ -42,6 +81,19 @@ export function createEditorDialog({ dialog, hasChanges, onDone, onBusy, confirm
 
   function isOpen() {
     return session !== null;
+  }
+
+  // What the server would answer if another entry has the name, or "".
+  function nameClash() {
+    const key = nameKey(cleanName(nameField.value));
+    const holder = session.others.find((other) => nameKey(other.name) === key);
+    if (!holder) return "";
+    const text = conflictText(holder);
+    return holder.archived ? `${text} To use it, restore it from Archived.` : text;
+  }
+
+  function nameProblem() {
+    return cleanName(nameField.value) === "" ? "The name can't be empty." : nameClash();
   }
 
   function isBusy() {
@@ -84,6 +136,23 @@ export function createEditorDialog({ dialog, hasChanges, onDone, onBusy, confirm
 
   dialog.querySelector(".cancel").addEventListener("click", close);
   doneButton.addEventListener("click", done);
+  // Archive drops the other changes, so it asks first when there are any.
+  archiveButton.addEventListener("click", async () => {
+    if (session === null || session.busy) return;
+    if (hasChanges()) {
+      const archive = await askBeforeLosing({
+        title: "Archive without saving?",
+        message: "Your changes aren't saved. If you archive now, they're lost.",
+        keep: "Keep Editing",
+        lose: "Archive Without Saving",
+      });
+      if (!archive) {
+        archiveButton.focus();
+        return;
+      }
+    }
+    onArchive();
+  });
   // Escape and Android's Back close the dialog, which discards the changes,
   // except while a save runs.
   dialog.addEventListener("cancel", (event) => {
@@ -106,5 +175,11 @@ export function createEditorDialog({ dialog, hasChanges, onDone, onBusy, confirm
     }
   });
 
-  return { close, isBusy, isOpen, open, submit };
+  // The message under Name follows the name as you type. An empty name says
+  // nothing until Done.
+  nameField.addEventListener("input", () => {
+    nameMessage.textContent = nameClash();
+  });
+
+  return { close, isBusy, isOpen, nameProblem, open, submit };
 }

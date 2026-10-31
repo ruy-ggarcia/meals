@@ -78,6 +78,10 @@ start a development server next to it, run `PORT=3001 npm start`.
   1. In the device's browser, go to `http://IP_ADDRESS:3000`, where
      `IP_ADDRESS` is the address from the first step.
 
+To open Meals like an app, with its own icon, add it to the Home Screen. In
+Safari on an iPhone or iPad, tap **Share**, and then tap **Add to Home
+Screen**.
+
 If the page doesn't load on the device, a firewall might be blocking the port.
 To open the port, run the command for your firewall:
 
@@ -95,25 +99,34 @@ To open the port, run the command for your firewall:
 
 ## Navigate the meal plan
 
-- **Desktop** (windows 768 px wide or wider): the full grid shows one column
-  per day and one row per meal. Each day header shows the weekday and the day
-  of the month.
-- **Mobile:** the app shows one day at a time. To switch days, tap a day in the
-  day bar. Each button shows the weekday letter and the day of the month. When
-  the page opens, it shows the current day.
+Meals has three sections: **Meal plan**, **Recipes**, and **Ingredients**.
+On wide screens, a sidebar lists them, with the number of active recipes and
+active ingredients. The sidebar shows on screens 1000 px wide or wider. To
+hide or show it, click the sidebar button at its top or in the toolbar. The
+app remembers your choice. On phones, a tab bar at the bottom lists the
+sections.
 
-When the displayed week contains today, the app marks today in green. On
-desktop, it marks today's column. On mobile, it outlines today's button in the
-day bar.
+- **Wide screens** (700 px wide or wider): the grid shows one column per day
+  and one row per meal, under the meal's name. Each day header shows the
+  weekday and the day of the month.
+- **Phones:** the app shows one day at a time, with its name and date at the
+  top. To switch days, tap a day in the day bar. Each button shows the
+  weekday letter and the day of the month, and a dot marks the days with
+  menus. When the page opens, it shows the current day.
 
-To move between weeks, use the week bar below the title. It shows the dates of
-the displayed week:
+When the displayed week contains today, the app marks today in green. On wide
+screens, it shades today's column, from its header to its last slot. On
+phones, it marks today's button in the day bar, and **Today** follows the
+date.
+
+To move between weeks, use the toolbar at the top. On wide screens, it shows
+the dates of the displayed week next to **Today**:
 
 - `‹` shows the previous week.
 - `›` shows the next week.
-- **Today** shows the current week. On mobile, it also selects today.
+- **Today** shows the current week. On phones, it also selects today.
 
-On mobile, changing weeks keeps the selected day. The address bar holds the
+On phones, changing weeks keeps the selected day. The address bar holds the
 displayed week, for example `http://localhost:3000/#2026-09-21`, so a reload
 shows the same week and you can bookmark a week.
 
@@ -122,13 +135,14 @@ shows the same week and you can bookmark a week.
 To plan a meal, click or tap its slot. The slot editor opens with the slot's
 menu:
 
-- To add a recipe, type part of its name in **Add recipe**. Then click the
-  recipe, or select it with the arrow keys and press `Enter`. A menu holds up
-  to 20 recipes, and the list offers only active recipes that aren't already
-  in the menu. To add recipes to the recipe book, use the **Recipes** page.
+- To add a recipe, click it in the list under **Add recipe**. To narrow the
+  list, type part of the recipe's name, and then click the recipe or select
+  it with the arrow keys and press `Enter`. A menu holds up to 20 recipes,
+  and the list offers only active recipes that aren't already in the menu.
+  To add recipes to the recipe book, use the **Recipes** page.
 - To change the servings of a recipe, click `−` or `+`. Servings go from 0.5
   to 99 in steps of 0.5. A recipe that you add starts at 1.
-- To remove a recipe from the menu, click **Remove**.
+- To remove a recipe from the menu, click the red button before its name.
 
 To save the menu, click **Done**. To close the editor without saving, click
 **Cancel** or press `Escape`. In **Add recipe**, the first `Escape` only
@@ -136,21 +150,25 @@ clears the text. Clicking outside the editor closes it only if you haven't
 changed anything. If you reload or close the page while the editor has
 changes, the browser asks you to confirm.
 
-Below each slot, an icon shows the save status:
+The toolbar shows the save status of the week. On phones, it shows next to
+the date:
 
-| Icon             | Status                                                       |
-|------------------|--------------------------------------------------------------|
-| Gray clock       | The app is saving the slot.                                  |
-| Green check mark | The slot is saved. The icon disappears after a few seconds. |
-| Red cross        | The save failed. The slot keeps your menu.                   |
+| Status                  | Meaning                                                      |
+|-------------------------|--------------------------------------------------------------|
+| **Saving…**             | The app is saving a slot.                                    |
+| **All changes saved**   | Every slot is saved. The status disappears after a few seconds. |
+| **1 not saved · Retry** | A slot couldn't be saved. The slot keeps your menu.          |
 
-To retry a failed save, select the red cross. To see what an icon means,
-hover over it.
+A slot that couldn't be saved has a red outline and a **Retry** button. To
+retry it, click **Retry**. To retry every slot that couldn't be saved, click
+the status in the toolbar. A screen reader announces each save as it starts,
+ends, or fails.
 
 Before the app changes weeks, it waits for pending saves. If a slot couldn't
-be saved, the app asks whether to leave the week anyway. To stay and retry the
-save, click **Cancel**. To discard the unsaved menu and change weeks, click
-**OK**. The slot then goes back to its last saved menu.
+be saved, the app names the meals that weren't saved and asks whether to
+leave the week. To stay and retry the save, click **Stay**. To discard the
+unsaved menus and change weeks, click **Leave Without Saving**. The slots
+then go back to their last saved menus.
 
 Changes from other devices don't appear in real time. To see them, reload the
 page. If two people edit the same slot, the last save wins.
@@ -158,7 +176,7 @@ page. If two people edit the same slot, the last save wins.
 ## View the shopping list
 
 To see the shopping list for the displayed week, click **Shopping list** in
-the week bar. It lists ingredients from A to Z, and it counts the menus
+the toolbar. It lists ingredients from A to Z, and it counts the menus
 that the grid shows, including slots that are still saving and slots whose
 save failed.
 
@@ -167,16 +185,17 @@ number so that you never buy too little. From 1000 `g` or `ml` on, the total
 shows in `kg` or `l`, rounded up to tenths: `1320 g` shows as `1.4 kg`.
 
 When a recipe of the week uses a measure of the ingredient, the line also
-breaks the total down in parentheses: first the part in the unit, if any,
-rounded like the total, and then each measure in the ingredient's order,
-rounded to two decimals. For example, the following line means 220 g of
-onion, 4 medium onions, and 1 large onion, 1.1 kg in all:
+breaks the total down in parentheses, under the total: first the part in the
+unit, if any, rounded like the total, and then each measure in the
+ingredient's order, rounded to two decimals. For example, the following line
+means 220 g of onion, 4 medium onions, and 1 large onion, 1.1 kg in all:
 
 ```none
-Onion    1.1 kg (220 g, 4 medium, 1 large)
+Onion                        1.1 kg
+             (220 g, 4 medium, 1 large)
 ```
 
-Recipes without ingredients can't add to the list. The dialog names them
+Recipes without ingredients can't add to the list. The list names them
 under **Not included**, with the slots where they appear.
 
 To close the list, click **Close**, press `Escape`, or click outside it.
@@ -184,43 +203,51 @@ To close the list, click **Close**, press `Escape`, or click outside it.
 ## Manage recipes
 
 The recipe book holds the recipes that you can add to menus. To open it,
-click **Recipes** at the top of any page.
+click **Recipes** in the sidebar or the tab bar.
 
 A recipe has a name of up to 100 characters and a list of ingredients,
 each with the quantity that one serving needs, in the ingredient's unit or
 in one of its measures. Names are unique, ignoring case and accents, so
 `Café` and `cafe` are the same name.
 
-- To add a recipe, click **New recipe**. To change a recipe, click its
-  **Edit** button. Both open the recipe editor:
-  - Type the name in **Name**. If an archived recipe has the name, restore
-    it from **Archived** instead.
-  - To add an ingredient, type part of its name in **Add ingredient**, and
-    then click it, or select it with the arrow keys and press `Enter`. A
-    recipe holds up to 50 ingredients, and the list offers only active
-    ingredients that aren't in the recipe. To add ingredients to the
-    catalog, use the **Ingredients** page.
+- To add a recipe, click **New recipe** in the toolbar. To change a recipe,
+  click its row. Both open the recipe editor:
+  - Type the name in **Name**. As you type, a message says when another
+    recipe has the name. If an archived recipe has it, restore that recipe
+    from **Archived** instead.
+  - To add an ingredient, click it in the list under **Add ingredient**. To
+    narrow the list, type part of the ingredient's name, and then click the
+    ingredient or select it with the arrow keys and press `Enter`. A recipe
+    holds up to 50 ingredients, and the list offers only active ingredients
+    that aren't in the recipe. To add ingredients to the catalog, use the
+    **Ingredients** page.
   - Type each quantity from `0.01` to `10000` with at most two decimals,
-    such as `0.25`. You can type `.` or `,` as the decimal separator.
+    such as `0.25`. You can type `.` or `,` as the decimal separator. A
+    quantity that isn't valid gets a red outline as you type.
   - To use a measure of the ingredient instead of its unit, choose the
     measure in the list after the quantity, such as `medium (150 g)`. The
     list starts on the unit. An ingredient without measures shows only its
     unit.
-  - To remove an ingredient, click **Remove**.
+  - To remove an ingredient, click the red button before its name.
   - To save, click **Done** or press `Enter`. To close the editor without
     saving, click **Cancel** or press `Escape`.
-- A recipe without ingredients shows a warning icon. You can save it, but
-  the shopping list can't count it.
+- Each row lists the recipe's ingredients. A recipe without ingredients shows
+  a warning instead. You can save it, but the shopping list can't count it.
 - To find a recipe, type part of its name in **Search**.
-- To archive a recipe that you no longer use, click **Archive**. To bring
-  one back, click **Restore** under **Archived**.
+- To archive a recipe that you no longer use, open it, and then click
+  **Archive** at the end of the editor. If you changed something in the
+  editor, the app asks first: **Keep Editing** keeps your changes, and
+  **Archive Without Saving** archives the recipe without them. To bring a
+  recipe back, click **Restore** under **Archived**. An archived recipe
+  still opens when you click its row, so you can change it, for example
+  for the menus that still use it. Its editor has no **Archive**.
 
 You can't delete recipes.
 
 ## Manage ingredients
 
 The ingredient catalog holds the ingredients that recipes use. To open
-it, click **Ingredients** at the top of any page.
+it, click **Ingredients** in the sidebar or the tab bar.
 
 An ingredient has a name of up to 100 characters, a unit (`g`, `ml`, or
 `pcs`), and up to 20 measures. Names are unique, ignoring case and accents.
@@ -233,25 +260,29 @@ the ingredient, ignoring case and accents. Its amount is from `0.01` to
 or in one of its measures, so two recipes can measure the same ingredient
 differently.
 
-- To add an ingredient, click **New ingredient**. To change an ingredient,
-  click its **Edit** button. Both open the ingredient editor:
-  - Type the name in **Name**. If an archived ingredient has the name,
-    restore it from **Archived** instead.
-  - Choose the unit in **Unit**. To change the unit of an existing
-    ingredient, see
+- To add an ingredient, click **New ingredient** in the toolbar. To change
+  an ingredient, click its row. Both open the ingredient editor:
+  - Type the name in **Name**. As you type, a message says when another
+    ingredient has the name. If an archived ingredient has it, restore
+    that ingredient from **Archived** instead.
+  - Choose the unit in **Unit**: `g`, `ml`, or `pcs`. To change the unit of
+    an existing ingredient, see
     [Change the unit of an ingredient](#change-the-unit-of-an-ingredient).
   - To add a measure, click **Add measure**, and type its name and its
     amount in the unit. You can type `.` or `,` as the decimal separator.
+    An amount that isn't valid gets a red outline as you type.
   - To rename a measure or change its amount, edit its row. The recipes that
     use the measure follow the change.
-  - To remove a measure, click **Remove**. While a recipe, active or
-    archived, uses the measure, **Remove** is disabled, and the row says how
-    many recipes use it.
+  - To remove a measure, click the red button before its name. While a
+    recipe, active or archived, uses the measure, the button is disabled, and
+    the row says how many recipes use it.
   - To save, click **Done** or press `Enter`. To close the editor without
     saving, click **Cancel** or press `Escape`.
 - To find an ingredient, type part of its name in **Search**.
-- To archive an ingredient, click **Archive**. To bring one back, click
-  **Restore** under **Archived**.
+- To archive an ingredient, open it, and then click **Archive** at the end of
+  the editor. As with a recipe, the app asks first if you changed something.
+  To bring an ingredient back, click **Restore** under **Archived**. As
+  with a recipe, an archived ingredient still opens when you click its row.
 
 Each row of the list shows the unit and the names of the measures, such as
 `g · medium, large`.

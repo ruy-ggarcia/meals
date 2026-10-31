@@ -8,7 +8,10 @@ const {
   addDays,
   addWeeks,
   dayIndex,
+  formatDayDate,
+  formatFullDate,
   formatLongDate,
+  formatShortWeekRange,
   formatWeekRange,
   isWeekId,
   weekIdOf,
@@ -104,6 +107,20 @@ test("formatWeekRange shares the month and the year when they match", () => {
   assert.equal(plain(formatWeekRange("2026-09-21")), "Sep 21 – 27, 2026");
   assert.equal(plain(formatWeekRange("2026-09-28")), "Sep 28 – Oct 4, 2026");
   assert.equal(plain(formatWeekRange("2026-12-28")), "Dec 28, 2026 – Jan 3, 2027");
+});
+
+test("formatShortWeekRange leaves out the year", () => {
+  assert.equal(plain(formatShortWeekRange("2026-09-21")), "Sep 21 – 27");
+  assert.equal(plain(formatShortWeekRange("2026-09-28")), "Sep 28 – Oct 4");
+  assert.equal(plain(formatShortWeekRange("2026-12-28")), "Dec 28 – Jan 3");
+});
+
+test("formatDayDate returns the weekday, the short month, and the day", () => {
+  assert.equal(formatDayDate(new Date(2026, 8, 21)), "Monday, Sep 21");
+});
+
+test("formatFullDate returns the month, day, and year", () => {
+  assert.equal(formatFullDate(new Date(2026, 8, 21)), "September 21, 2026");
 });
 
 test("formatLongDate returns the weekday, month, and day", () => {

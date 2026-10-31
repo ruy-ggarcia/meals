@@ -2,7 +2,7 @@
 // clicking one, or with the arrow keys and Enter. Escape in the field clears
 // its text first. Enter never confirms the dialog around it.
 
-import { createElement } from "./dom.js";
+import { createElement, createIcon } from "./dom.js";
 
 /**
  * Wires `input` (the text field), `list` (its listbox), and `noMatch` (shown
@@ -34,6 +34,7 @@ export function createCombobox({
     list.replaceChildren(
       ...entries.map((entry, index) => {
         const option = createElement("li", "option", label(entry));
+        option.append(createIcon("plus", "option-add"));
         option.id = `${idPrefix}-${index}`;
         option.setAttribute("role", "option");
         option.setAttribute("aria-selected", String(index === highlighted));
@@ -42,6 +43,8 @@ export function createCombobox({
       }),
     );
     list.hidden = entries.length === 0;
+    // The highlight shows only while the text filters the list.
+    list.toggleAttribute("data-filtered", input.value.trim() !== "");
     noMatch.hidden = isDisabled() || entries.length > 0;
     input.setAttribute("aria-expanded", String(entries.length > 0));
     if (entries.length > 0) {

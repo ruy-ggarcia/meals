@@ -7,13 +7,14 @@
 //   stray click never throws work away.
 
 import { createCombobox } from "./combobox.js";
-import { createButton, createElement } from "./dom.js";
-import { createEditorDialog } from "./editor-dialog.js";
+import { createElement, createIconButton, markQuantity } from "./dom.js";
+import { createEditorDialog, sendArchive } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
 import { filterByName, sortByName } from "./name-search.js";
 import { MAX_INGREDIENTS, parseQuantity } from "./quantities.js";
 
+const SEARCH_HINT = "Type part of a name";
 const QUANTITY_MESSAGE = "Enter a quantity from 0.01 to 10000, with up to two decimals.";
 
 function sameIngredients(a, b) {
@@ -49,6 +50,11 @@ export function createRecipeEditor(dialog) {
     dialog,
     hasChanges,
     onDone: save,
+    onArchive: () => {
+      saveMessage.textContent = "";
+      const url = `/api/recipes/${encodeURIComponent(session.recipe.id)}`;
+      lifecycle.submit(() => sendArchive(url, "recipe", saveMessage));
+    },
     onBusy: (busy) => {
       search.disabled = busy || isFull();
     },
@@ -81,7 +87,7 @@ export function createRecipeEditor(dialog) {
     }));
   }
 
-  function open({ recipe, ingredients, restoreFocus, onSaved }) {
+  function open({ recipe, ingredients, others = [], restoreFocus, onSaved }) {
     session = {
       recipe,
       catalog: new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
@@ -95,7 +101,13 @@ export function createRecipeEditor(dialog) {
     combobox.reset();
     // A new recipe starts with its name. An existing one starts on the
     // title: on a phone, focusing a field opens the keyboard.
-    lifecycle.open({ focus: recipe ? title : nameField, restoreFocus, onSaved });
+    lifecycle.open({
+      focus: recipe ? title : nameField,
+      restoreFocus,
+      onSaved,
+      canArchive: recipe?.archived === false,
+      others: others.filter((other) => other.id !== recipe?.id),
+    });
   }
 
   /** True when the fields differ from what the editor opened with. */
@@ -144,23 +156,25 @@ export function createRecipeEditor(dialog) {
     field.setAttribute("autocomplete", "off");
     field.setAttribute("inputmode", "decimal");
     field.setAttribute("aria-label", `Quantity of ${name} per serving`);
-    // Editing the field clears the row's message, without a re-render, which
-    // would take the focus away.
+    // As you type, the field shows whether it holds a quantity. Editing it
+    // also clears the row's message, without a re-render, which would take
+    // the focus away.
+    markQuantity(field);
     field.addEventListener("input", () => {
       row.text = field.value;
+      markQuantity(field);
       if (row.message === "") return;
       row.message = "";
-      field.removeAttribute("aria-invalid");
       item.querySelector(".row-message")?.remove();
     });
     const measure = ingredient?.measures?.length ? measureSelect(row, ingredient) : null;
-    const remove = createButton("Remove", `Remove ${name}`, "remove");
+    const remove = createIconButton("minus", `Remove ${name}`, "remove");
     remove.addEventListener("click", () => removeRow(index));
     item.append(
+      remove,
       createElement("span", "ingredient-name", ingredient?.archived ? `${name} (archived)` : name),
       field,
       measure ?? createElement("span", "unit", ingredient?.unit ?? ""),
-      remove,
     );
     if (row.message) {
       field.setAttribute("aria-invalid", "true");
@@ -173,7 +187,9 @@ export function createRecipeEditor(dialog) {
     rowList.replaceChildren(...session.rows.map(rowElement));
     noIngredients.hidden = session.rows.length > 0;
     search.disabled = lifecycle.isBusy() || isFull();
-    search.placeholder = isFull() ? `A recipe holds up to ${MAX_INGREDIENTS} ingredients.` : "";
+    search.placeholder = isFull()
+      ? `A recipe holds up to ${MAX_INGREDIENTS} ingredients.`
+      : SEARCH_HINT;
   }
 
   // The active ingredients that aren't in the recipe yet and match `query`,
@@ -267,7 +283,7 @@ export function createRecipeEditor(dialog) {
   // Checks the name and the quantities, then saves what changed, or closes
   // when nothing did.
   function save() {
-    nameMessage.textContent = nameField.value.trim() === "" ? "The name can't be empty." : "";
+    nameMessage.textContent = lifecycle.nameProblem();
     saveMessage.textContent = "";
     const ingredients = readIngredients();
     if (nameMessage.textContent !== "") {

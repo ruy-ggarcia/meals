@@ -57,13 +57,14 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-function openEditor({ recipe, ingredients = CATALOG } = {}) {
+function openEditor({ recipe, ingredients = CATALOG, others = [] } = {}) {
   const opener = document.createElement("button");
   document.body.append(opener);
   const saved = [];
   editor.open({
     recipe,
     ingredients,
+    others,
     restoreFocus: () => opener.focus(),
     onSaved: (entry) => saved.push(entry),
   });
@@ -183,8 +184,18 @@ test("with no matches, Add ingredient points to the Ingredients page", () => {
   assert.equal(query(".no-match").hidden, false);
   assert.equal(
     query(".no-match").textContent,
-    "No matching ingredients. To add ingredients, use the Ingredients page.",
+    "No active ingredients match. Add them on the Ingredients page.",
   );
+});
+
+test("a recipe without ingredients warns that the shopping list can't count it", () => {
+  openEditor();
+
+  assert.equal(
+    query(".no-ingredients").textContent.trim(),
+    "No ingredients yet. You can save it, but the shopping list can't count it.",
+  );
+  assert.equal(search().placeholder, "Type part of a name");
 });
 
 test("Done with an invalid quantity shows a message under its row, focuses it, and sends nothing", () => {
@@ -218,6 +229,77 @@ test("editing an invalid quantity clears its message and aria-invalid, and keeps
   assertFocus(document, quantityFields()[0]);
   assert.equal(second.querySelector(".row-message")?.textContent, QUANTITY_MESSAGE);
   assert.equal(quantityFields()[1].getAttribute("aria-invalid"), "true");
+});
+
+test("a quantity that isn't valid is marked as you type, and Done stays enabled", () => {
+  openEditor({ recipe: SOUP });
+  const field = quantityFields()[0];
+
+  setValue(field, "1.255");
+  assert.equal(field.getAttribute("aria-invalid"), "true");
+  assert.equal(field.closest(".ingredient-row").querySelector(".row-message"), null);
+  assert.equal(query(".done").disabled, false);
+
+  setValue(field, "1,25");
+  assert.equal(field.hasAttribute("aria-invalid"), false);
+
+  setValue(field, "");
+  assert.equal(field.hasAttribute("aria-invalid"), false); // empty says nothing until Done
+});
+
+test("a quantity marked as you type stays marked when the rows render again", () => {
+  openEditor({ recipe: SOUP });
+  setValue(quantityFields()[0], "abc");
+
+  addIngredient("egg");
+
+  assert.equal(quantityFields()[0].getAttribute("aria-invalid"), "true");
+});
+
+const OTHERS = [
+  { id: "gazpacho", name: "Gazpacho", archived: false },
+  { id: "old", name: "Old stew", archived: true },
+  { id: "soup", name: "Onion soup", archived: false }, // the recipe being edited
+];
+
+test("a name that another recipe has shows its message as you type, ignoring case and accents", () => {
+  openEditor({ recipe: SOUP, others: OTHERS });
+
+  setValue(nameField(), "GAZPÁCHO");
+  assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
+
+  setValue(nameField(), "old  stew");
+  assert.equal(
+    query(".name-message").textContent,
+    '"Old stew" is archived. To use it, restore it from Archived.',
+  );
+
+  setValue(nameField(), "Gazpacho andaluz");
+  assert.equal(query(".name-message").textContent, "");
+
+  setValue(nameField(), "Onion soup"); // its own name
+  assert.equal(query(".name-message").textContent, "");
+});
+
+test("Done with a name that another recipe has keeps the message and sends nothing", () => {
+  openEditor({ others: OTHERS });
+  setValue(nameField(), "gazpacho");
+
+  query(".done").click();
+
+  assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
+  assertFocus(document, nameField());
+  assert.equal(server.requests.length, 0);
+});
+
+test("typing in Name clears the empty-name message", () => {
+  openEditor();
+  query(".done").click();
+  assert.equal(query(".name-message").textContent, "The name can't be empty.");
+
+  setValue(nameField(), "P");
+
+  assert.equal(query(".name-message").textContent, "");
 });
 
 test("a valid Done doesn't re-render the rows, so focus stays in the field", async () => {
@@ -640,4 +722,103 @@ test("a measure choice survives the re-render after an invalid quantity", () => 
 
   assert.equal(document.querySelectorAll(".row-message").length, 1);
   assert.equal(measureFields()[0].value, "large");
+});
+
+test("Archive shows only for a recipe that exists and isn't archived", () => {
+  openEditor();
+  assert.equal(query(".archive").hidden, true);
+  query(".cancel").click();
+
+  openEditor({ recipe: { ...SOUP, archived: true } });
+  assert.equal(query(".archive").hidden, true);
+  query(".cancel").click();
+
+  openEditor({ recipe: SOUP });
+  assert.equal(query(".archive").hidden, false);
+});
+
+test("Archive without changes sends only archived: true, then closes with the archived recipe", async () => {
+  const { saved } = openEditor({ recipe: SOUP });
+
+  query(".archive").click();
+  assert.equal(query(".archive").disabled, true);
+  await respondTo("PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+
+  assert.equal(document.querySelector('[role="alertdialog"]'), null);
+  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
+  assert.equal(dialog.open, false);
+  assert.deepEqual(saved, [{ ...SOUP, archived: true }]);
+});
+
+// Changes the name, chooses Archive, and returns the alert that asks first.
+async function archiveWithChanges() {
+  openEditor({ recipe: SOUP });
+  setValue(nameField(), "Changed, but not saved");
+  query(".archive").click();
+  await tick();
+  return document.querySelector('[role="alertdialog"]');
+}
+
+test("Archive with changes asks first, with Keep Editing focused", async () => {
+  const alert = await archiveWithChanges();
+
+  assert.equal(alert.open, true);
+  assert.equal(alert.querySelector(".alert-title").textContent, "Archive without saving?");
+  assert.equal(
+    alert.querySelector(".alert-message").textContent,
+    "Your changes aren't saved. If you archive now, they're lost.",
+  );
+  assert.equal(alert.getAttribute("aria-labelledby"), alert.querySelector(".alert-title").id);
+  assert.equal(alert.getAttribute("aria-describedby"), alert.querySelector(".alert-message").id);
+  assertFocus(document, alert.querySelector(".keep"));
+  assert.equal(alert.querySelector(".keep").textContent, "Keep Editing");
+  assert.equal(alert.querySelector(".lose").textContent, "Archive Without Saving");
+  alert.querySelector(".keep").click();
+  await tick();
+});
+
+test("Keep Editing keeps the editor and its changes, and sends nothing", async () => {
+  const alert = await archiveWithChanges();
+
+  alert.querySelector(".keep").click();
+  await tick();
+
+  assert.equal(document.querySelector('[role="alertdialog"]'), null);
+  assert.equal(dialog.open, true);
+  assert.equal(nameField().value, "Changed, but not saved");
+  assert.equal(server.requests.length, 0);
+  assertFocus(document, query(".archive"));
+});
+
+test("Escape in the alert keeps the editor, the same as Keep Editing", async () => {
+  const alert = await archiveWithChanges();
+
+  alert.close(); // what Escape and Android's Back do to a modal dialog
+  await tick();
+
+  assert.equal(dialog.open, true);
+  assert.equal(server.requests.length, 0);
+});
+
+test("Archive Without Saving archives the recipe without the changes", async () => {
+  const alert = await archiveWithChanges();
+
+  alert.querySelector(".lose").click();
+  await respondTo("PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+
+  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
+  assert.equal(dialog.open, false);
+});
+
+test("a failed archive keeps the editor open and says so", async () => {
+  openEditor({ recipe: SOUP });
+
+  query(".archive").click();
+  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+  server.requestFor("PATCH", "/api/recipes/soup").fail();
+  await tick();
+
+  assert.equal(dialog.open, true);
+  assert.equal(query(".save-message").textContent, "Couldn't archive the recipe. Try again.");
+  assert.equal(query(".archive").disabled, false);
 });

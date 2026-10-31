@@ -6,7 +6,7 @@
 //   changes, so a stray click never throws work away.
 
 import { createCombobox } from "./combobox.js";
-import { createButton, createElement, onBackdropClick } from "./dom.js";
+import { createElement, createIconButton, onBackdropClick } from "./dom.js";
 import {
   addableRecipes,
   addItem,
@@ -19,9 +19,13 @@ import {
   stepServings,
 } from "./menus.js";
 
+const SEARCH_HINT = "Type part of a name";
+
 export function createSlotEditor(dialog) {
   const title = dialog.querySelector(".dialog-title");
+  const subtitle = dialog.querySelector(".sheet-subtitle");
   const itemList = dialog.querySelector(".menu-items");
+  const emptyMenu = dialog.querySelector(".empty-menu");
   const search = dialog.querySelector(".option-search");
   const doneButton = dialog.querySelector(".done");
 
@@ -47,7 +51,7 @@ export function createSlotEditor(dialog) {
     return session.copy.items.length >= MAX_ITEMS;
   }
 
-  function open({ title: text, menu, recipes, opener, onDone }) {
+  function open({ title: text, subtitle: subtitleText, menu, recipes, opener, onDone }) {
     session = {
       original: copyMenu(menu),
       copy: copyMenu(menu),
@@ -57,6 +61,7 @@ export function createSlotEditor(dialog) {
       onDone,
     };
     title.textContent = text;
+    subtitle.textContent = subtitleText;
     renderItems();
     combobox.reset();
     dialog.showModal();
@@ -87,9 +92,9 @@ export function createSlotEditor(dialog) {
     const row = createElement("li", "menu-item");
     const servings = createElement("span", "servings", String(item.servings));
     servings.setAttribute("aria-live", "polite");
-    const decrease = createButton("−", `Decrease servings of ${name}`, "step");
-    const increase = createButton("+", `Increase servings of ${name}`, "step");
-    const remove = createButton("Remove", `Remove ${name}`, "remove");
+    const decrease = createIconButton("minus", `Decrease servings of ${name}`, "step");
+    const increase = createIconButton("plus", `Increase servings of ${name}`, "step");
+    const remove = createIconButton("minus", `Remove ${name}`, "remove");
     decrease.disabled = item.servings <= MIN_SERVINGS;
     increase.disabled = item.servings >= MAX_SERVINGS;
     decrease.addEventListener("click", () => step(item.recipeId, -1, row));
@@ -101,7 +106,9 @@ export function createSlotEditor(dialog) {
       combobox.render();
       focusRemoved(index);
     });
-    row.append(createElement("span", "recipe-name", name), decrease, servings, increase, remove);
+    const stepper = createElement("span", "stepper");
+    stepper.append(decrease, servings, increase);
+    row.append(remove, createElement("span", "recipe-name", name), stepper);
     return row;
   }
 
@@ -128,8 +135,9 @@ export function createSlotEditor(dialog) {
 
   function renderItems() {
     itemList.replaceChildren(...session.copy.items.map(itemRow));
+    emptyMenu.hidden = session.copy.items.length > 0;
     search.disabled = isFull();
-    search.placeholder = isFull() ? `A menu holds up to ${MAX_ITEMS} recipes.` : "";
+    search.placeholder = isFull() ? `A menu holds up to ${MAX_ITEMS} recipes.` : SEARCH_HINT;
   }
 
   function add(recipeId) {
