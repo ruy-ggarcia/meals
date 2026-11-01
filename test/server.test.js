@@ -62,6 +62,26 @@ test("start() creates a data directory that doesn't exist yet, so the health che
   assert.deepEqual(await health.json(), { status: "ok", version: "1.2.3" });
 });
 
+test("start() listens on every interface unless it gets a host", async (t) => {
+  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
+  t.after(() => server.stop());
+
+  assert.equal(server.address, "0.0.0.0");
+});
+
+test("start() listens only on the host that it gets", async (t) => {
+  const server = await start({
+    dataDir,
+    host: "127.0.0.1",
+    logger: silentLogger,
+    port: 0,
+    version: "1.2.3",
+  });
+  t.after(() => server.stop());
+
+  assert.equal(server.address, "127.0.0.1");
+});
+
 test("start() rejects when it can't create the data directory", async (t) => {
   if (process.getuid?.() === 0) {
     t.skip("root can write to any directory");
