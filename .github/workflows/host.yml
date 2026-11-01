@@ -1,0 +1,38 @@
+name: Host
+
+# Installs the host tools for real on a GitHub-hosted runner, a new virtual
+# machine for each job, and checks them with the published releases. The
+# weekly run catches changes outside the repository, such as a new runner
+# image, or a change in GitHub or GHCR.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/host.yml
+      - deploy/**
+      - scripts/**
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the host acceptance test
+        env:
+          # meals-deploy gets the token for the GitHub API, so the limit on
+          # requests without a token can't fail the run.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: sudo --preserve-env=GITHUB_ACTIONS,GITHUB_TOKEN,RUNNER_ENVIRONMENT scripts/host-acceptance.sh
