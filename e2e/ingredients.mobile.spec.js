@@ -24,7 +24,12 @@ import {
   expectKeyboardOpen,
   expectNoZoomOnFocus,
 } from "./phone.js";
-import { quantityOf, editorOf as recipeEditorOf, rowOf as recipeRowOf } from "./recipes.js";
+import {
+  createTortilla,
+  quantityOf,
+  editorOf as recipeEditorOf,
+  rowOf as recipeRowOf,
+} from "./recipes.js";
 
 /** Taps the link to `name` in the tab bar, and waits until the page has loaded. */
 async function openPage(page, name, firstRow) {
@@ -84,10 +89,7 @@ test("opens the editor of an ingredient full screen without the keyboard", async
 
 test("fits every measure row and conversion row to the width", async ({ app, page }) => {
   await giveOnionMeasures(app);
-  await app.api.createRecipe({
-    name: "Tortilla",
-    ingredients: [{ ingredientId: app.ingredients.Egg.id, quantity: 1.25 }],
-  });
+  await createTortilla(app);
   await openCatalog(page);
   const onion = await openIngredient(page, "Onion");
 
@@ -153,10 +155,7 @@ test("keeps every field of the editor at a size that doesn't zoom the page", asy
   page,
 }) => {
   await useMediumOnions(app, await giveOnionMeasures(app));
-  await app.api.createRecipe({
-    name: "Tortilla",
-    ingredients: [{ ingredientId: app.ingredients.Egg.id, quantity: 1.25 }],
-  });
+  await createTortilla(app);
   await openCatalog(page);
   const onion = await openIngredient(page, "Onion");
   const row = measureRowsOf(onion).last();

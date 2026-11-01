@@ -20,6 +20,7 @@ import {
   useMediumOnions,
 } from "./ingredients.js";
 import {
+  createTortilla,
   ingredientSearchOf,
   quantityOf,
   editorOf as recipeEditorOf,
@@ -628,10 +629,7 @@ test("names the measure that replaces the unit of an ingredient that a recipe ho
   app,
   page,
 }) => {
-  await app.api.createRecipe({
-    name: "Tortilla",
-    ingredients: [{ ingredientId: app.ingredients.Egg.id, quantity: 1.25 }],
-  });
+  await createTortilla(app);
   await openCatalog(page);
   const editor = await openIngredient(page, "Egg");
 
