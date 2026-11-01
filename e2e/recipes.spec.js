@@ -85,9 +85,11 @@ async function addEgg(editor) {
   return quantityOf(editor, "Egg");
 }
 
-/** Clicks the dark area outside the editor. */
-async function clickBackdrop(page) {
-  await page.mouse.click(10, 10);
+/** Clicks the dark area outside `editor`, halfway between the window's left edge and the editor. */
+async function clickBackdrop(page, editor) {
+  const box = await editor.boundingBox();
+  expect(box.x, "space left of the editor").toBeGreaterThan(0);
+  await page.mouse.click(box.x / 2, box.y + box.height / 2);
 }
 
 test("opens the recipe book from the sidebar", async ({ page }) => {
@@ -112,17 +114,21 @@ test("warns that a recipe without ingredients is not in the shopping list", asyn
   const detail = row.getByText("No ingredients · not in shopping list");
   await expect(detail).toBeVisible();
   await expect(detail).toHaveCSS("color", WARNING_TEXT);
+  // The icon is decorative, with no role or name, so its class finds it.
   const icon = row.locator(".warning-icon");
   await expect(icon).toBeVisible();
   await expect(icon).toHaveCSS("color", WARNING_ICON);
-  // The chevron sits at the right end of the row, after the text.
+  // The chevron sits at the right end of the row, after the text. It's
+  // decorative too, so its class finds it.
   const chevron = await row.locator(".chevron").boundingBox();
   const text = await detail.boundingBox();
-  const box = await row.boundingBox();
-  expect(chevron.x, "chevron after the text").toBeGreaterThan(text.x + text.width);
-  expect(box.x + box.width - (chevron.x + chevron.width), "space after the chevron").toBeLessThan(
-    40,
+  const end = await rowOf(page, "Omelette").evaluate(
+    (element) =>
+      element.getBoundingClientRect().right -
+      Number.parseFloat(getComputedStyle(element).paddingRight),
   );
+  expect(chevron.x, "chevron after the text").toBeGreaterThan(text.x + text.width);
+  expect(chevron.x + chevron.width, "chevron at the end of the row").toBeCloseTo(end, 0);
 });
 
 test("opens the editor of a new recipe with the name focused", async ({ page }) => {
@@ -213,7 +219,7 @@ test("keeps the editor on a click outside it and discards the changes on Cancel"
   const editor = await openRecipe(page, "Tortilla");
   await quantityOf(editor, "Egg").fill("1.3");
 
-  await clickBackdrop(page);
+  await clickBackdrop(page, editor);
 
   await expect(editor).toBeVisible();
 

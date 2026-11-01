@@ -36,7 +36,10 @@ export function archivedListOf(page) {
   return page.getByRole("list", { name: "Archived recipes", exact: true });
 }
 
-/** The heading of the Archived section, which has no role. */
+/**
+ * The heading of the Archived section. A `summary` has no role that
+ * Playwright can find, so its tag finds it.
+ */
 export function archivedHeadingOf(page) {
   return page.locator("summary").filter({ hasText: "Archived" });
 }
