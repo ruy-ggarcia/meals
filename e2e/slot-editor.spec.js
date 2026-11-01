@@ -175,6 +175,7 @@ test("saves the menu with Done and shows that it saved", async ({ app, page }) =
   release();
   const saved = page.getByText("All changes saved", { exact: true }).filter({ visible: true });
   await expect(saved).toBeVisible();
+  await page.unroute("**/api/weeks/**");
   expect(await savedMonday(app)).toEqual([
     { recipeId: app.recipes["Russian salad"].id, servings: 0.5 },
     { recipeId: app.recipes["Green salad"].id, servings: 2 },
@@ -316,9 +317,10 @@ test("keeps focus inside the editor", async ({ app, page }) => {
   ]);
   const visited = new Set();
 
-  // The editor has ten controls, so this goes around it more than once, in
-  // both directions. The title has the focus when the editor opens, and
-  // Cancel comes before it, so only Shift+Tab reaches Cancel at first.
+  // The editor has fewer controls than the presses, so this goes around it
+  // more than once, in both directions. The title has the focus when the
+  // editor opens, and Cancel comes before it, so only Shift+Tab reaches
+  // Cancel at first.
   for (const key of ["Tab", "Shift+Tab"]) {
     for (let press = 1; press <= 30; press += 1) {
       await page.keyboard.press(key);

@@ -90,9 +90,14 @@ test("stays open when you tap inside the editor", async ({ page }) => {
   const search = searchOf(editor);
   await search.fill("sal");
   const box = await editor.boundingBox();
+  // The list of matches is the last control of the editor.
+  const options = await editor.getByRole("listbox", { name: "Recipes" }).boundingBox();
+  const below = options.y + options.height;
+  const bottom = box.y + box.height;
+  expect(bottom - below, "empty space below the last control").toBeGreaterThan(20);
 
-  // An empty area below the buttons, near the bottom of the editor.
-  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height - 40);
+  // The middle of the empty area below the last control.
+  await page.touchscreen.tap(box.x + box.width / 2, (below + bottom) / 2);
 
   await expect(editor).toBeVisible();
   await expect(search).toHaveValue("sal");

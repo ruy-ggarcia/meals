@@ -42,16 +42,17 @@ export async function expectAbove(upper, lower) {
  */
 export async function expectWrapsInside(locator, container) {
   const { lines, hiddenWidth } = await locator.evaluate((element) => {
-    const style = getComputedStyle(element);
-    const lineHeight =
-      Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2;
+    // A range over the text has a box for each line that the text fills.
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const tops = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
     return {
-      lines: element.getBoundingClientRect().height / lineHeight,
+      lines: tops.size,
       // A word that doesn't break overflows its box, and the box clips it.
       hiddenWidth: element.scrollWidth - element.clientWidth,
     };
   });
-  expect(lines, "number of lines").toBeGreaterThan(1.5);
+  expect(lines, "number of lines").toBeGreaterThan(1);
   expect(hiddenWidth, "width cut off").toBeLessThanOrEqual(0);
   const box = await locator.boundingBox();
   const containerBox = await container.boundingBox();
