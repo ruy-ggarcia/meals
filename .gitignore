@@ -1,4 +1,5 @@
 .superpowers/
+.tools/
 .worktrees/
 data/
 node_modules/

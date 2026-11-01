@@ -63,7 +63,7 @@ that the level below it can't.
 
 | Level | Backend | Frontend | Deployment |
 | --- | --- | --- | --- |
-| Static | Biome and CodeQL | Biome and CodeQL | ShellCheck, `systemd-analyze verify`, and the check of the units in `test/systemd-units.test.js` |
+| Static | Biome and CodeQL | Biome and CodeQL | ShellCheck, actionlint, hadolint, `systemd-analyze verify`, and the check of the units in `test/systemd-units.test.js` |
 | Unit | Pure modules of `server/`, such as names and limits | Pure modules of `public/`, such as dates, quantities, the shopping list, and saves | The `meals-*` scripts, with stubs of Docker and systemd |
 | Integration | The API with supertest, the stores on a real data directory, and the server's start and stop | The pages and the editors on happy-dom, with a fake server | The image through `deploy/compose.yaml`, and the `meals-*` scripts with real Docker |
 | End to end | The app in real browsers, with the real server: `e2e/` | The app in real browsers, with the real server: `e2e/` | A real installation of the host tools on a disposable runner: `scripts/host-acceptance.sh` |
@@ -75,7 +75,11 @@ Static checks read the code without running it:
 
 - [Biome](https://biomejs.dev) checks the format and the lint rules of the
   JavaScript, and [ShellCheck](https://www.shellcheck.net) checks the shell
-  scripts. `npm run lint` runs both.
+  scripts. [actionlint](https://github.com/rhysd/actionlint) checks the
+  workflows, and [hadolint](https://github.com/hadolint/hadolint) checks the
+  `Dockerfile`. `npm run lint` runs all four, and the `ci` job runs it on
+  every pull request. `scripts/install-lint-tools.sh` downloads the pinned
+  versions of actionlint and hadolint and verifies their checksums.
 - `npm run test:units` runs `systemd-analyze verify` on the units in
   `deploy/systemd`.
 - `test/systemd-units.test.js` checks that each host script that runs on a

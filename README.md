@@ -23,6 +23,8 @@ Install the following:
 - npm. To check that it's installed, run `npm --version`.
 - ShellCheck, which `npm run lint` runs on the shell scripts. On Ubuntu,
   run `sudo apt install shellcheck`.
+- `curl`, which `npm run lint` uses to download actionlint and hadolint. The
+  download supports only Linux on x86-64.
 - Optional: Docker with the Compose plugin, to build and test the image
   with `npm run test:image` and `npm run test:host`.
 - Optional: `systemd-analyze`, which systemd provides, to check the systemd
@@ -391,8 +393,9 @@ Before you commit, check your changes:
    npm run format
    ```
 
-1. Check the code style. This command doesn't change any files, and it fails
-   if the code has lint errors or isn't formatted:
+1. Check the code style, the workflows, and the `Dockerfile`. This command
+   changes no files except `.tools/`, and it fails if the code has lint
+   errors or isn't formatted:
 
    ```bash
    npm run lint
@@ -408,6 +411,14 @@ Before you commit, check your changes:
 files. The settings are in `biome.json`.
 [ShellCheck](https://www.shellcheck.net) checks the shell scripts. The
 settings are in `.shellcheckrc`.
+[actionlint](https://github.com/rhysd/actionlint) checks the workflows in
+`.github/workflows/`, and [hadolint](https://github.com/hadolint/hadolint)
+checks the `Dockerfile`. `npm run lint` runs `scripts/install-lint-tools.sh`
+first. The script downloads the pinned version of each tool from its GitHub
+release into `.tools/bin`, which Git ignores, and checks the SHA-256
+checksum of the download. It skips a tool that's already installed. To
+ignore a hadolint rule, add a comment next to the instruction that explains
+why.
 
 If you change `e2e/`, `public/`, `server/`, or `playwright.config.js`, also
 run the browser tests:
@@ -460,7 +471,8 @@ GitHub Actions runs three checks on every pull request and on every push to
 `main`. The workflow is in `.github/workflows/ci.yml`:
 
 - `ci` runs `npm run lint`, `npm test`, and `npm run test:units` with
-  Node.js 22.
+  Node.js 22. `npm run lint` checks the code, the shell scripts, the
+  workflows, and the `Dockerfile`.
 - `e2e` runs `npm run test:e2e` with Node.js 22. A test that fails runs
   once more with a trace, and a test that passes only on that retry still
   fails the check. When the check fails, it uploads the Playwright report as
@@ -554,6 +566,7 @@ scripts/
   host-acceptance.sh    # Installs the host tools for real on a runner and checks them.
   host-smoke.sh         # Runs the meals-* scripts on an image and checks them.
   image-smoke.sh        # Runs an image as the host does and checks it.
+  install-lint-tools.sh # Downloads actionlint and hadolint, and checks their checksums.
   install.sh            # Installs the host tools.
   meals-backup          # Backs up the data.
   meals-deploy          # Deploys a release, with a rollback.
