@@ -417,7 +417,8 @@ run the browser tests:
 [Playwright](https://playwright.dev) runs the tests in `e2e/`. Each test
 starts its own server on a free port, with a new temporary data directory,
 so the tests never touch your data. The settings are in
-`playwright.config.js`, which names a project for each browser and phone.
+`playwright.config.js`, which defines five projects: three desktop browsers
+and two emulated phones.
 
 To run the tests of one project, or of one file, pass it after `--`:
 
