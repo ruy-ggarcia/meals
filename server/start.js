@@ -12,6 +12,13 @@ import { createStores } from "./stores.js";
  * connections, waits for the requests in progress and the queued writes, and
  * then resolves.
  * Creates `dataDir` first if it doesn't exist, and rejects if it can't.
+ * @param {{
+ *   dataDir: string,
+ *   host?: string,
+ *   logger?: import("./logger.js").Logger,
+ *   port: number,
+ *   version?: string,
+ * }} options
  */
 export async function start({ dataDir, host = "0.0.0.0", logger, port, version }) {
   await mkdir(dataDir, { recursive: true });
@@ -37,6 +44,7 @@ export async function start({ dataDir, host = "0.0.0.0", logger, port, version }
     port: server.address().port,
     async stop() {
       stopping = true;
+      /** @type {Promise<void>} */
       const closed = new Promise((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );

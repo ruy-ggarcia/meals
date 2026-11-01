@@ -38,6 +38,10 @@ function logRequests(logger) {
   };
 }
 
+/**
+ * @param {{ ingredients?: any, recipes?: any, weeks?: any }} stores
+ * @param {{ dataDir?: string, logger?: import("./logger.js").Logger, version?: string }} [options]
+ */
 export function createApp(
   { ingredients, recipes, weeks },
   { dataDir, logger = silentLogger, version } = {},

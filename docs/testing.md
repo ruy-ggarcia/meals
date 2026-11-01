@@ -63,7 +63,7 @@ that the level below it can't.
 
 | Level | Backend | Frontend | Deployment |
 | --- | --- | --- | --- |
-| Static | Biome and CodeQL | Biome and CodeQL | ShellCheck, actionlint, hadolint, `systemd-analyze verify`, and the check of the units in `test/systemd-units.test.js` |
+| Static | Biome, TypeScript, and CodeQL | Biome, TypeScript, and CodeQL | ShellCheck, actionlint, hadolint, `systemd-analyze verify`, and the check of the units in `test/systemd-units.test.js` |
 | Unit | Pure modules of `server/`, such as names and limits | Pure modules of `public/`, such as dates, quantities, the shopping list, and saves | The `meals-*` scripts, with stubs of Docker and systemd |
 | Integration | The API with supertest, the stores on a real data directory, and the server's start and stop | The pages and the editors on happy-dom, with a fake server | The image through `deploy/compose.yaml`, and the `meals-*` scripts with real Docker |
 | End to end | The app in real browsers, with the real server: `e2e/` | The app in real browsers, with the real server: `e2e/` | A real installation of the host tools on a disposable runner: `scripts/host-acceptance.sh` |
@@ -80,6 +80,14 @@ Static checks read the code without running it:
   `Dockerfile`. `npm run lint` runs all four, and the `ci` job runs it on
   every pull request. `scripts/install-lint-tools.sh` downloads the pinned
   versions of actionlint and hadolint and verifies their checksums.
+- [TypeScript](https://www.typescriptlang.org) checks the types of the
+  JavaScript in `e2e/`, `public/`, `server/`, and `test/`, and in
+  `playwright.config.js`, without a build step: it reads the
+  JSDoc comments, and the app stays plain JavaScript. `npm run typecheck`
+  runs it, and the `ci` job runs it on every pull request. It catches a
+  misspelled property, a wrong number of arguments, and a browser or Node.js
+  global used where it doesn't exist, which no test might run. The check
+  isn't `strict`: it doesn't require a type for every value.
 - `npm run test:units` runs `systemd-analyze verify` on the units in
   `deploy/systemd`.
 - `test/systemd-units.test.js` checks that each host script that runs on a

@@ -16,8 +16,8 @@ export async function hidePage(page) {
 /** Makes the page report what the browser says again, and fires `visibilitychange`. */
 export async function showPage(page) {
   await page.evaluate(() => {
-    delete document.visibilityState;
-    delete document.hidden;
+    delete (/** @type {any} */ (document).visibilityState);
+    delete (/** @type {any} */ (document).hidden);
     document.dispatchEvent(new Event("visibilitychange"));
   });
 }

@@ -158,6 +158,14 @@ function installGlobals(window, fetch) {
  * Returns `{ window, document, cleanup }`. Always call `cleanup()`, even if
  * the test throws (for example from `afterEach`), so globals and timers
  * never leak into the next test.
+ *
+ * @param {{
+ *   html: string,
+ *   script: string,
+ *   fetch?: any,
+ *   url?: string,
+ *   beforeScript?: (window: any) => unknown,
+ * }} options
  */
 export async function loadPage({
   html,
@@ -189,6 +197,8 @@ export async function loadPage({
  *
  * Returns `{ window, document, dialog, module, cleanup }`. Always call
  * `cleanup()`.
+ *
+ * @param {{ html: string, id: string, script: string, fetch?: any }} options
  */
 export async function loadDialog({ html, id, script, fetch }) {
   const markup = await readFile(path.join(PUBLIC_DIR, html), "utf8");

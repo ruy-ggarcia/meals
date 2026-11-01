@@ -45,5 +45,8 @@ test("withLoadState resolves to false and shows the load error when the load fai
   assert.equal(content[0].hidden, true);
   assert.equal(loadError.hidden, false);
   assert.equal(retryButton.disabled, false);
-  assert.deepEqual(console.error.mock.calls[0].arguments, ["Couldn't load:", error]);
+  assert.deepEqual(/** @type {any} */ (console.error).mock.calls[0].arguments, [
+    "Couldn't load:",
+    error,
+  ]);
 });

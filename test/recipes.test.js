@@ -112,7 +112,7 @@ test("concurrent creates with the same name key store only one recipe", async ()
     results.map((result) => result.status),
     ["fulfilled", "rejected"],
   );
-  assert.ok(results[1].reason instanceof NameConflictError);
+  assert.ok(/** @type {PromiseRejectedResult} */ (results[1]).reason instanceof NameConflictError);
   assert.equal((await recipes.list()).length, 1);
 });
 

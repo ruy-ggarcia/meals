@@ -29,6 +29,7 @@ jobs:
         run: command -v shellcheck || (sudo apt-get update && sudo apt-get install --yes shellcheck)
       - run: npm ci
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm test
       - run: npm run test:units
 

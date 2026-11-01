@@ -193,10 +193,12 @@ test("meals-restore-check fails, and cleans up, when a request fails", async () 
   assert.deepEqual(await leftovers(), []);
 });
 
-for (const [damage, writeLatest] of [
+/** @type {[string, () => Promise<unknown>][]} */
+const damages = [
   ["isn't an archive", () => host.writeBackup(LATEST, "not an archive")],
   ["has invalid JSON", () => host.makeBackup(LATEST, { ...DATA, "v2/recipes.json": "{ not json" })],
-]) {
+];
+for (const [damage, writeLatest] of damages) {
   test(`meals-restore-check fails, and checks no older backup, when the latest backup ${damage}`, async () => {
     await host.makeBackup(OLDER);
     await writeLatest();

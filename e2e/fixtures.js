@@ -141,7 +141,34 @@ export function watchErrors(page, consoleErrors) {
   };
 }
 
-export const test = base.extend({
+/**
+ * @typedef {object} Fixtures
+ * @property {"catalog" | "empty"} seed
+ * @property {"never" | "real"} requestTimeout
+ * @property {{
+ *   url: string,
+ *   port: number,
+ *   dataDir: string,
+ *   api: ReturnType<typeof createApi>,
+ *   recipes: Record<string, any>,
+ *   ingredients: Record<string, any>,
+ * }} app
+ * @property {{ allowed: boolean }} consoleErrors
+ * @property {() => Promise<import("@playwright/test").Page>} newPage
+ * @property {{ down(): Promise<void>, stall(): Promise<void>, up(): Promise<void> }} network
+ */
+
+/**
+ * @type {import("@playwright/test").Fixtures<
+ *   Fixtures,
+ *   {},
+ *   import("@playwright/test").PlaywrightTestArgs &
+ *     import("@playwright/test").PlaywrightTestOptions,
+ *   import("@playwright/test").PlaywrightWorkerArgs &
+ *     import("@playwright/test").PlaywrightWorkerOptions
+ * >}
+ */
+const fixtures = {
   // "catalog" seeds the recipes and the ingredients of catalog.js, and
   // "empty" seeds nothing.
   seed: ["catalog", { option: true }],
@@ -261,6 +288,8 @@ export const test = base.extend({
     // The test may end while the page still logs: the page fixture decides.
     await release();
   },
-});
+};
+
+export const test = base.extend(fixtures);
 
 export { expect };

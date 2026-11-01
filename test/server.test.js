@@ -103,6 +103,7 @@ test("start() rejects when it can't create the data directory", async (t) => {
 
 test("stop() waits for a request in progress, and then closes its keep-alive connection", async (t) => {
   // The server emits "request" once it has parsed the headers.
+  /** @type {PromiseWithResolvers<void>} */
   const requestReceived = Promise.withResolvers();
   const emit = http.Server.prototype.emit;
   t.mock.method(http.Server.prototype, "emit", function (event, ...args) {
@@ -164,7 +165,11 @@ test("node server/index.js logs one error line and exits with 1 when the port is
   await once(taken, "listening");
   try {
     const child = spawn(process.execPath, [INDEX], {
-      env: { ...process.env, DATA_DIR: dataDir, PORT: String(taken.address().port) },
+      env: {
+        ...process.env,
+        DATA_DIR: dataDir,
+        PORT: String(/** @type {net.AddressInfo} */ (taken.address()).port),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";

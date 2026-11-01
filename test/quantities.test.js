@@ -9,6 +9,7 @@ import {
 } from "../public/quantities.js";
 
 test("parseQuantity reads whole numbers and up to two decimals, after . or ,", () => {
+  /** @type {[string, number][]} */
   const cases = [
     ["150", 150],
     ["0.5", 0.5],

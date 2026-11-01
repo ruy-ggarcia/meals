@@ -60,7 +60,8 @@ test("each page links the app icon, the Home Screen icon, and the web app manife
     assert.equal(href('link[rel="apple-touch-icon"]'), "/icons/apple-touch-icon.png", html);
     assert.equal(href('link[rel="manifest"]'), "/manifest.webmanifest", html);
     assert.equal(
-      window.document.querySelector('meta[name="apple-mobile-web-app-title"]')?.content,
+      /** @type {any} */ (window.document.querySelector('meta[name="apple-mobile-web-app-title"]'))
+        ?.content,
       "Meals",
       html,
     );

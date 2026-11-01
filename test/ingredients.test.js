@@ -121,7 +121,7 @@ test("create rejects a name whose key is taken, active or archived, and reports 
 
   const archived = await ingredients.update(onion.id, { archived: true });
   await assert.rejects(ingredients.create({ name: "onion", unit: "g" }), (error) => {
-    assert.deepEqual(error.entity, archived);
+    assert.deepEqual(/** @type {NameConflictError} */ (error).entity, archived);
     return true;
   });
   assert.equal((await ingredients.list()).length, 1);

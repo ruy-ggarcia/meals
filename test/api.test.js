@@ -103,6 +103,7 @@ test("errors that map to a 4xx status are logged as requests, and not as failure
     weeks: {},
   };
   const loggedApp = createApp(throwing, { logger });
+  /** @type {[Error, number][]} */
   const cases = [
     [new ValidationError("Invalid"), 400],
     [new NotFoundError("Missing"), 404],
@@ -133,9 +134,13 @@ test("errors that map to a 4xx status are logged as requests, and not as failure
 
 test("a request that the client aborts is logged once", async () => {
   const { entries, logger } = collectingLogger();
+  /** @type {PromiseWithResolvers<void>} */
   const logged = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<void>} */
   const handlerStarted = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<void>} */
   const release = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<void>} */
   const handlerDone = Promise.withResolvers();
   const loggingInfo = logger.info;
   logger.info = (msg, fields) => {

@@ -57,6 +57,7 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
+/** @param {{ recipe?: object, ingredients?: object[], others?: object[] }} [options] */
 function openEditor({ recipe, ingredients = CATALOG, others = [] } = {}) {
   const opener = document.createElement("button");
   document.body.append(opener);

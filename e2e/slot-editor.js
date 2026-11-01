@@ -22,11 +22,13 @@ export function searchOf(editor) {
  */
 export async function watchClose(page) {
   await page.evaluate(() => {
-    window.editorClosed = new Promise((resolve) => {
+    /** @type {Promise<void>} */
+    const closed = new Promise((resolve) => {
       document.getElementById("slot-editor").addEventListener("close", () => resolve(), {
         once: true,
       });
     });
+    /** @type {any} */ (window).editorClosed = closed;
   });
-  return () => page.evaluate(() => window.editorClosed);
+  return () => page.evaluate(() => /** @type {any} */ (window).editorClosed);
 }

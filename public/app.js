@@ -82,10 +82,10 @@ const weekRange = document.getElementById("week-range");
 const weekShort = document.getElementById("week-short");
 const saveSummaries = document.querySelectorAll(".save-summary");
 const saveAnnouncement = document.getElementById("save-announcement");
-const leaveAlert = document.getElementById("leave-alert");
+const leaveAlert = /** @type {HTMLDialogElement} */ (document.getElementById("leave-alert"));
 const editor = createSlotEditor(document.getElementById("slot-editor"));
 const shopping = createShoppingDialog(document.getElementById("shopping-dialog"));
-const shoppingButton = document.getElementById("shopping-list");
+const shoppingButton = /** @type {HTMLButtonElement} */ (document.getElementById("shopping-list"));
 
 /** Timer that hides the "✓" badge, per slot element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
@@ -108,6 +108,11 @@ let failedMarks = [];
 // Keys include the week, so the same slot in two weeks never shares save state.
 function slotKey(week, day, meal) {
   return `${week}/${day}/${meal}`;
+}
+
+// Every slot element on screen.
+function slotElements() {
+  return /** @type {NodeListOf<HTMLElement>} */ (grid.querySelectorAll(".slot"));
 }
 
 // The slot element of `key`, or null when its week isn't on screen.
@@ -321,7 +326,7 @@ function showDayHeading() {
   const date = addDays(weekStart(week), index);
   dayHeading.querySelector(".day-title").textContent = DAYS[index].label;
   dayHeading.querySelector(".day-date").textContent = formatFullDate(date);
-  dayHeading.querySelector(".today-mark").hidden =
+  /** @type {HTMLElement} */ (dayHeading.querySelector(".today-mark")).hidden =
     week !== weekIdOf(new Date()) || selectedDay !== todayId();
 }
 
@@ -329,7 +334,7 @@ function fillWeek(week, weekData) {
   grid.dataset.week = week;
   menus.clear();
   const entries = [];
-  for (const slot of grid.querySelectorAll(".slot")) {
+  for (const slot of slotElements()) {
     const { day, meal } = slot.dataset;
     const key = slotKey(week, day, meal);
     const menu = weekData[day][meal];
@@ -360,7 +365,9 @@ function showDayDates(week) {
 // Marks today's header, slots, and day bar button when the loaded week contains today.
 function markToday() {
   const todayDay = weekIdOf(new Date()) === grid.dataset.week ? todayId() : null;
-  for (const element of document.querySelectorAll("[data-day]")) {
+  for (const element of /** @type {NodeListOf<HTMLElement>} */ (
+    document.querySelectorAll("[data-day]")
+  )) {
     element.toggleAttribute("data-today", element.dataset.day === todayDay);
   }
   // Wide screens shade today's column, from its header to its last slot.
@@ -372,9 +379,7 @@ function markToday() {
 // The keys of the slots on screen.
 function shownKeys() {
   const { week } = grid.dataset;
-  return [...grid.querySelectorAll(".slot")].map((slot) =>
-    slotKey(week, slot.dataset.day, slot.dataset.meal),
-  );
+  return [...slotElements()].map((slot) => slotKey(week, slot.dataset.day, slot.dataset.meal));
 }
 
 // Shows a slot's save status. The status itself comes from saves.js.
@@ -411,7 +416,7 @@ function setStatus(slot, state) {
 function showWeekStatus() {
   const count = { idle: 0, saving: 0, saved: 0, error: 0 };
   const failedDays = new Set();
-  for (const status of grid.querySelectorAll(".status")) {
+  for (const status of /** @type {NodeListOf<HTMLElement>} */ (grid.querySelectorAll(".status"))) {
     const { state } = status.dataset;
     count[state] += 1;
     if (state === "error") failedDays.add(status.parentElement.dataset.day);
@@ -454,7 +459,9 @@ function showSaveSummary(count) {
 
 function retryFailedSlots() {
   const { week } = grid.dataset;
-  for (const slot of grid.querySelectorAll('.slot:has(.status[data-state="error"])')) {
+  for (const slot of /** @type {NodeListOf<HTMLElement>} */ (
+    grid.querySelectorAll('.slot:has(.status[data-state="error"])')
+  )) {
     saves.queueSave(slotKey(week, slot.dataset.day, slot.dataset.meal));
   }
 }
@@ -535,7 +542,7 @@ function askToLeave(keys, place) {
     leaveAlert.addEventListener("close", () => resolve(leaveChosen), { once: true });
     leaveAlert.showModal();
     // Stay, the choice that keeps the changes.
-    leaveAlert.querySelector(".stay").focus();
+    /** @type {HTMLElement} */ (leaveAlert.querySelector(".stay")).focus();
   });
 }
 
@@ -545,7 +552,7 @@ async function goToWeek(week, { selectToday = false } = {}) {
   if (changingWeek || editor.isOpen() || shopping.isOpen()) return;
   // Disabling the clicked button (a week bar button or Retry) moves focus to
   // <body>; remember it so it can be refocused afterward.
-  const focused = document.activeElement;
+  const focused = /** @type {HTMLElement} */ (document.activeElement);
   setChangingWeek(true);
   try {
     if (week !== grid.dataset.week || grid.hidden) {
@@ -601,7 +608,9 @@ leaveAlert.querySelector(".leave").addEventListener("click", () => {
 // because the browser's own question comes too late to name the slots and
 // phones never show it. A click that opens a new tab or window, or that
 // another handler took, keeps the browser's default and asks nothing.
-for (const link of document.querySelectorAll(".page-link")) {
+for (const link of /** @type {NodeListOf<HTMLAnchorElement>} */ (
+  document.querySelectorAll(".page-link")
+)) {
   link.addEventListener("click", async (event) => {
     const plain =
       event.button === 0 &&

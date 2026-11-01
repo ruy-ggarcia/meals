@@ -401,6 +401,12 @@ Before you commit, check your changes:
    npm run lint
    ```
 
+1. Check the types of the JavaScript. This command changes no files:
+
+   ```bash
+   npm run typecheck
+   ```
+
 1. Run the tests:
 
    ```bash
@@ -419,6 +425,21 @@ release into `.tools/bin`, which Git ignores, and checks the SHA-256
 checksum of the download. It skips a tool that's already installed. To
 ignore a hadolint rule, add a comment next to the instruction that explains
 why.
+
+[TypeScript](https://www.typescriptlang.org) checks the types of the
+JavaScript without compiling it: the app stays plain JavaScript. It reads
+the JSDoc comments in the `.js` files of `e2e/`, `public/`, `server/`, and
+`test/`, and in `playwright.config.js`. A
+`@param`, `@returns`, `@typedef`, or `@type` comment gives a function or a
+value the type that TypeScript can't infer. The settings are in
+`tsconfig.json`, and `tsconfig.browser.json` and `tsconfig.tests.json`
+extend it. `npm run typecheck` checks three sets of files, so that the
+globals of one environment don't hide a mistake in another: `server/` and
+`playwright.config.js` see only the Node.js types, `public/` sees only the
+browser types, and `e2e/` and `test/` see both. The check isn't `strict`.
+To fix an error, give the code the right type. Use `// @ts-expect-error`
+only with a comment that explains why the code is right and the type can't
+say so.
 
 If you change `e2e/`, `public/`, `server/`, or `playwright.config.js`, also
 run the browser tests:
@@ -470,9 +491,10 @@ npm run test:units
 GitHub Actions runs three checks on every pull request and on every push to
 `main`. The workflow is in `.github/workflows/ci.yml`:
 
-- `ci` runs `npm run lint`, `npm test`, and `npm run test:units` with
-  Node.js 22. `npm run lint` checks the code, the shell scripts, the
-  workflows, and the `Dockerfile`.
+- `ci` runs `npm run lint`, `npm run typecheck`, `npm test`, and
+  `npm run test:units` with Node.js 22. `npm run lint` checks the code, the
+  shell scripts, the workflows, and the `Dockerfile`. `npm run typecheck`
+  checks the types of the JavaScript.
 - `e2e` runs `npm run test:e2e` with Node.js 22. A test that fails runs
   once more with a trace, and a test that passes only on that retry still
   fails the check. When the check fails, it uploads the Playwright report as
@@ -599,6 +621,9 @@ CHANGELOG.md       # The changes in each release.
 Dockerfile         # The server image.
 playwright.config.js # Browser test settings.
 release-please-config.json # release-please settings.
+tsconfig.browser.json # Type check settings of public/.
+tsconfig.json      # Type check settings of server/, and the base of the others.
+tsconfig.tests.json # Type check settings of e2e/ and test/.
 ```
 
 `*` No DOM access, so tests import the module directly in Node.js.

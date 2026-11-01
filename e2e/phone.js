@@ -13,6 +13,9 @@ const MAX_GAP_BELOW_STATUS_BAR = 20;
  * Describes `element`, by default the focused element, if a phone shows a
  * keyboard for it: a text area, an element you can edit, or an input whose
  * type takes text. Otherwise returns null. Runs in the page.
+ *
+ * @param {any} [element]
+ * @returns {string | null}
  */
 function describeTextField(element = document.activeElement) {
   if (!element) return null;

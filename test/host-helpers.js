@@ -135,6 +135,7 @@ class Host {
   }
 
   #spawn(command, args) {
+    /** @type {NodeJS.ProcessEnv} */
     const env = {
       ...process.env,
       MEALS_ROOT: this.root,
@@ -255,6 +256,10 @@ class Host {
   /**
    * Writes backups/NAME as a real archive of FILES under data/, with
    * DATAMODE as the mode of data/ if given.
+   *
+   * @param {string} name
+   * @param {Record<string, string>} [files]
+   * @param {{ dataMode?: number }} [options]
    */
   async makeBackup(name, files = DATA, { dataMode } = {}) {
     const dir = await mkdtemp(path.join(os.tmpdir(), "meals-archive-"));

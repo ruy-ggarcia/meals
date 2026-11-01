@@ -90,10 +90,22 @@ function validConversion(conversion) {
   };
 }
 
-// A PATCH body: any non-empty combination of name, unit, measures, and
-// conversion, or { archived } alone. A conversion needs a unit and can't go
-// with measures. The measures stay as sent, because their IDs are checked
-// against the stored ingredient inside the queue.
+/**
+ * @typedef {object} IngredientChanges
+ * @property {boolean} [archived]
+ * @property {{ from: any, measureName: any, to: any }} [conversion]
+ * @property {any[]} [measures]
+ * @property {string} [name]
+ * @property {string} [unit]
+ */
+
+/**
+ * A PATCH body: any non-empty combination of name, unit, measures, and
+ * conversion, or { archived } alone. A conversion needs a unit and can't go
+ * with measures. The measures stay as sent, because their IDs are checked
+ * against the stored ingredient inside the queue.
+ * @returns {IngredientChanges}
+ */
 function validChanges(changes) {
   const keys = isPlainObject(changes) ? Object.keys(changes) : [];
   if (keys.length === 1 && keys[0] === "archived") {
@@ -110,6 +122,7 @@ function validChanges(changes) {
       'Send "name", "unit", "measures", "conversion", or any combination, or "archived" alone.',
     );
   }
+  /** @type {IngredientChanges} */
   const valid = {};
   if (keys.includes("name")) valid.name = validName(changes.name);
   if (keys.includes("unit")) valid.unit = validUnit(changes.unit);

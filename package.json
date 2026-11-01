@@ -16,7 +16,8 @@
     "test:e2e:install": "playwright install --with-deps chromium firefox webkit",
     "test:host": "scripts/host-smoke.sh meals:test",
     "test:image": "docker build --tag meals:test . && scripts/image-smoke.sh meals:test",
-    "test:units": "scripts/units-check.sh"
+    "test:units": "scripts/units-check.sh",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.browser.json && tsc -p tsconfig.tests.json"
   },
   "dependencies": {
     "express": "^5.3.0"
@@ -25,7 +26,9 @@
     "@axe-core/playwright": "4.14.0",
     "@biomejs/biome": "2.6.3",
     "@playwright/test": "1.64.1",
+    "@types/node": "22.20.5",
     "happy-dom": "21.0.4",
-    "supertest": "^7.3.1"
+    "supertest": "^7.3.1",
+    "typescript": "7.0.2"
   }
 }

@@ -110,10 +110,12 @@ test("meals-backup keeps the 14 newest daily backups, and leaves other kinds and
 });
 
 test("meals-backup deletes nothing while a kind has no more backups than its retention", async () => {
-  for (const [kind, keep] of [
+  /** @type {[string, number][]} */
+  const retentions = [
     ["daily", 14],
     ["pre-deploy", 10],
-  ]) {
+  ];
+  for (const [kind, keep] of retentions) {
     for (let day = 1; day < keep; day++) await host.writeBackup(oldBackup(day, kind), "");
 
     const result = await host.run("meals-backup", kind);

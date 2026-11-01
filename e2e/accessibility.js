@@ -16,7 +16,10 @@ import { editorOf as slotEditorOf } from "./slot-editor.js";
 /** The rules of the WCAG 2.1 levels A and AA. */
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
-/** The appearances that the system can switch between. */
+/**
+ * The appearances that the system can switch between.
+ * @type {("light" | "dark")[]}
+ */
 export const SCHEMES = ["light", "dark"];
 
 /**
@@ -56,8 +59,16 @@ async function openMealPlan(page) {
 }
 
 /**
+ * @typedef {object} State
+ * @property {string} title
+ * @property {"alertdialog" | "dialog"} [role]
+ * @property {(fixtures: { app?: any, network?: any, page: import("@playwright/test").Page }) => Promise<void>} open
+ */
+
+/**
  * The states that axe checks. Each has a `title`, an `open` that leaves the
  * state on screen, and for a dialog, its `role`.
+ * @type {State[]}
  */
 export const STATES = [
   {
@@ -172,6 +183,8 @@ export async function violationsOf(page) {
  * Defines a test for each state and appearance: axe finds exactly the
  * violations in the list that `known(project)` returns for the project, a map
  * from the title of a state to its lines (see `violationsOf`), per appearance.
+ *
+ * @param {(project: string) => Record<string, Record<string, string[]>>} [known]
  */
 export function defineAxeTests(known = () => ({})) {
   test.describe("accessibility", () => {
