@@ -1,6 +1,6 @@
 // Saves on a phone: the day bar's mark of a slot that wasn't saved, the
-// question before you leave its week, and the saves that the app sends again
-// when you switch to another app.
+// question before you leave its week or open another page, and the saves
+// that the app sends again when you switch to another app.
 
 import { CURRENT_WEEK } from "./catalog.js";
 import { expect, test } from "./fixtures.js";
@@ -159,4 +159,38 @@ test("gives up on a stalled save and asks before you leave", async ({ app, netwo
 
   await expect.poll(() => savedItems(app, "wed", "lunch")).toEqual([itemOf(app, "Lentil soup")]);
   await expect(page.getByRole("button", { name: RETRY })).toHaveCount(0);
+});
+
+test("asks before you open another page from the tab bar with a slot that wasn't saved", async ({
+  app,
+  network,
+  page,
+}) => {
+  await openApp(page);
+  await network.down();
+  await addToSlot(page, "Wednesday", "Lunch", "Lentil soup");
+  await expect(page.getByRole("button", { name: RETRY })).toBeVisible();
+  await network.up();
+  const link = page
+    .getByRole("navigation", { name: "Sections" })
+    .getByRole("link", { name: "Recipes" });
+
+  await link.tap();
+
+  const alert = leaveAlert(page);
+  await expect(alert).toBeVisible();
+  await expect(alert).toHaveAccessibleDescription(
+    "Wednesday lunch couldn't be saved. If you leave this page, it goes back to its last saved menu.",
+  );
+  await alert.getByRole("button", { name: "Stay" }).tap();
+
+  await expect(alert).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`#${CURRENT_WEEK}$`));
+  await expect(page.getByRole("button", { name: RETRY })).toBeVisible();
+
+  await link.tap();
+  await alert.getByRole("button", { name: "Leave Without Saving" }).tap();
+
+  await expect(page).toHaveURL(/\/recipes\.html$/);
+  expect(await savedItems(app, "wed", "lunch")).toEqual([]);
 });

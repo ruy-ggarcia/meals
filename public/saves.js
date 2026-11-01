@@ -111,22 +111,22 @@ export function createSaves({ fetch, url, readMenu, onStatus, timeoutMs }) {
     return next;
   }
 
-  // Last-chance save when the page is hidden or unloaded (reload, close, app
-  // switch). Uses keepalive so the PUT survives unload, with the same timeout
-  // as any other save; bypasses the per-slot chain (last write wins). Each
-  // save is tracked in pageHideSaves so that settle can wait for it.
-  // lastSaved is updated optimistically BEFORE the fetch so a second call
-  // (visibilitychange + pagehide) or a later queueSave doesn't resend; it is
-  // restored to the confirmed menu on failure so the next save retries.
-  function flush(keys, { skipInFlight }) {
+  // Last-chance save when the page is hidden (app switch, tab switch). Uses
+  // keepalive so the PUT survives if the browser then discards the page, with
+  // the same timeout as any other save; bypasses the per-slot chain (last
+  // write wins). Each save is tracked in pageHideSaves so that settle can wait
+  // for it. lastSaved is updated optimistically BEFORE the fetch so a second
+  // call or a later queueSave doesn't resend; it is restored to the confirmed
+  // menu on failure so the next save retries.
+  function flush(keys) {
     for (const key of keys) {
       const current = readMenu(key);
       const previous = lastSaved.get(key);
       if (current === undefined || previous === undefined) continue; // not loaded
       if (sameMenu(current, previous)) continue; // unchanged
-      // The page survives a visibilitychange, so a normal PUT already carrying
-      // this menu will complete; on pagehide it may be cancelled, so resend.
-      if (skipInFlight && same(inFlight.get(key), current)) continue;
+      // A hidden page keeps running, so a normal PUT already carrying this
+      // menu will complete.
+      if (same(inFlight.get(key), current)) continue;
 
       const menu = copyMenu(current);
       lastSaved.set(key, menu);
@@ -176,6 +176,18 @@ export function createSaves({ fetch, url, readMenu, onStatus, timeoutMs }) {
   }
 
   /**
+   * The loaded slots, among `keys`, whose current menu the server hasn't
+   * confirmed: its save failed, waits, or is still running.
+   */
+  function unconfirmed(keys) {
+    return keys.filter((key) => {
+      const confirmed = confirmedMenu.get(key);
+      const current = readMenu(key);
+      return confirmed !== undefined && current !== undefined && !sameMenu(current, confirmed);
+    });
+  }
+
+  /**
    * Gives up the unsaved menu of a slot: returns a copy of the menu the server
    * has, to show instead, and clears the slot's status. No later save sends
    * the discarded menu once the slot shows the returned menu.
@@ -186,5 +198,5 @@ export function createSaves({ fetch, url, readMenu, onStatus, timeoutMs }) {
     return copyMenu(confirmedMenu.get(key));
   }
 
-  return { discard, flush, loaded, queueSave, settle, unsaved };
+  return { discard, flush, loaded, queueSave, settle, unconfirmed, unsaved };
 }

@@ -34,13 +34,24 @@ test("unsavedTitle counts the meals that weren't saved", () => {
   assert.equal(unsavedTitle(2), "2 meals weren't saved");
 });
 
-test("unsavedMessage names the meals and says what leaving does to them", () => {
+test("unsavedMessage names the meals and says what leaving the week does to them", () => {
   assert.equal(
-    unsavedMessage(["Monday lunch"]),
+    unsavedMessage(["Monday lunch"], "this week"),
     "Monday lunch couldn't be saved. If you leave this week, it goes back to its last saved menu.",
   );
   assert.equal(
-    unsavedMessage(["Monday lunch", "Tuesday dinner"]),
+    unsavedMessage(["Monday lunch", "Tuesday dinner"], "this week"),
     "Monday lunch and Tuesday dinner couldn't be saved. If you leave this week, they go back to their last saved menus.",
+  );
+});
+
+test("unsavedMessage says what leaving the page does to the meals", () => {
+  assert.equal(
+    unsavedMessage(["Monday lunch"], "this page"),
+    "Monday lunch couldn't be saved. If you leave this page, it goes back to its last saved menu.",
+  );
+  assert.equal(
+    unsavedMessage(["Monday lunch", "Tuesday dinner"], "this page"),
+    "Monday lunch and Tuesday dinner couldn't be saved. If you leave this page, they go back to their last saved menus.",
   );
 });

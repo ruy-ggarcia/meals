@@ -21,11 +21,14 @@ export function unsavedTitle(count) {
   return count === 1 ? "1 meal wasn't saved" : `${count} meals weren't saved`;
 }
 
-/** What leaving the week does to the meals in `names`, such as "Monday lunch". */
-export function unsavedMessage(names) {
+/**
+ * What leaving `place` does to the meals in `names`, such as "Monday lunch".
+ * `place` is "this week" or "this page".
+ */
+export function unsavedMessage(names, place) {
   const outcome =
     names.length === 1
       ? "it goes back to its last saved menu"
       : "they go back to their last saved menus";
-  return `${joinNames(names)} couldn't be saved. If you leave this week, ${outcome}.`;
+  return `${joinNames(names)} couldn't be saved. If you leave ${place}, ${outcome}.`;
 }

@@ -170,6 +170,15 @@ leave the week. To stay and retry the save, click **Stay**. To discard the
 unsaved menus and change weeks, click **Leave Without Saving**. The slots
 then go back to their last saved menus.
 
+The app asks the same question before it opens another page, such as
+**Recipes** or **Ingredients**. On a computer, the browser also asks before
+you close or reload the tab while a slot isn't saved.
+
+A phone doesn't ask before you close the tab or reload the page. The app
+tries to save a slot when the page goes to the background, but a change that
+couldn't be saved can be lost. Before you close the app on a phone, check
+that no slot shows **Retry**.
+
 Changes from other devices don't appear in real time. To see them, reload the
 page. If two people edit the same slot, the last save wins.
 

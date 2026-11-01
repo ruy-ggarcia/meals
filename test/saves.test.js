@@ -231,7 +231,7 @@ test("flush sends each changed slot with keepalive and skips unchanged slots", a
   menus.set("tue/lunch", RICE);
   menus.set(KEY, SOUP);
 
-  saves.flush([KEY, "tue/lunch"], { skipInFlight: false });
+  saves.flush([KEY, "tue/lunch"]);
   await tick();
   assert.equal(server.requests.length, 1);
   assert.deepEqual(server.requests[0].body, SOUP);
@@ -242,7 +242,7 @@ test("flush copies the menu, so mutating it afterward doesn't change the saved s
   const { saves, server, menus } = setup();
   const original = menu("soup");
   menus.set(KEY, original);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   await tick();
   server.requests[0].ok();
   await tick();
@@ -263,7 +263,7 @@ test("flush copies the menu, so mutating it afterward doesn't change the saved s
 test("flush skips slots that were never loaded", async () => {
   const { saves, server, menus } = setup();
   menus.set("wed/lunch", FISH);
-  saves.flush(["wed/lunch"], { skipInFlight: false });
+  saves.flush(["wed/lunch"]);
   await tick();
   assert.equal(server.requests.length, 0);
 });
@@ -274,7 +274,7 @@ test("flush skips a loaded slot whose readMenu now returns undefined, and still 
   menus.set("tue/lunch", RICE); // changed since it was loaded
   menus.delete(KEY); // KEY was loaded in setup(), but its menu vanished (for example, removed from the DOM)
 
-  assert.doesNotThrow(() => saves.flush([KEY, "tue/lunch"], { skipInFlight: false }));
+  assert.doesNotThrow(() => saves.flush([KEY, "tue/lunch"]));
   await tick();
 
   assert.equal(server.requests.length, 1);
@@ -284,39 +284,40 @@ test("flush skips a loaded slot whose readMenu now returns undefined, and still 
 test("a second flush and a later queueSave don't resend the flushed menu", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: true });
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
+  saves.flush([KEY]);
   await saves.queueSave(KEY);
   assert.equal(server.requests.length, 1);
 });
 
-test("flush with skipInFlight skips a slot whose queued save carries the same menu", async () => {
+test("flush skips a slot whose running save carries the same menu", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.queueSave(KEY);
   await tick();
-  saves.flush([KEY], { skipInFlight: true });
+  saves.flush([KEY]);
   await tick();
   assert.equal(server.requests.length, 1);
   assert.equal(server.requests[0].keepalive, false);
 });
 
-test("flush without skipInFlight resends a menu whose queued save is in flight", async () => {
+test("flush sends the menu that a slot shows now while an older save is running", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.queueSave(KEY);
   await tick();
-  saves.flush([KEY], { skipInFlight: false }); // pagehide may cancel the queued save
+  menus.set(KEY, SOUP_AND_BREAD);
+  saves.flush([KEY]);
   await tick();
   assert.equal(server.requests.length, 2);
-  assert.deepEqual(server.requests[1].body, SOUP);
+  assert.deepEqual(server.requests[1].body, SOUP_AND_BREAD);
   assert.equal(server.requests[1].keepalive, true);
 });
 
 test("after a failed flush, the next queueSave retries the menu", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   await tick();
   server.requests[0].fail();
   await tick();
@@ -335,7 +336,7 @@ test("a successful flush clears an earlier error of the slot", async () => {
   server.requests[0].fail();
   await first;
 
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   await tick();
   server.requests[1].ok();
   await tick();
@@ -350,7 +351,7 @@ test("settle waits for queued saves and page-hide saves", async () => {
   menus.set(KEY, SOUP);
   menus.set("tue/lunch", RICE);
   saves.queueSave(KEY);
-  saves.flush(["tue/lunch"], { skipInFlight: false });
+  saves.flush(["tue/lunch"]);
   let settled = false;
   const done = saves.settle().then(() => {
     settled = true;
@@ -376,7 +377,7 @@ test("settle also waits for page-hide saves that start while it waits", async ()
   await tick();
 
   menus.set("tue/lunch", RICE);
-  saves.flush([KEY, "tue/lunch"], { skipInFlight: true }); // the page is hidden during the wait
+  saves.flush([KEY, "tue/lunch"]); // the page is hidden during the wait
   server.requestWith(SOUP).ok();
   await tick();
   assert.equal(settled, false, "the page-hide save that started during the wait is pending");
@@ -390,7 +391,7 @@ test("settle also waits for page-hide saves that start while it waits", async ()
 test("a failed page-hide save marks the slot as an error and leaves it unsaved", async () => {
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   server.requests[0].fail();
   await saves.settle();
   assert.equal(statuses.get(KEY), "error");
@@ -400,7 +401,7 @@ test("a failed page-hide save marks the slot as an error and leaves it unsaved",
 test("a page-hide save gives up after the timeout", async () => {
   const { saves, menus, statuses } = setup({ timeoutMs: 20 });
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false }); // the fake server never answers
+  saves.flush([KEY]); // the fake server never answers
   await sleep(50);
   await saves.settle();
   assert.equal(statuses.get(KEY), "error");
@@ -409,7 +410,7 @@ test("a page-hide save gives up after the timeout", async () => {
 test("a failed page-hide save doesn't mark the slot when a newer save replaced its menu", async () => {
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   menus.set(KEY, SOUP_AND_BREAD);
   const newer = saves.queueSave(KEY);
   await tick();
@@ -425,7 +426,7 @@ test("a failed page-hide save doesn't mark the slot when a newer save replaced i
 test("a failed page-hide save doesn't mark the slot while a newer save runs", async () => {
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   menus.set(KEY, SOUP_AND_BREAD);
   const newer = saves.queueSave(KEY);
   await tick();
@@ -451,6 +452,80 @@ test("unsaved skips a loaded slot whose readMenu now returns undefined", () => {
   const { saves, menus } = setup();
   menus.delete(KEY); // KEY was loaded in setup(), but its menu vanished (for example, removed from the DOM)
   assert.deepEqual(saves.unsaved([KEY]), []);
+});
+
+// A slot is unconfirmed until the server confirmed the menu that it shows.
+
+test("unconfirmed lists a slot whose save failed", async () => {
+  const { saves, server, menus } = setup();
+  menus.set(KEY, SOUP);
+  const failed = saves.queueSave(KEY);
+  await tick();
+  server.requests[0].fail();
+  await failed;
+  assert.deepEqual(saves.unconfirmed([KEY]), [KEY]);
+});
+
+test("unconfirmed lists a slot whose save is running", async () => {
+  const { saves, menus } = setup();
+  menus.set(KEY, SOUP);
+  saves.queueSave(KEY);
+  await tick();
+  assert.deepEqual(saves.unconfirmed([KEY]), [KEY]);
+});
+
+test("unconfirmed lists a slot whose newer menu is still saving after the server confirmed an older one", async () => {
+  const { saves, server, menus } = setup();
+  menus.set(KEY, SOUP);
+  saves.queueSave(KEY);
+  await tick();
+  menus.set(KEY, SOUP_AND_BREAD);
+  saves.queueSave(KEY);
+  await tick();
+  server.requests[0].ok();
+  await tick();
+  assert.deepEqual(saves.unconfirmed([KEY]), [KEY]);
+});
+
+test("unconfirmed lists a slot whose page-hide save is running", async () => {
+  const { saves, menus } = setup();
+  menus.set(KEY, SOUP);
+  saves.flush([KEY]);
+  assert.deepEqual(saves.unconfirmed([KEY]), [KEY]);
+});
+
+test("unconfirmed skips a slot that the server confirmed", async () => {
+  const { saves, server, menus } = setup();
+  menus.set(KEY, SOUP);
+  const saved = saves.queueSave(KEY);
+  await tick();
+  server.requests[0].ok();
+  await saved;
+  assert.deepEqual(saves.unconfirmed([KEY]), []);
+});
+
+test("unconfirmed skips a slot that isn't loaded", () => {
+  const { saves, menus } = setup();
+  menus.set("wed/lunch", FISH);
+  assert.deepEqual(saves.unconfirmed(["wed/lunch"]), []);
+});
+
+test("unconfirmed skips a slot whose readMenu now returns undefined", () => {
+  const { saves, menus } = setup();
+  menus.delete(KEY);
+  assert.deepEqual(saves.unconfirmed([KEY]), []);
+});
+
+test("unconfirmed skips a slot after discard", async () => {
+  const { saves, server, menus } = setup();
+  menus.set(KEY, SOUP);
+  const failed = saves.queueSave(KEY);
+  await tick();
+  server.requests[0].fail();
+  await failed;
+
+  menus.set(KEY, saves.discard(KEY));
+  assert.deepEqual(saves.unconfirmed([KEY]), []);
 });
 
 test("discard returns a copy, so mutating it afterward doesn't change the saved state", async () => {
@@ -488,7 +563,7 @@ test("discard returns the saved menu and clears the error, so no later save send
   assert.equal(statuses.get(KEY), "idle");
 
   await saves.queueSave(KEY); // for example, a later Done without changes
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   await tick();
   assert.equal(server.requests.length, 1);
 });
@@ -496,7 +571,7 @@ test("discard returns the saved menu and clears the error, so no later save send
 test("a late successful page-hide save keeps the error of a newer menu that failed", async () => {
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false }); // the page is hidden; this save is slow
+  saves.flush([KEY]); // the page is hidden; this save is slow
   menus.set(KEY, SOUP_AND_BREAD);
   const newer = saves.queueSave(KEY);
   await tick();
@@ -512,9 +587,9 @@ test("a late successful page-hide save keeps the error of a newer menu that fail
 test("when two page-hide saves of a slot fail, a later save sends the menu again", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   menus.set(KEY, SOUP_AND_BREAD);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   server.requests[0].fail();
   server.requests[1].fail();
   await saves.settle();
@@ -529,9 +604,9 @@ test("when two page-hide saves of a slot fail, a later save sends the menu again
 test("when two page-hide saves of a slot fail, discard returns the menu the server has", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   menus.set(KEY, SOUP_AND_BREAD);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   server.requests[0].fail();
   server.requests[1].fail();
   await saves.settle();
@@ -542,7 +617,7 @@ test("when two page-hide saves of a slot fail, discard returns the menu the serv
 test("a page-hide save confirmed after a newer save doesn't replace the newer menu", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false }); // sent first, answered last
+  saves.flush([KEY]); // sent first, answered last
   menus.set(KEY, SOUP_AND_BREAD);
   const newer = saves.queueSave(KEY);
   await tick();
@@ -562,7 +637,7 @@ test("a page-hide save confirmed after a newer save doesn't replace the newer me
 test("after a successful page-hide save, discard returns its menu", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   server.requests[0].ok();
   await saves.settle();
 
@@ -577,9 +652,9 @@ test("after a successful page-hide save, discard returns its menu", async () => 
 test("when an older page-hide save succeeds after a newer one failed, discard returns the older menu", async () => {
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   menus.set(KEY, SOUP_AND_BREAD);
-  saves.flush([KEY], { skipInFlight: false });
+  saves.flush([KEY]);
   server.requests[1].fail();
   await tick();
   server.requests[0].ok();
