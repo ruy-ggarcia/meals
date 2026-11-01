@@ -442,9 +442,6 @@ If you change `deploy/systemd/`, also verify the units with
 npm run test:units
 ```
 
-Before you merge a change to the user interface, `deploy/`, or `scripts/`,
-also run the [manual test plan](docs/manual-test-plan.md).
-
 ## Continuous integration
 
 GitHub Actions runs three checks on every pull request and on every push to
@@ -512,7 +509,6 @@ deploy/
 docs/
   deployment.md         # Releases, deployments, and backups.
   glossary.md           # The terms the app uses.
-  manual-test-plan.md   # Checks that need a person with a browser or a host.
 e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js               # Meal plan page: grid, week changes, and saves.
