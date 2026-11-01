@@ -397,17 +397,18 @@ files. The settings are in `biome.json`.
 [ShellCheck](https://www.shellcheck.net) checks the shell scripts. The
 settings are in `.shellcheckrc`.
 
-If you change `public/` or `server/`, also run the browser tests:
+If you change `e2e/`, `public/`, `server/`, or `playwright.config.js`, also
+run the browser tests:
 
-1. The first time, install Chromium, Firefox, WebKit, and the system
-   packages that they need. On Linux, the command installs the packages
-   with `sudo`:
+1. The first time, and again after an update of `@playwright/test`, install
+   Chromium, Firefox, WebKit, and the system packages that they need. On
+   Linux, the command installs the packages with `sudo`:
 
    ```bash
    npm run test:e2e:install
    ```
 
-1. Run the tests in the three browsers:
+1. Run the tests in the three browsers and on the two emulated phones:
 
    ```bash
    npm run test:e2e
@@ -416,7 +417,14 @@ If you change `public/` or `server/`, also run the browser tests:
 [Playwright](https://playwright.dev) runs the tests in `e2e/`. Each test
 starts its own server on a free port, with a new temporary data directory,
 so the tests never touch your data. The settings are in
-`playwright.config.js`.
+`playwright.config.js`, which names a project for each browser and phone.
+
+To run the tests of one project, or of one file, pass it after `--`:
+
+```bash
+npm run test:e2e -- --project=chromium
+npm run test:e2e -- e2e/week.spec.js
+```
 
 If you change `Dockerfile`, `deploy/compose.yaml`, `scripts/`, or `server/`,
 also build and test the image, and then run the host scripts on it:

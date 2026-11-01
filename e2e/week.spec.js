@@ -10,9 +10,12 @@ import { expect, test } from "./fixtures.js";
 const CURRENT_RANGE = "Sep 21 – 27, 2026";
 const NEXT_RANGE = "Sep 28 – Oct 4, 2026";
 
-/** The header of `day`'s column in the grid, which shows its day of the month. */
+/**
+ * The header of `day`'s column in the grid, which shows its day of the month.
+ * It has no role or name. In the grid, only a header has a day and no meal.
+ */
 function dayHeader(page, day) {
-  return page.getByRole("main").locator(`.day-header[data-day="${day}"]`);
+  return page.getByRole("main").locator(`[data-day="${day}"]:not([data-meal])`);
 }
 
 /** Checks that the address, the range, and the grid all show `week`. */
@@ -87,6 +90,14 @@ test("ends on the last week after fast week changes", async ({ app, page }) => {
   ]);
   await page.goto("/");
   await expectWeek(page, CURRENT_WEEK, CURRENT_RANGE);
+  // Notes the week of the grid each time the grid changes while it shows the
+  // menu of Oct 5, so a menu that shows in another week for a moment counts.
+  await page.getByRole("main").evaluate((grid) => {
+    window.weeksWithTheMenu = [];
+    new MutationObserver(() => {
+      if (grid.textContent.includes("Lentil soup")) window.weeksWithTheMenu.push(grid.dataset.week);
+    }).observe(grid, { attributes: true, characterData: true, childList: true, subtree: true });
+  });
 
   // Hold each week response. Click again as soon as Next week takes a click,
   // and when it has to wait, deliver the held responses, the latest request
@@ -115,6 +126,11 @@ test("ends on the last week after fast week changes", async ({ app, page }) => {
   await expect(dayHeader(page, "sun")).toHaveText("Sun1");
   await expect(page.getByRole("button", { name: "Monday, Lunch: empty" })).toBeVisible();
   await expect(page.getByRole("main")).not.toContainText("Lentil soup");
+  const weeks = await page.evaluate(() => window.weeksWithTheMenu);
+  expect(
+    weeks.filter((week) => week !== "2026-10-05"),
+    "the other weeks that showed the menu of Oct 5",
+  ).toEqual([]);
 });
 
 test("opens the week in the address", async ({ page }) => {
