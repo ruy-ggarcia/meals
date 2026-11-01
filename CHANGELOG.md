@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0](https://github.com/ruy-ggarcia/meals/compare/v0.3.0...v0.4.0) (2026-11-01)
+
+
+### Features
+
+* **ui:** add the app icon and the web app manifest ([34bf4fc](https://github.com/ruy-ggarcia/meals/commit/34bf4fc104e8e7d99a5a0bc5dba070399c93c99e))
+* **ui:** check names and quantities in the editors as you type ([578cb8a](https://github.com/ruy-ggarcia/meals/commit/578cb8aa08aeebc3238ef54fa1b2ed2a7be278bd))
+* **ui:** open recipes and ingredients from their rows, and archive in the editor ([6628fdd](https://github.com/ruy-ggarcia/meals/commit/6628fdddee5fa8b799f795663f0fdf68606cdd57))
+* **ui:** pick the unit of an ingredient in a segmented control ([d558743](https://github.com/ruy-ggarcia/meals/commit/d558743d34d883c4300e8ccdf6fea16058e43d77))
+* **ui:** redesign the app with a sidebar, sheets, and a dark mode ([933035b](https://github.com/ruy-ggarcia/meals/commit/933035b848af2ee0e8d4ef1ced05a7c711febc97))
+* **ui:** redesign the week grid, the day view, and the save status ([0159c2d](https://github.com/ruy-ggarcia/meals/commit/0159c2dcf309849e6d98db5390e842fef2dac963))
+* **ui:** restyle the pages with a sidebar, a tab bar, and a dark mode ([43c5495](https://github.com/ruy-ggarcia/meals/commit/43c5495d587140b0576f0188118edddf1f9c036d))
+* **ui:** say that there is nothing to buy in an empty week ([2a38b00](https://github.com/ruy-ggarcia/meals/commit/2a38b002ec394ee759d0d2cebc45dad3b680e170))
+* **ui:** show the editors and the shopping list as sheets ([ef5fb06](https://github.com/ruy-ggarcia/meals/commit/ef5fb061354d122f9a1122c03bd5b663234db832))
+
+
+### Bug Fixes
+
+* **deps:** bump node from `0a7108b` to `fe4f6d7` ([683ee14](https://github.com/ruy-ggarcia/meals/commit/683ee1420fbce06135d6117241d00d80ec6afbc2))
+* **deps:** bump node from `0a7108b` to `fe4f6d7` ([12ff71d](https://github.com/ruy-ggarcia/meals/commit/12ff71d33b19d3066e01badb9d8aeeea2e52e5fc))
+* **ui:** never show a focus ring on an editor's title when it opens ([42c380b](https://github.com/ruy-ggarcia/meals/commit/42c380bf2253fd83efe1f6204d4b7135643e7a7b))
+
 ## [0.3.0](https://github.com/ruy-ggarcia/meals/compare/v0.2.0...v0.3.0) (2026-10-18)
 
 
