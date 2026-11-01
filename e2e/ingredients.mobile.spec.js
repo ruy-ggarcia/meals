@@ -52,9 +52,11 @@ async function expectFillsScreen(editor) {
   await expect
     .poll(async () => {
       const box = await editor.boundingBox();
-      return { x: box.x, width: box.width, bottom: box.y + box.height };
+      // The bottom may end a fraction of a pixel off the edge of the screen.
+      return { x: box.x, width: box.width, bottom: Math.round(box.y + box.height) };
     })
     .toEqual({ x: 0, width, bottom: height });
+  // The poll leaves the top free: the editor reaches up close to the top.
   expect((await editor.boundingBox()).height, "height").toBeGreaterThanOrEqual(height - 100);
 }
 

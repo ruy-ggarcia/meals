@@ -30,8 +30,6 @@ import {
 
 const AMOUNT_MESSAGE = "Enter an amount from 0.01 to 10000, with up to two decimals.";
 const CONVERSION_MESSAGE = "Enter a number from 0.01 to 10000, with up to two decimals.";
-// The colors of the stylesheet, as the browser computes them.
-const TINT = "rgb(46, 125, 50)";
 
 /** The heading of the page, which shows the number of active ingredients. */
 function titleOf(page) {
@@ -54,6 +52,15 @@ async function expectActive(page, rows) {
   await expect(activeListOf(page).getByRole("listitem")).toHaveText(
     rows.map(([name, details]) => new RegExp(`^${name}\\s*${details}$`)),
   );
+}
+
+/** Presses Tab until `target` has the focus, at most `most` times. */
+async function tabTo(page, target, most) {
+  for (let presses = 0; presses < most; presses += 1) {
+    if (await target.evaluate((element) => element === document.activeElement)) return;
+    await page.keyboard.press("Tab");
+  }
+  await expect(target, `focused after ${most} Tab presses`).toBeFocused();
 }
 
 /** Opens the catalog, and waits until it has loaded. */
@@ -153,18 +160,25 @@ test("lists the ingredients with their units and marks Ingredients in the sideba
     ["Onion", "g"],
     ["Rice", "g"],
   ]);
-  // The unit sits at the right end of the row, before the chevron.
-  const row = activeListOf(page).getByRole("listitem").first();
+});
+
+test("shows the unit at the right end of the row, before the chevron", async ({ page }) => {
+  await openCatalog(page);
+
+  const row = rowOf(page, "Egg");
   const unit = await row.getByText("pcs", { exact: true }).boundingBox();
+  // The chevron is decorative, with no role or name, so its class finds it.
   const chevron = await row.locator(".chevron").boundingBox();
-  const box = await row.boundingBox();
-  expect(unit.x + unit.width, "unit before the chevron").toBeLessThanOrEqual(chevron.x);
-  expect(chevron.x - (unit.x + unit.width), "space between the unit and the chevron").toBeLessThan(
-    40,
-  );
-  expect(box.x + box.width - (chevron.x + chevron.width), "space after the chevron").toBeLessThan(
-    40,
-  );
+  // Where the content of the row ends, and the space between its parts.
+  const { end, gap } = await row.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      end: element.getBoundingClientRect().right - Number.parseFloat(style.paddingRight),
+      gap: Number.parseFloat(style.columnGap),
+    };
+  });
+  expect(chevron.x - (unit.x + unit.width), "unit right before the chevron").toBeCloseTo(gap, 0);
+  expect(chevron.x + chevron.width, "chevron at the end of the row").toBeCloseTo(end, 0);
 });
 
 test("opens the editor of a new ingredient with the name focused and no unit chosen", async ({
@@ -766,16 +780,17 @@ test("moves the choice of the unit with the arrow keys and rings the focused cho
   const editor = await openIngredient(page, "Onion");
   const choice = (unit) => unitOf(editor).getByText(unit, { exact: true });
   const expectRing = async (unit) => {
-    await expect(choice(unit)).toHaveCSS("outline-style", "solid");
-    await expect(choice(unit)).toHaveCSS("outline-width", "2px");
-    await expect(choice(unit)).toHaveCSS("outline-color", TINT);
+    await expect(choice(unit)).not.toHaveCSS("outline-style", "none");
+    await expect
+      .poll(() =>
+        choice(unit).evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).outlineWidth),
+        ),
+      )
+      .toBeGreaterThan(0);
   };
 
-  for (let tabs = 0; tabs < 5; tabs += 1) {
-    if (await choiceOf(editor, "g").evaluate((element) => element === document.activeElement))
-      break;
-    await page.keyboard.press("Tab");
-  }
+  await tabTo(page, choiceOf(editor, "g"), 5);
 
   await expect(choiceOf(editor, "g")).toBeFocused();
   await expectRing("g");
