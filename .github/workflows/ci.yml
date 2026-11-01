@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, ci/host-acceptance-trial]
 
 permissions:
   contents: read

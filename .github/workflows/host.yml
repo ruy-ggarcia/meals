@@ -10,6 +10,8 @@ on:
       - .github/workflows/host.yml
       - deploy/**
       - scripts/**
+  push:
+    branches: [ci/host-acceptance-trial]
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:
