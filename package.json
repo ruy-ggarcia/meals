@@ -1,6 +1,6 @@
 {
   "name": "meals",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Self-hosted weekly family meal planner",
   "type": "module",
