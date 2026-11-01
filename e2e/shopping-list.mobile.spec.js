@@ -8,6 +8,18 @@ import { expectInsideViewport, expectNoSidewaysScroll } from "./layout.js";
 
 const FILLERS = 29;
 
+/** The inset of the status bar, which a browser without a notch reports as 0. */
+function safeTopOf(page) {
+  return page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.paddingTop = "var(--safe-top)";
+    document.body.append(probe);
+    const inset = Number.parseFloat(getComputedStyle(probe).paddingTop);
+    probe.remove();
+    return inset;
+  });
+}
+
 /** Adds `FILLERS` ingredients in `g` that sort after `Onion`, and returns them. */
 async function createFillers(app) {
   const fillers = [];
@@ -64,7 +76,11 @@ test("rises from the bottom, fills the screen, scrolls inside, and keeps a line 
       return { x: box.x, width: box.width, bottom: box.y + box.height };
     })
     .toEqual({ x: 0, width, bottom: height });
-  expect((await dialog.boundingBox()).height, "height").toBeGreaterThanOrEqual(height - 100);
+  // The sheet reaches up to just below the status bar.
+  const safeTop = await safeTopOf(page);
+  const sheetBox = await dialog.boundingBox();
+  expect(sheetBox.y, "top edge").toBeGreaterThanOrEqual(safeTop);
+  expect(sheetBox.height, "height").toBeGreaterThanOrEqual(height - safeTop - 20);
   await expectNoSidewaysScroll(page);
 
   const list = dialog.getByRole("list", { name: "Ingredients to buy" });

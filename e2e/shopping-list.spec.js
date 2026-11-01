@@ -204,8 +204,11 @@ test("tells you to plan meals in a week with no menus, and closes when you click
   await expect(dialog.getByText(SUMMARY)).toBeHidden();
   await expect(dialog.getByRole("list", { name: "Ingredients to buy" })).toBeHidden();
   await expect(notIncludedOf(dialog)).toBeHidden();
+  const box = await dialog.boundingBox();
+  expect(box.x, "space left of the dialog").toBeGreaterThan(0);
 
-  await page.mouse.click(10, 10);
+  // Halfway between the window's left edge and the dialog.
+  await page.mouse.click(box.x / 2, box.y + box.height / 2);
 
   await expect(dialog).toBeHidden();
   await expect(shoppingButton(page)).toBeFocused();
