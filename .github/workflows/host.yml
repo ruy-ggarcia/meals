@@ -37,4 +37,4 @@ jobs:
           # meals-deploy gets the token for the GitHub API, so the limit on
           # requests without a token can't fail the run.
           GITHUB_TOKEN: ${{ github.token }}
-        run: sudo --preserve-env=GITHUB_ACTIONS,GITHUB_TOKEN scripts/host-acceptance.sh
+        run: sudo --preserve-env=GITHUB_ACTIONS,GITHUB_TOKEN,RUNNER_ENVIRONMENT scripts/host-acceptance.sh

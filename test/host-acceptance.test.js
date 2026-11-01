@@ -32,10 +32,26 @@ test("host acceptance refuses to run outside GitHub Actions", () => {
   assert.equal(result.stderr, "Run the host acceptance test only on a GitHub Actions runner.\n");
 });
 
+test("host acceptance refuses to run on a self-hosted runner", () => {
+  const result = runAcceptance({
+    ...process.env,
+    GITHUB_ACTIONS: "true",
+    RUNNER_ENVIRONMENT: "self-hosted",
+  });
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.stdout, "");
+  assert.equal(result.stderr, "Run the host acceptance test only on a GitHub Actions runner.\n");
+});
+
 test("host acceptance refuses to run as a user other than root", {
   skip: skipAsRoot("the test runs as root"),
 }, () => {
-  const result = runAcceptance({ ...process.env, GITHUB_ACTIONS: "true" });
+  const result = runAcceptance({
+    ...process.env,
+    GITHUB_ACTIONS: "true",
+    RUNNER_ENVIRONMENT: "github-hosted",
+  });
 
   assert.equal(result.status, 1, result.stderr);
   assert.equal(result.stdout, "");

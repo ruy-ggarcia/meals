@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: sudo --preserve-env=GITHUB_ACTIONS,GITHUB_TOKEN scripts/host-acceptance.sh
+# Usage: sudo --preserve-env=GITHUB_ACTIONS,GITHUB_TOKEN,RUNNER_ENVIRONMENT scripts/host-acceptance.sh
 #
 # Installs the Meals host tools from this checkout for real, and checks the
 # host with the published releases from GitHub and GHCR: the installation and
@@ -11,12 +11,12 @@
 #
 # It changes the machine for good: it creates the deployer user, installs
 # /opt/server/meals and the timers, and edits /etc/hosts for a while. So it
-# runs only as root on a GitHub Actions runner, a new virtual machine for each
+# runs only as root on a GitHub-hosted runner, a new virtual machine for each
 # job, and never where /opt/server/meals exists. With GITHUB_TOKEN, it gives
 # meals-deploy that token for the GitHub API.
 set -euo pipefail
 
-if [[ ${GITHUB_ACTIONS:-} != true ]]; then
+if [[ ${GITHUB_ACTIONS:-} != true || ${RUNNER_ENVIRONMENT:-} != github-hosted ]]; then
   echo "Run the host acceptance test only on a GitHub Actions runner." >&2
   exit 1
 fi
@@ -31,7 +31,9 @@ fi
 
 readonly ROOT=/opt/server/meals
 # An older release whose image is public. It doesn't know measures, so the
-# data has none.
+# data has none. The test needs this release to stay published on GitHub and
+# GHCR. It also fails in the minutes after a new release, until the release
+# workflow attaches its image.txt: meals-deploy can't deploy the release yet.
 readonly OLDER=0.2.0
 readonly TIMERS=(meals-backup.timer meals-deploy.timer meals-restore-check.timer)
 # Ends the lines that block GHCR in /etc/hosts, so the cleanup finds them.
@@ -271,7 +273,8 @@ check_timers
 step "Installs again, and checks that .env and hold don't change."
 cp "$ROOT/.env" "$work/env-before"
 succeeds "install.sh, the second time" "$repo/scripts/install.sh"
-check "$ROOT/.env" "$(tr '\n' ' ' <"$work/env-before")" "$(tr '\n' ' ' <"$ROOT/.env")"
+check "$ROOT/.env" unchanged \
+  "$(if cmp -s "$work/env-before" "$ROOT/.env"; then echo unchanged; else echo changed; fi)"
 check "$ROOT/hold" exists "$(presence "$ROOT/hold")"
 
 step "Gives meals-deploy the job's token for the GitHub API, if there is one."
@@ -294,7 +297,7 @@ fi
 latest=$(github releases/latest | jq -er .tag_name) || fail "couldn't get the latest release from GitHub."
 latest=${latest#v}
 [[ $latest != "$OLDER" ]] ||
-  fail "the latest release: expected a release newer than $OLDER, found $latest."
+  fail "the latest release: expected a release other than $OLDER, found $latest."
 echo "The latest release is $latest, and the older release is $OLDER."
 
 step "Moves the data of an earlier installation in, and deploys the latest release."
@@ -341,6 +344,7 @@ check "the recipe after the first rename" "Lentil stew" \
 before=$(backups_of daily)
 succeeds "systemctl start meals-backup" systemctl start meals-backup
 daily=$(new_backups daily "$before")
+check "the number of new daily backups" 1 "$(grep -c . <<<"$daily" || true)"
 check_match "the new daily backup" "*-daily-v$latest.tar.gz" "$daily"
 check "the recipe after the second rename" "Lentil and onion soup" \
   "$(api PATCH "/api/recipes/$RECIPE" '{"name":"Lentil and onion soup"}' | jq -r .name)"
@@ -352,9 +356,10 @@ check_match "the new pre-restore backup" "*-pre-restore-v$latest.tar.gz" "$(new_
 
 step "Runs meals-restore-check.service, and checks its journal and that its container is gone."
 newest=$(backups_of '*' | tail -n 1)
+# The health check, the recipes, the ingredients, and each week in the backup.
+weeks=$(tar -tzf "$ROOT/backups/$newest" | grep -c '^data/v2/weeks/[^/]*\.json$' || true)
 succeeds "systemctl start meals-restore-check" systemctl start meals-restore-check
-# The health check, the recipes, the ingredients, and the two weeks.
-expected="The backup $newest restores into version $latest: 5 requests succeeded."
+expected="The backup $newest restores into version $latest: $((3 + weeks)) requests succeeded."
 wait_for 10 restore_check_is "$expected" || true
 check "the journal of meals-restore-check.service" "$expected" "$(restore_check_line)"
 containers=$(docker ps --all --quiet --filter label=com.docker.compose.project=meals-restore-check)
