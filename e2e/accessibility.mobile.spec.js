@@ -49,7 +49,10 @@ const KNOWN = {
   },
 };
 
-/** What axe finds on the `project`, which is `pixel` or `iphone`. */
+/**
+ * What axe finds on the `project`, which is `pixel` or `iphone`, the names of
+ * the phone projects in `playwright.config.js`.
+ */
 function knownFor(project) {
   if (project !== "iphone") return KNOWN;
   return {

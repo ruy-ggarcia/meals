@@ -36,7 +36,9 @@ const TEXT = { light: "rgb(0, 0, 0)", dark: "rgb(255, 255, 255)" };
  * - `label-content-name-mismatch`: the accessible name of a slot (`Monday,
  *   Breakfast: empty`) and of a row (`Edit Egg`) doesn't contain the visible
  *   text (`Add`, `Egg`, and the details). A voice control user who says the
- *   text they see doesn't reach the control.
+ *   text they see doesn't reach the control. The meal plan has 35 slots,
+ *   7 days of 5 meals. Only Tuesday's dinner passes: its one recipe with 1
+ *   serving reads the same in its name and on screen.
  */
 const SLOTS = "label-content-name-mismatch button.slot-menu ×34";
 const SIDEBAR = "color-contrast span.page-name ×1";
@@ -100,7 +102,11 @@ test("shows the next week on each Enter on Next week, and the focus stays there"
     await expect(rangeOf(page)).toHaveText(range);
     // The grid shows the week once it has loaded. Until then, the buttons
     // ignore a press, and a disabled button keeps its focus for a moment.
-    await expect(page.getByRole("main").locator('.day-header[data-day="mon"]')).toHaveText(monday);
+    // Monday's header has no role or name. In the grid, only a header has a
+    // day and no meal.
+    await expect(page.getByRole("main").locator('[data-day="mon"]:not([data-meal])')).toHaveText(
+      monday,
+    );
     await expect(next).toBeFocused();
   }
 });
@@ -214,10 +220,9 @@ test("announces the highlighted recipe while you move through the list", async (
   await search.fill("salad");
   const green = editor.getByRole("option", { name: "Green salad" });
   const russian = editor.getByRole("option", { name: "Russian salad" });
-  await expect(search).toHaveAttribute(
-    "aria-activedescendant",
-    (await green.getAttribute("id")) ?? "",
-  );
+  const first = await green.getAttribute("id");
+  expect(first, "the option has an ID").toBeTruthy();
+  await expect(search).toHaveAttribute("aria-activedescendant", first);
 
   await search.press("ArrowDown");
 

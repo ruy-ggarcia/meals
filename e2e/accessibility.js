@@ -136,9 +136,15 @@ export const STATES = [
   },
 ];
 
-/** Describes the element of an axe `node` by its tag and classes, such as `button.slot-empty`. */
+/**
+ * Describes the element of an axe `node` by its tag and classes, such as
+ * `button.slot-empty`, or by axe's selector if its HTML doesn't start with a
+ * tag.
+ */
 function describe(node) {
-  const [, tag, attributes] = node.html.match(/^<([\w-]+)([^>]*)>/);
+  const match = node.html.match(/^<([\w-]+)([^>]*)>/);
+  if (match === null) return String(node.target);
+  const [, tag, attributes] = match;
   const classes =
     attributes
       .match(/\sclass="([^"]*)"/)?.[1]
