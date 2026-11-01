@@ -55,7 +55,8 @@ automatically, such as focus or layout in a real browser, cover it in
 ## Checks
 
 Before every commit, follow [Check your changes](README.md#check-your-changes):
-`npm run lint` and `npm test` must pass.
+`npm run lint` and `npm test` must always pass. Also run every other check
+that the section lists for your change.
 
 ## Commits and pull requests
 
