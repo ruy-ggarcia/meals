@@ -170,6 +170,15 @@ leave the week. To stay and retry the save, click **Stay**. To discard the
 unsaved menus and change weeks, click **Leave Without Saving**. The slots
 then go back to their last saved menus.
 
+The app asks the same question before it opens another page, such as
+**Recipes** or **Ingredients**. On a computer, the browser also asks before
+you close or reload the tab while a slot isn't saved.
+
+A phone doesn't ask before you close the tab or reload the page. The app
+tries to save a slot when the page goes to the background, but a change that
+couldn't be saved can be lost. Before you close the app on a phone, check
+that no slot shows **Retry**.
+
 Changes from other devices don't appear in real time. To see them, reload the
 page. If two people edit the same slot, the last save wins.
 
@@ -397,6 +406,36 @@ files. The settings are in `biome.json`.
 [ShellCheck](https://www.shellcheck.net) checks the shell scripts. The
 settings are in `.shellcheckrc`.
 
+If you change `e2e/`, `public/`, `server/`, or `playwright.config.js`, also
+run the browser tests:
+
+1. The first time, and again after an update of `@playwright/test`, install
+   Chromium, Firefox, WebKit, and the system packages that they need. On
+   Linux, the command installs the packages with `sudo`:
+
+   ```bash
+   npm run test:e2e:install
+   ```
+
+1. Run the tests in the three browsers and on the two emulated phones:
+
+   ```bash
+   npm run test:e2e
+   ```
+
+[Playwright](https://playwright.dev) runs the tests in `e2e/`. Each test
+starts its own server on a free port, with a new temporary data directory,
+so the tests never touch your data. The settings are in
+`playwright.config.js`, which defines five projects: three desktop browsers
+and two emulated phones.
+
+To run the tests of one project, or of one file, pass it after `--`:
+
+```bash
+npm run test:e2e -- --project=chromium
+npm run test:e2e -- e2e/week.spec.js
+```
+
 If you change `Dockerfile`, `deploy/compose.yaml`, `scripts/`, or `server/`,
 also build and test the image, and then run the host scripts on it:
 
@@ -412,17 +451,38 @@ If you change `deploy/systemd/`, also verify the units with
 npm run test:units
 ```
 
-Before you merge a change to the user interface, `deploy/`, or `scripts/`,
-also run the [manual test plan](docs/manual-test-plan.md).
-
 ## Continuous integration
 
-GitHub Actions runs two checks on every pull request and on every push to
+GitHub Actions runs three checks on every pull request and on every push to
 `main`. The workflow is in `.github/workflows/ci.yml`:
 
 - `ci` runs `npm run lint`, `npm test`, and `npm run test:units` with
   Node.js 22.
+- `e2e` runs `npm run test:e2e` with Node.js 22. A test that fails runs
+  once more with a trace, and a test that passes only on that retry still
+  fails the check. When the check fails, it uploads the Playwright report as
+  the `playwright-report` artifact, which GitHub keeps for 7 days.
 - `image` runs `npm run test:image` and `npm run test:host`.
+
+`.github/workflows/host.yml` runs `host` on pull requests that change that
+file, `deploy/`, or `scripts/`, every Monday at 05:17 UTC, and when you run
+it by hand. `host` runs
+`scripts/host-acceptance.sh` on a GitHub-hosted runner, a new virtual
+machine for each job. The script installs the host tools for real, and
+checks them with the published releases from GitHub and GHCR: the
+installation and the timers, a second installation, moving the data of an
+earlier installation in, a deployment by hand and the resume, a backup and a
+restore, the restore check, a deployment that can't pull its image, and the
+app after the Docker daemon restarts. The weekly run catches changes outside
+the repository, such as a new runner image or a change in GitHub or GHCR.
+`host` isn't a required check, because its path filter skips most pull
+requests.
+
+You can't run `scripts/host-acceptance.sh` on your own machine, because it
+installs Meals for real. It refuses to run unless `GITHUB_ACTIONS` is
+`true`, it runs as root, and `/opt/server/meals` doesn't exist. To run
+`host` by hand, run `gh workflow run host.yml --ref BRANCH`, where `BRANCH`
+is the branch to check.
 
 On every pull request, `.github/workflows/conventional.yml` also runs
 `conventional`. It checks that the pull request title and every commit
@@ -430,7 +490,8 @@ except merge commits follow
 [Conventional Commits](https://www.conventionalcommits.org), because the
 commit type decides releases.
 
-Changes reach `main` only through pull requests that pass the three checks.
+Changes reach `main` only through pull requests that pass `ci`, `e2e`,
+`image`, and `conventional`.
 Each pull request merges with a merge commit.
 
 On every push to `main`, `.github/workflows/release.yml` keeps a release
@@ -448,6 +509,7 @@ dependencies, the GitHub Actions, and the base image. The settings are in
   workflows/
     ci.yml              # Continuous integration: lint, tests, and the image.
     conventional.yml    # Checks pull request titles and commit subjects.
+    host.yml            # Installs the host tools on a disposable runner and checks them.
     release.yml         # Releases: release-please, and the image in GHCR.
   dependabot.yml        # Weekly dependency updates.
 deploy/
@@ -456,7 +518,7 @@ deploy/
 docs/
   deployment.md         # Releases, deployments, and backups.
   glossary.md           # The terms the app uses.
-  manual-test-plan.md   # Checks that need a person with a browser or a host.
+e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js               # Meal plan page: grid, week changes, and saves.
   catalog-list.js      # List logic shared by the Recipes and Ingredients pages.
@@ -485,6 +547,7 @@ scripts/
   lib/
     common.sh           # Functions shared by the meals-* scripts.
   check-conventional.sh # Checks subjects against Conventional Commits.
+  host-acceptance.sh    # Installs the host tools for real on a runner and checks them.
   host-smoke.sh         # Runs the meals-* scripts on an image and checks them.
   image-smoke.sh        # Runs an image as the host does and checks it.
   install.sh            # Installs the host tools.
@@ -517,6 +580,7 @@ test/              # Tests: node:test, with supertest for the API and happy-dom 
 biome.json         # Lint and format settings.
 CHANGELOG.md       # The changes in each release.
 Dockerfile         # The server image.
+playwright.config.js # Browser test settings.
 release-please-config.json # release-please settings.
 ```
 
