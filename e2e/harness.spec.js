@@ -1,11 +1,67 @@
-// Checks of the test harness itself: the failure of a test on an error in
-// the page, and the server that each test starts.
+// Checks of the test harness itself: the errors that the fixtures collect,
+// the failure of a test on such an error, and the server that each test
+// starts. The tests that call `test.fail()` prove only that the fixture wires
+// `watchErrors` to the page.
 
 import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
-import { CURRENT_WEEK } from "./catalog.js";
-import { expect, test } from "./fixtures.js";
+import { CURRENT_WEEK, NOW } from "./catalog.js";
+import { expect, settleRequests, test, trackRequests, watchErrors } from "./fixtures.js";
+
+/** Throws `message` from a timer. The fake clock catches it, and logs it as a console error. */
+function throwFromTimer(page, message) {
+  return Promise.all([
+    page.waitForEvent("console", (logged) => logged.type() === "error"),
+    page.evaluate((text) => {
+      setTimeout(() => {
+        throw new Error(text);
+      }, 0);
+    }, message),
+  ]);
+}
+
+/** Throws `message` from a microtask, an uncaught error outside a timer. */
+function throwFromMicrotask(page, message) {
+  return Promise.all([
+    page.waitForEvent("pageerror"),
+    page.evaluate((text) => {
+      queueMicrotask(() => {
+        throw new Error(text);
+      });
+    }, message),
+  ]);
+}
+
+/**
+ * Throws an error from a timer that reads like the app's own logs, so only
+ * its type tells it apart.
+ */
+function throwLikeTheApp(page) {
+  return Promise.all([
+    page.waitForEvent("console", (logged) => logged.type() === "error"),
+    page.evaluate(() => {
+      setTimeout(() => {
+        const error = new Error("a timer");
+        error.name = "Couldn't run";
+        error.stack = "Couldn't run: a timer";
+        throw error;
+      }, 0);
+    }),
+  ]);
+}
+
+/**
+ * Opens the app in a new page of `context`, which no fixture watches, with
+ * the fake clock, and returns the page and what `watchErrors` collects.
+ */
+async function openWatched(context, consoleErrors) {
+  const page = await context.newPage();
+  const errorsOf = watchErrors(page, consoleErrors);
+  await page.clock.install({ time: NOW });
+  await page.goto("/");
+  return { page, errorsOf };
+}
 
 /**
  * Holds the requests to the health check in `context` without an answer, and
@@ -34,6 +90,32 @@ async function startHeldRequest(context, page) {
 }
 
 test.describe("e2e/fixtures.js", () => {
+  test.describe("watchErrors", () => {
+    test("collects an error thrown from a timer", async ({ context }) => {
+      const { page, errorsOf } = await openWatched(context, { allowed: false });
+
+      await throwFromTimer(page, "Thrown from a timer");
+
+      expect(await errorsOf()).toEqual([expect.stringContaining("Error: Thrown from a timer")]);
+    });
+
+    test("collects an error thrown from a microtask", async ({ context }) => {
+      const { page, errorsOf } = await openWatched(context, { allowed: false });
+
+      await throwFromMicrotask(page, "Thrown from a microtask");
+
+      expect(await errorsOf()).toEqual(["Uncaught error: Thrown from a microtask"]);
+    });
+
+    test("collects a timer error when console errors are allowed", async ({ context }) => {
+      const { page, errorsOf } = await openWatched(context, { allowed: true });
+
+      await throwLikeTheApp(page);
+
+      expect(await errorsOf()).toEqual([expect.stringContaining("Couldn't run: a timer")]);
+    });
+  });
+
   test.describe("neverTimeOut", () => {
     test("keeps a held request pending past its timeout", async ({
       consoleErrors,
@@ -71,35 +153,72 @@ test.describe("e2e/fixtures.js", () => {
     });
   });
 
+  test.describe("settleRequests", () => {
+    test("waits for the handler of a failed request", async ({ consoleErrors, context, page }) => {
+      consoleErrors.allowed = true; // The browser logs the request that fails.
+      await context.addInitScript(trackRequests);
+      await page.goto("/");
+      const logs = [];
+      page.on("console", (logged) => logs.push(logged.text()));
+      const held = Promise.withResolvers();
+      await context.route("**/api/health", held.resolve);
+      await page.evaluate(() => {
+        fetch("/api/health").catch(async () => {
+          await null;
+          // The page is busy, so the message reaches the test late.
+          const end = performance.now() + 100;
+          while (performance.now() < end);
+          console.log("handled the failure");
+        });
+      });
+      const route = await held.promise;
+      await route.abort();
+
+      await settleRequests(page);
+
+      expect(logs).toContain("handled the failure");
+    });
+  });
+
+  // Each test below is expected to fail, because the page fixture fails a test
+  // on an error in the page. Any other failure would pass them too, so the
+  // tests above check the errors that the fixture sees.
+
   test.describe("page fixture", () => {
     test("fails a test on an error thrown from a timer", async ({ page }) => {
       test.fail();
       await page.goto("/");
 
-      // The fake clock catches an error thrown from a timer, and logs it as a
-      // console error.
-      await Promise.all([
-        page.waitForEvent("console", (message) => message.type() === "error"),
-        page.evaluate(() => {
-          setTimeout(() => {
-            throw new Error("Thrown from a timer");
-          }, 0);
-        }),
-      ]);
+      await throwFromTimer(page, "Thrown from a timer");
     });
 
     test("fails a test on an uncaught error outside a timer", async ({ page }) => {
       test.fail();
       await page.goto("/");
 
-      await Promise.all([
-        page.waitForEvent("pageerror"),
-        page.evaluate(() => {
-          queueMicrotask(() => {
-            throw new Error("Thrown from a microtask");
-          });
-        }),
-      ]);
+      await throwFromMicrotask(page, "Thrown from a microtask");
+    });
+
+    test("fails a test on a timer error when console errors are allowed", async ({
+      consoleErrors,
+      page,
+    }) => {
+      test.fail();
+      consoleErrors.allowed = true;
+      await page.goto("/");
+
+      await throwLikeTheApp(page);
+    });
+  });
+
+  test.describe("network fixture", () => {
+    test("fails a test on a failure log after up()", async ({ network, page }) => {
+      test.fail();
+      await page.goto("/");
+      await network.down();
+      await network.up();
+
+      await page.evaluate(() => console.error("Couldn't load the health check"));
     });
   });
 
