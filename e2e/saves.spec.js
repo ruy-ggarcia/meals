@@ -39,9 +39,12 @@ function loadError(page) {
   return page.getByRole("alert").filter({ hasText: "Couldn't load the meal plan." });
 }
 
-/** The header of `day`'s column in the grid, which shows its day of the month. */
+/**
+ * The header of `day`'s column in the grid, which shows its day of the month.
+ * It has no role or name. In the grid, only a header has a day and no meal.
+ */
 function dayHeader(page, day) {
-  return page.getByRole("main").locator(`.day-header[data-day="${day}"]`);
+  return page.getByRole("main").locator(`[data-day="${day}"]:not([data-meal])`);
 }
 
 /** Checks that the address and the range show `week`. */
@@ -90,11 +93,16 @@ test("saves a slot when you change weeks right after Done", async ({ app, page }
   const held = new Promise((resolve) => {
     release = resolve;
   });
+  let saving = false;
   await page.route("**/api/weeks/**", async (route) => {
-    if (route.request().method() === "PUT") await held;
+    if (route.request().method() === "PUT") {
+      saving = true;
+      await held;
+    }
     await route.fallback();
   });
   await addToSlot(page, "Monday", "Lunch", "Lentil soup");
+  await expect.poll(() => saving).toBe(true);
 
   await nextWeekButton(page).click();
   release();
@@ -363,6 +371,8 @@ test("sends a running save again when the page reloads", async ({ app, consoleEr
     .poll(() => savedItems(app, CURRENT_WEEK, "mon", "lunch"))
     .toEqual([itemOf(app, "Lentil soup")]);
   await expect(page.getByRole("button", { name: "Monday, Lunch: Lentil soup × 1" })).toBeVisible();
+  // The reload canceled the held request, so the route may be gone already.
+  await heldSave.abort().catch(() => {});
 });
 
 test("sends a failed slot again when the tab closes", async ({

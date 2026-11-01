@@ -35,12 +35,21 @@ function isFailureLog(text) {
   return text.startsWith("Failed to load resource") || text.startsWith("Couldn't ");
 }
 
-/** Whether the only argument of `message` is an Error object. */
-async function logsOnlyAnError(message) {
+/**
+ * The name and the message of the Error object that `message` logs as its
+ * only argument, such as `Error: Thrown`, or null if it logs something else.
+ */
+async function loggedError(message) {
   const args = message.args();
-  if (args.length !== 1) return false;
-  // The page may be gone, for example after a reload: then the text decides.
-  return args[0].evaluate((value) => value instanceof Error).catch(() => false);
+  try {
+    if (args.length !== 1) return null;
+    // The page may be gone, for example after a reload: then the text decides.
+    return await args[0]
+      .evaluate((value) => (value instanceof Error ? `${value.name}: ${value.message}` : null))
+      .catch(() => null);
+  } finally {
+    await Promise.all(args.map((arg) => arg.dispose().catch(() => {})));
+  }
 }
 
 /**
@@ -50,7 +59,7 @@ async function logsOnlyAnError(message) {
  * only an Error object always counts: that's how the fake clock reports an
  * error thrown from a timer. Returns a function that resolves to the errors.
  */
-function watchErrors(page, consoleErrors) {
+export function watchErrors(page, consoleErrors) {
   const errors = [];
   const pending = [];
   page.on("pageerror", (error) => errors.push(`Uncaught error: ${error.message}`));
@@ -60,8 +69,11 @@ function watchErrors(page, consoleErrors) {
     const { allowed } = consoleErrors;
     const text = message.text();
     pending.push(
-      logsOnlyAnError(message).then((thrown) => {
-        if (thrown || !allowed || !isFailureLog(text)) errors.push(`Console error: ${text}`);
+      loggedError(message).then((thrown) => {
+        if (thrown === null && allowed && isFailureLog(text)) return;
+        // Firefox logs only `Error` for an Error object, so add its message.
+        const shown = thrown === null || text.includes(thrown) ? text : `${text} (${thrown})`;
+        errors.push(`Console error: ${shown}`);
       }),
     );
   });
@@ -137,6 +149,8 @@ export const test = base.extend({
     let state;
     const held = [];
     async function handle(route) {
+      // A request that reaches the route while `up()` removes it goes through.
+      if (state === undefined) return route.fallback();
       if (state === "down") await route.abort("connectionrefused");
       else held.push(route);
     }
