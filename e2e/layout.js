@@ -35,3 +35,29 @@ export async function expectAbove(upper, lower) {
   expect(lowerBox, "the lower element has a box").not.toBeNull();
   expect(upperBox.y + upperBox.height).toBeLessThanOrEqual(lowerBox.y);
 }
+
+/**
+ * Checks that the text of `locator` wraps onto more than one line, and that
+ * its box stays inside the box of `container`, so a long word never widens it.
+ */
+export async function expectWrapsInside(locator, container) {
+  const { lines, hiddenWidth } = await locator.evaluate((element) => {
+    // A range over the text has a box for each line that the text fills.
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const tops = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+    return {
+      lines: tops.size,
+      // A word that doesn't break overflows its box, and the box clips it.
+      hiddenWidth: element.scrollWidth - element.clientWidth,
+    };
+  });
+  expect(lines, "number of lines").toBeGreaterThan(1);
+  expect(hiddenWidth, "width cut off").toBeLessThanOrEqual(0);
+  const box = await locator.boundingBox();
+  const containerBox = await container.boundingBox();
+  expect(box, "the text has a box").not.toBeNull();
+  expect(containerBox, "the container has a box").not.toBeNull();
+  expect(box.x, "left edge").toBeGreaterThanOrEqual(containerBox.x);
+  expect(box.x + box.width, "right edge").toBeLessThanOrEqual(containerBox.x + containerBox.width);
+}
