@@ -18,6 +18,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY public ./public
 COPY server ./server
+# The name is the node image's own user, and it resolves inside the image. The
+# rule asks for a numeric ID for hosts that must resolve the user by ID, which
+# Docker Compose on the host doesn't need.
+# hadolint ignore=DL3066
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --start-interval=1s \
