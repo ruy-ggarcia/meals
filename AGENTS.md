@@ -55,9 +55,8 @@ host tools gets a check in `scripts/host-acceptance.sh`.
 ## Checks
 
 Before every commit, follow [Check your changes](README.md#check-your-changes):
-`npm run lint` and `npm test` must pass. After a change to `e2e/`,
-`public/`, `server/`, or `playwright.config.js`, `npm run test:e2e` must pass
-too.
+`npm run lint` and `npm test` must always pass. Also run every other check
+that the section lists for your change.
 
 ## Commits and pull requests
 
