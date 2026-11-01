@@ -449,6 +449,26 @@ GitHub Actions runs three checks on every pull request and on every push to
   the `playwright-report` artifact, which GitHub keeps for 7 days.
 - `image` runs `npm run test:image` and `npm run test:host`.
 
+`.github/workflows/host.yml` runs `host` on pull requests that change
+`.github/workflows/host.yml`, `deploy/`, or `scripts/`, every Monday at
+05:17 UTC, and when you run it by hand. `host` runs
+`scripts/host-acceptance.sh` on a GitHub-hosted runner, a new virtual
+machine for each job. The script installs the host tools for real, and
+checks them with the published releases from GitHub and GHCR: the
+installation and the timers, a second installation, moving the data of an
+earlier installation in, a deployment by hand and the resume, a backup and a
+restore, the restore check, a deployment that can't pull its image, and the
+app after the Docker daemon restarts. The weekly run catches changes outside
+the repository, such as a new runner image or a change in GitHub or GHCR.
+`host` isn't a required check, because its path filter skips most pull
+requests.
+
+You can't run `scripts/host-acceptance.sh` on your own machine, because it
+installs Meals for real. It refuses to run unless `GITHUB_ACTIONS` is
+`true`, it runs as root, and `/opt/server/meals` doesn't exist. To run
+`host` by hand, run `gh workflow run host.yml --ref BRANCH`, where `BRANCH`
+is the branch to check.
+
 On every pull request, `.github/workflows/conventional.yml` also runs
 `conventional`. It checks that the pull request title and every commit
 except merge commits follow
@@ -474,6 +494,7 @@ dependencies, the GitHub Actions, and the base image. The settings are in
   workflows/
     ci.yml              # Continuous integration: lint, tests, and the image.
     conventional.yml    # Checks pull request titles and commit subjects.
+    host.yml            # Installs the host tools on a disposable runner and checks them.
     release.yml         # Releases: release-please, and the image in GHCR.
   dependabot.yml        # Weekly dependency updates.
 deploy/
@@ -512,6 +533,7 @@ scripts/
   lib/
     common.sh           # Functions shared by the meals-* scripts.
   check-conventional.sh # Checks subjects against Conventional Commits.
+  host-acceptance.sh    # Installs the host tools for real on a runner and checks them.
   host-smoke.sh         # Runs the meals-* scripts on an image and checks them.
   image-smoke.sh        # Runs an image as the host does and checks it.
   install.sh            # Installs the host tools.
