@@ -124,6 +124,14 @@ health_is() {
   [[ $(health) == "$1" ]]
 }
 
+# Prints when the container of the app started, or nothing if none runs.
+app_started_at() {
+  local id
+  id=$(docker ps --quiet --filter label=com.docker.compose.project=meals \
+    --filter label=com.docker.compose.service=app)
+  [[ -z $id ]] || docker inspect --format '{{.State.StartedAt}}' "$id"
+}
+
 # Sends METHOD to PATH on the app with the JSON BODY, if given, and prints
 # the response.
 api() {
@@ -377,9 +385,12 @@ step "Restarts the Docker daemon, and checks that the app and the timers come ba
 # A GitHub-hosted runner can't reboot in the middle of a job, so a restart of
 # the Docker daemon stands in for the reboot: the app has to come back
 # through its restart policy, and the timers have to stay.
+started=$(app_started_at)
 succeeds "systemctl restart docker" systemctl restart docker
 wait_for 120 health_is "ok $latest" || true
 check "the health check after the restart" "ok $latest" "$(health)"
+check "the container of the app" "started again" \
+  "$(if [[ $(app_started_at) != "$started" ]]; then echo "started again"; else echo "runs since $started"; fi)"
 check_timers
 
 echo
