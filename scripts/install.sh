@@ -27,7 +27,8 @@ fi
 
 install -d -o root -g docker -m 2775 /opt/server
 install -d -o deployer -g docker -m 2775 \
-  "$ROOT" "$ROOT/.docker" "$ROOT/backups" "$ROOT/data" "$ROOT/scripts" "$ROOT/scripts/lib"
+  "$ROOT" "$ROOT/.docker" "$ROOT/backups" "$ROOT/scripts" "$ROOT/scripts/lib"
+install -d -o deployer -g docker -m 0775 "$ROOT/data"
 install -o deployer -g docker -m 0664 "$repo/deploy/compose.yaml" "$ROOT/compose.yaml"
 install -o deployer -g docker -m 0664 "$repo"/scripts/lib/*.sh "$ROOT/scripts/lib/"
 install -o deployer -g docker -m 0775 "$repo"/scripts/meals-* "$ROOT/scripts/"
