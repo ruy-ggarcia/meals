@@ -380,6 +380,9 @@ are or copy them elsewhere.
 
 ## Check your changes
 
+For how the tests are organized and the rules that every test follows, see
+[Testing strategy](docs/testing.md).
+
 Before you commit, check your changes:
 
 1. Apply the code format and safe lint fixes:
@@ -518,6 +521,7 @@ deploy/
 docs/
   deployment.md         # Releases, deployments, and backups.
   glossary.md           # The terms the app uses.
+  testing.md            # Testing strategy: the levels of tests and their rules.
 e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js               # Meal plan page: grid, week changes, and saves.

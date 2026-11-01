@@ -43,6 +43,9 @@ A to Z.
 
 ## Testing
 
+Before you add, move, or review a test, follow the
+[testing strategy](docs/testing.md): its rules apply to every test.
+
 Use test-driven development whenever possible: write a failing test, watch it
 fail, and then write the code that makes it pass.
 
