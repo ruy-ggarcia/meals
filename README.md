@@ -455,9 +455,9 @@ GitHub Actions runs three checks on every pull request and on every push to
   the `playwright-report` artifact, which GitHub keeps for 7 days.
 - `image` runs `npm run test:image` and `npm run test:host`.
 
-`.github/workflows/host.yml` runs `host` on pull requests that change
-`.github/workflows/host.yml`, `deploy/`, or `scripts/`, every Monday at
-05:17 UTC, and when you run it by hand. `host` runs
+`.github/workflows/host.yml` runs `host` on pull requests that change that
+file, `deploy/`, or `scripts/`, every Monday at 05:17 UTC, and when you run
+it by hand. `host` runs
 `scripts/host-acceptance.sh` on a GitHub-hosted runner, a new virtual
 machine for each job. The script installs the host tools for real, and
 checks them with the published releases from GitHub and GHCR: the
