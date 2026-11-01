@@ -397,6 +397,27 @@ files. The settings are in `biome.json`.
 [ShellCheck](https://www.shellcheck.net) checks the shell scripts. The
 settings are in `.shellcheckrc`.
 
+If you change `public/` or `server/`, also run the browser tests:
+
+1. The first time, install Chromium, Firefox, WebKit, and the system
+   packages that they need. On Linux, the command installs the packages
+   with `sudo`:
+
+   ```bash
+   npm run test:e2e:install
+   ```
+
+1. Run the tests in the three browsers:
+
+   ```bash
+   npm run test:e2e
+   ```
+
+[Playwright](https://playwright.dev) runs the tests in `e2e/`. Each test
+starts its own server on a free port, with a new temporary data directory,
+so the tests never touch your data. The settings are in
+`playwright.config.js`.
+
 If you change `Dockerfile`, `deploy/compose.yaml`, `scripts/`, or `server/`,
 also build and test the image, and then run the host scripts on it:
 
@@ -417,11 +438,15 @@ also run the [manual test plan](docs/manual-test-plan.md).
 
 ## Continuous integration
 
-GitHub Actions runs two checks on every pull request and on every push to
+GitHub Actions runs three checks on every pull request and on every push to
 `main`. The workflow is in `.github/workflows/ci.yml`:
 
 - `ci` runs `npm run lint`, `npm test`, and `npm run test:units` with
   Node.js 22.
+- `e2e` runs `npm run test:e2e` with Node.js 22. A test that fails runs
+  once more with a trace, and a test that passes only on that retry still
+  fails the check. When the check fails, it uploads the Playwright report as
+  the `playwright-report` artifact, which GitHub keeps for 7 days.
 - `image` runs `npm run test:image` and `npm run test:host`.
 
 On every pull request, `.github/workflows/conventional.yml` also runs
@@ -430,7 +455,8 @@ except merge commits follow
 [Conventional Commits](https://www.conventionalcommits.org), because the
 commit type decides releases.
 
-Changes reach `main` only through pull requests that pass the three checks.
+Changes reach `main` only through pull requests that pass `ci`, `image`, and
+`conventional`.
 Each pull request merges with a merge commit.
 
 On every push to `main`, `.github/workflows/release.yml` keeps a release
@@ -457,6 +483,7 @@ docs/
   deployment.md         # Releases, deployments, and backups.
   glossary.md           # The terms the app uses.
   manual-test-plan.md   # Checks that need a person with a browser or a host.
+e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js               # Meal plan page: grid, week changes, and saves.
   catalog-list.js      # List logic shared by the Recipes and Ingredients pages.
@@ -517,6 +544,7 @@ test/              # Tests: node:test, with supertest for the API and happy-dom 
 biome.json         # Lint and format settings.
 CHANGELOG.md       # The changes in each release.
 Dockerfile         # The server image.
+playwright.config.js # Browser test settings.
 release-please-config.json # release-please settings.
 ```
 

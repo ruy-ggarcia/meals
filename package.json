@@ -12,6 +12,8 @@
     "lint": "biome ci . && shellcheck scripts/*.sh scripts/lib/*.sh scripts/meals-* test/stubs/*",
     "start": "node server/index.js",
     "test": "node --test --disable-warning=ExperimentalWarning --test-timeout=10000 test/*.test.js",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install --with-deps chromium firefox webkit",
     "test:host": "scripts/host-smoke.sh meals:test",
     "test:image": "docker build --tag meals:test . && scripts/image-smoke.sh meals:test",
     "test:units": "scripts/units-check.sh"
@@ -20,7 +22,9 @@
     "express": "^5.3.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.64.1",
     "happy-dom": "21.0.1",
     "supertest": "^7.3.1"
   }
