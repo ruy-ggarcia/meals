@@ -358,6 +358,7 @@ step "Runs meals-restore-check.service, and checks its journal and that its cont
 newest=$(backups_of '*' | tail -n 1)
 # The health check, the recipes, the ingredients, and each week in the backup.
 weeks=$(tar -tzf "$ROOT/backups/$newest" | grep -c '^data/v2/weeks/[^/]*\.json$' || true)
+check "the weeks in $newest" 2 "$weeks"
 succeeds "systemctl start meals-restore-check" systemctl start meals-restore-check
 expected="The backup $newest restores into version $latest: $((3 + weeks)) requests succeeded."
 wait_for 10 restore_check_is "$expected" || true
