@@ -61,7 +61,10 @@ fail() {
   echo "Host acceptance test failed: $*" >&2
   echo "The journal of the meals-* units ends with the following lines:" >&2
   journalctl --no-pager --lines 40 --unit 'meals-*' >&2 || true
-  docker compose --project-directory "$ROOT" logs --tail 30 app >&2 || true
+  # Compose can't read compose.yaml before the first deployment.
+  if grep -q '^MEALS_IMAGE=.' "$ROOT/.env" 2>/dev/null; then
+    docker compose --project-directory "$ROOT" logs --tail 30 app >&2 || true
+  fi
   exit 1
 }
 
