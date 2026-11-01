@@ -6,10 +6,11 @@
 import { expect } from "@playwright/test";
 
 /**
- * Whether a phone shows a keyboard for `element`: a text area, an element you
- * can edit, or an input whose type takes text. Runs in the page.
+ * Whether a phone shows a keyboard for `element`, by default the focused
+ * element: a text area, an element you can edit, or an input whose type takes
+ * text. Runs in the page.
  */
-function isTextField(element) {
+function isTextField(element = document.activeElement) {
   if (!element) return false;
   if (element.isContentEditable || element.tagName === "TEXTAREA") return true;
   const types = ["text", "search", "email", "number", "tel", "url", "password"];
@@ -29,12 +30,7 @@ export async function expectNoDoubleTapZoom(locator) {
 
 /** Checks that the focus isn't in a text field, so the keyboard is closed. */
 export async function expectKeyboardClosed(page) {
-  await expect
-    .poll(async () => {
-      const focused = await page.evaluateHandle(() => document.activeElement);
-      return focused.evaluate(isTextField);
-    })
-    .toBe(false);
+  await expect.poll(() => page.evaluate(isTextField)).toBe(false);
 }
 
 /** Checks that the locator has the focus and is a text field, so the keyboard is open. */

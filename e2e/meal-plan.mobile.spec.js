@@ -14,14 +14,26 @@ const CURRENT = {
   longRange: "Sep 21 – 27, 2026",
   monday: "Monday, September 21",
 };
+// The taps on Next week in the test of fast taps.
+const TAPS = 5;
+
+/** The week `count` weeks after `week`, such as `2026-09-28` one week after `2026-09-21`. */
+function weeksAfter(week, count) {
+  const monday = new Date(`${week}T00:00:00Z`);
+  monday.setUTCDate(monday.getUTCDate() + 7 * count);
+  return monday.toISOString().slice(0, 10);
+}
+
+// The week that the fast taps end on, and the week before it. The texts are
+// what the page shows for them.
 const LAST = {
-  week: "2026-10-26",
+  week: weeksAfter(CURRENT_WEEK, TAPS),
   range: "Oct 26 – Nov 1",
   longRange: "Oct 26 – Nov 1, 2026",
   monday: "Monday, October 26",
 };
 const BEFORE_LAST = {
-  week: "2026-10-19",
+  week: weeksAfter(CURRENT_WEEK, TAPS - 1),
   range: "Oct 19 – 25",
   longRange: "Oct 19 – 25, 2026",
   monday: "Monday, October 19",
@@ -47,6 +59,7 @@ function shortRange(page, text) {
 /** The distance from the bottom of `locator` to the bottom of the viewport. */
 async function gapBelow(locator) {
   const box = await locator.boundingBox();
+  expect(box, `the box of ${locator}`).not.toBeNull();
   return locator.page().viewportSize().height - (box.y + box.height);
 }
 
@@ -136,7 +149,7 @@ test("changes weeks on fast taps without zooming", async ({ page }) => {
   const next = page.getByRole("button", { name: "Next week" });
   const previous = page.getByRole("button", { name: "Previous week" });
 
-  for (let tap = 0; tap < 5; tap += 1) await next.tap();
+  for (let tap = 0; tap < TAPS; tap += 1) await next.tap();
 
   await expectWeek(page, LAST);
   await expect.poll(() => page.evaluate(() => window.visualViewport.scale)).toBe(1);
@@ -201,6 +214,16 @@ test("can be added to the Home Screen", async ({ page }) => {
     document.documentElement.style.setProperty("--safe-top", "47px");
     document.documentElement.style.setProperty("--safe-bottom", "34px");
   });
+  // The content of the toolbar starts below the status bar.
+  const contentTop = await toolbar(page).evaluate((element) => {
+    const style = getComputedStyle(element);
+    return (
+      element.getBoundingClientRect().top +
+      Number.parseFloat(style.borderTopWidth) +
+      Number.parseFloat(style.paddingTop)
+    );
+  });
+  expect(contentTop, "the top of the toolbar's content").toBeGreaterThanOrEqual(47);
   for (const button of await toolbar(page).getByRole("button").all()) {
     expect((await button.boundingBox()).y).toBeGreaterThanOrEqual(47);
   }
