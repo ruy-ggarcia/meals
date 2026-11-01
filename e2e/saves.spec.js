@@ -1,8 +1,10 @@
-// Saves on a desktop: what a slot shows when its save fails, and the question
-// before you leave a week with such a slot.
+// Saves on a desktop: what a slot shows when its save fails, and the questions
+// before you leave a week, open another page, or close the tab with a slot
+// that the server hasn't confirmed.
 
 import { CURRENT_RANGE, CURRENT_WEEK, NEXT_RANGE, NEXT_WEEK } from "./catalog.js";
 import { RED, RED_FILL } from "./colors.js";
+import { answerQuestions, reloadAndAsk } from "./dialogs.js";
 import { expect, test } from "./fixtures.js";
 import { expectFocusTrapped } from "./keyboard.js";
 import {
@@ -16,6 +18,7 @@ import {
   RETRY,
   slotButton,
 } from "./meal-plan.js";
+import { pageLink } from "./navigation.js";
 
 // The app gives up on a request after 5 seconds, a real timer that the fake
 // clock doesn't control. The wait adds the usual 15 seconds of an assertion.
@@ -71,6 +74,14 @@ async function leaveWithoutSaving(app, network, page) {
 /** The announcement that the app makes once the server confirmed a slot. */
 function savedAnnouncement(page, text) {
   return page.locator("#save-announcement").filter({ hasText: text });
+}
+
+/** Fails Monday's lunch, brings the server back, and selects Recipes in the sidebar. */
+async function openRecipesWithUnsavedLunch(network, page) {
+  await openApp(page);
+  await failMondayLunch(network, page);
+  await network.up();
+  await pageLink(page, "Recipes").click();
 }
 
 test.describe("slot saves", () => {
@@ -252,5 +263,137 @@ test.describe("slot saves", () => {
       await expect(page.getByRole("button", { name: RETRY })).toBeVisible(AFTER_TIMEOUT);
       await expect(leaveAlert(page)).toBeVisible();
     });
+  });
+
+  test("asks before the tab closes with a slot that wasn't saved", async ({ network, page }) => {
+    await openApp(page);
+    await failMondayLunch(network, page);
+    const questions = answerQuestions(page);
+
+    // Runs the page's unload handlers, so the browser asks before it closes.
+    await page.close({ runBeforeUnload: true });
+
+    await expect.poll(() => questions).toEqual(["beforeunload"]);
+    expect(page.isClosed(), "the page stays open when the question is dismissed").toBe(false);
+    await expect(page.getByRole("button", { name: RETRY })).toBeVisible();
+  });
+
+  test("asks before the page reloads while a slot is still saving", async ({ app, page }) => {
+    await openApp(page);
+    const held = await holdSaves(page);
+    await addToSlot(page, "Monday", "Lunch", "Lentil soup");
+    await expect.poll(held.started).toBe(true);
+    const questions = answerQuestions(page);
+
+    await reloadAndAsk(page);
+
+    await expect.poll(() => questions).toEqual(["beforeunload"]);
+    await expect(
+      page.getByRole("button", { name: "Monday, Lunch: Lentil soup × 1" }),
+    ).toBeVisible();
+
+    held.release();
+
+    await expect(savedAnnouncement(page, "Saved Monday lunch")).toHaveCount(1);
+    expect(await savedItems(app, CURRENT_WEEK, "mon", "lunch")).toEqual([
+      itemOf(app, "Lentil soup"),
+    ]);
+  });
+
+  test("closes the tab without asking when every slot is saved", async ({ page }) => {
+    await openApp(page);
+    await addToSlot(page, "Monday", "Lunch", "Lentil soup");
+    await expect(savedAnnouncement(page, "Saved Monday lunch")).toHaveCount(1);
+    const questions = answerQuestions(page);
+
+    await Promise.all([page.waitForEvent("close"), page.close({ runBeforeUnload: true })]);
+
+    expect(questions, "native questions asked").toEqual([]);
+  });
+
+  test("asks before you open another page with a slot that wasn't saved", async ({
+    network,
+    page,
+  }) => {
+    await openRecipesWithUnsavedLunch(network, page);
+
+    const alert = leaveAlert(page);
+    await expect(alert).toBeVisible();
+    await expect(alert).toHaveAccessibleDescription(
+      "Monday lunch couldn't be saved. If you leave this page, it goes back to its last saved menu.",
+    );
+  });
+
+  test("opens the other page when you choose Leave Without Saving", async ({
+    app,
+    network,
+    page,
+  }) => {
+    const questions = answerQuestions(page);
+    await openRecipesWithUnsavedLunch(network, page);
+
+    await leaveAlert(page).getByRole("button", { name: "Leave Without Saving" }).click();
+
+    await expect(page).toHaveURL(/\/recipes\.html$/);
+    expect(questions, "native questions asked").toEqual([]);
+    expect(await savedItems(app, CURRENT_WEEK, "mon", "lunch")).toEqual([]);
+  });
+
+  test("opens another page without asking when every slot is saved", async ({ page }) => {
+    await openApp(page);
+    await addToSlot(page, "Monday", "Lunch", "Lentil soup");
+    await expect(savedAnnouncement(page, "Saved Monday lunch")).toHaveCount(1);
+    const questions = answerQuestions(page);
+
+    await pageLink(page, "Recipes").click();
+
+    await expect(page).toHaveURL(/\/recipes\.html$/);
+    expect(questions, "native questions asked").toEqual([]);
+  });
+
+  test("waits for a running save, then opens another page without asking", async ({
+    app,
+    page,
+  }) => {
+    await openApp(page);
+    const held = await holdSaves(page);
+    await addToSlot(page, "Monday", "Lunch", "Lentil soup");
+    await expect.poll(held.started).toBe(true);
+    const questions = answerQuestions(page);
+
+    await pageLink(page, "Recipes").click();
+
+    // The week bar is disabled while the app waits for the save.
+    await expect(nextWeekButton(page)).toBeDisabled();
+    expect(new URL(page.url()).pathname, "still on the meal plan while the save runs").toBe("/");
+
+    held.release();
+
+    await expect(page).toHaveURL(/\/recipes\.html$/);
+    expect(questions, "native questions asked").toEqual([]);
+    expect(await savedItems(app, CURRENT_WEEK, "mon", "lunch")).toEqual([
+      itemOf(app, "Lentil soup"),
+    ]);
+  });
+
+  test("opens another page in a new tab with Ctrl or Cmd without asking", async ({
+    network,
+    page,
+  }) => {
+    await openApp(page);
+    await failMondayLunch(network, page);
+    await network.up();
+    const questions = answerQuestions(page);
+
+    const [other] = await Promise.all([
+      page.context().waitForEvent("page"),
+      pageLink(page, "Recipes").click({ modifiers: ["ControlOrMeta"] }),
+    ]);
+
+    await expect(other).toHaveURL(/\/recipes\.html$/);
+    await expect(leaveAlert(page)).toBeHidden();
+    expect(new URL(page.url()).pathname, "still on the meal plan").toBe("/");
+    await expect(page.getByRole("button", { name: RETRY })).toBeVisible();
+    expect(questions, "native questions asked").toEqual([]);
   });
 });

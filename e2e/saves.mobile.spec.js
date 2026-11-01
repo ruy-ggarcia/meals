@@ -1,11 +1,12 @@
 // Saves on a phone: the day bar's mark of a slot that wasn't saved, the
-// question before you leave its week, and the saves that the app sends again
-// when you switch to another app.
+// question before you leave its week or open another page, and the saves
+// that the app sends again when you switch to another app.
 
 import { CURRENT_RANGE, CURRENT_WEEK } from "./catalog.js";
 import { GRAY, RED_FILL } from "./colors.js";
 import { expect, test } from "./fixtures.js";
 import { leaveAlert, RETRY, slotButton } from "./meal-plan.js";
+import { pageLink } from "./navigation.js";
 import { switchAway } from "./page-visibility.js";
 import { expectKeyboardClosed } from "./phone.js";
 
@@ -170,5 +171,41 @@ test.describe("slot saves", () => {
     await expect(
       page.getByRole("button", { name: "Wednesday, Lunch: Lentil soup × 1" }),
     ).toBeVisible();
+  });
+
+  /** Fails Wednesday's lunch, brings the server back, and taps Recipes in the tab bar. */
+  async function openRecipesWithUnsavedLunch(network, page) {
+    await openApp(page);
+    await network.down();
+    await addToSlot(page, "Wednesday", "Lunch", "Lentil soup");
+    await expect(page.getByRole("button", { name: RETRY })).toBeVisible();
+    await network.up();
+    await pageLink(page, "Recipes").tap();
+  }
+
+  test("asks before the tab bar opens a page with a slot that wasn't saved", async ({
+    network,
+    page,
+  }) => {
+    await openRecipesWithUnsavedLunch(network, page);
+
+    const alert = leaveAlert(page);
+    await expect(alert).toBeVisible();
+    await expect(alert).toHaveAccessibleDescription(
+      "Wednesday lunch couldn't be saved. If you leave this page, it goes back to its last saved menu.",
+    );
+  });
+
+  test("opens the other page when you choose Leave Without Saving", async ({
+    app,
+    network,
+    page,
+  }) => {
+    await openRecipesWithUnsavedLunch(network, page);
+
+    await leaveAlert(page).getByRole("button", { name: "Leave Without Saving" }).tap();
+
+    await expect(page).toHaveURL(/\/recipes\.html$/);
+    expect(await savedItems(app, "wed", "lunch")).toEqual([]);
   });
 });

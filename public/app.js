@@ -498,13 +498,15 @@ function setChangingWeek(changing) {
 
 // Waits for pending saves, then returns true if the loaded week can be left:
 // every slot is saved, or the user agreed to discard what couldn't be saved.
-async function leaveLoadedWeek() {
+// `place` is what the question calls the place the user leaves, "this week"
+// or "this page".
+async function leaveLoadedWeek(place) {
   await saves.settle();
   const unsaved = saves.unsaved(shownKeys());
   if (unsaved.length === 0) return true;
-  if (!(await askToLeave(unsaved))) return false;
-  // Put the saved menu back, so no later page-hide save can send the
-  // discarded menu.
+  if (!(await askToLeave(unsaved, place))) return false;
+  // Put the saved menu back, so no later save, and no question of the browser
+  // when the page closes, involves the discarded menu.
   for (const key of unsaved) {
     const menu = saves.discard(key);
     menus.set(key, menu);
@@ -514,10 +516,10 @@ async function leaveLoadedWeek() {
   return true;
 }
 
-// Asks whether to leave the week although the slots of `keys` weren't saved,
+// Asks whether to leave `place` although the slots of `keys` weren't saved,
 // naming them day by day. Resolves to true for Leave Without Saving, and to
 // false for Stay, Escape, or Android's Back.
-function askToLeave(keys) {
+function askToLeave(keys, place) {
   const order = (key) => {
     const [, day, meal] = key.split("/");
     return (
@@ -527,7 +529,7 @@ function askToLeave(keys) {
   };
   const names = [...keys].sort((a, b) => order(a) - order(b)).map(slotName);
   leaveAlert.querySelector(".alert-title").textContent = unsavedTitle(names.length);
-  leaveAlert.querySelector(".alert-message").textContent = unsavedMessage(names);
+  leaveAlert.querySelector(".alert-message").textContent = unsavedMessage(names, place);
   leaveChosen = false;
   return new Promise((resolve) => {
     leaveAlert.addEventListener("close", () => resolve(leaveChosen), { once: true });
@@ -547,7 +549,7 @@ async function goToWeek(week, { selectToday = false } = {}) {
   setChangingWeek(true);
   try {
     if (week !== grid.dataset.week || grid.hidden) {
-      if (!(await leaveLoadedWeek())) return;
+      if (!(await leaveLoadedWeek("this week"))) return;
       requestedWeek = week;
       syncHash();
       weekRange.textContent = formatWeekRange(week);
@@ -595,14 +597,37 @@ leaveAlert.querySelector(".leave").addEventListener("click", () => {
   leaveChosen = true;
   leaveAlert.close();
 });
-window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
-// Unconfirmed changes in the editor would be lost: ask before leaving.
+// A plain click on a link to another page asks first, like a week change,
+// because the browser's own question comes too late to name the slots and
+// phones never show it. A click that opens a new tab or window, or that
+// another handler took, keeps the browser's default and asks nothing.
+for (const link of document.querySelectorAll(".page-link")) {
+  link.addEventListener("click", async (event) => {
+    const plain =
+      event.button === 0 &&
+      !(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) &&
+      !event.defaultPrevented;
+    if (!plain) return;
+    event.preventDefault();
+    if (changingWeek || editor.isOpen() || shopping.isOpen()) return;
+    setChangingWeek(true);
+    try {
+      if (await leaveLoadedWeek("this page")) location.assign(link.href);
+    } finally {
+      setChangingWeek(false);
+    }
+  });
+}
+// Changes that the server hasn't confirmed would be lost: on a computer, the
+// browser asks before it closes or reloads the page. Phones don't show this
+// question: iPhone Safari never does, and Android Chrome doesn't when you
+// close the tab. A hidden page still tries to save (see below).
 window.addEventListener("beforeunload", (event) => {
-  if (!editor.hasChanges()) return;
+  if (!editor.hasChanges() && saves.unconfirmed(shownKeys()).length === 0) return;
   event.preventDefault();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
+  if (document.visibilityState === "hidden") saves.flush(shownKeys());
   else markToday(); // the day may have changed while the page was hidden
 });
 

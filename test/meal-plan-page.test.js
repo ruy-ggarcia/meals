@@ -412,6 +412,78 @@ test("beforeunload calls preventDefault() only while the editor has changes", as
   assert.equal(dispatchBeforeUnload().defaultPrevented, false); // closed again
 });
 
+test("beforeunload calls preventDefault() while a slot's menu isn't confirmed", async () => {
+  await openWeek({ recipes: [{ id: "soup", name: "Soup", archived: false }] });
+
+  function dispatchBeforeUnload() {
+    const event = new page.window.Event("beforeunload", { cancelable: true });
+    page.window.dispatchEvent(event);
+    return event;
+  }
+
+  const save = await addWithEditor("mon", "lunch", "soup");
+  assert.equal(dispatchBeforeUnload().defaultPrevented, true, "the save is running");
+
+  save.fail();
+  await tick();
+  assert.equal(dispatchBeforeUnload().defaultPrevented, true, "the save failed");
+
+  page.document.querySelector(".save-summary button").click(); // Retry
+  await tick();
+  const puts = server.requests.filter((request) => request.method === "PUT");
+  assert.equal(puts.length, 2);
+  puts[1].respond(200, {});
+  await tick();
+  assert.equal(dispatchBeforeUnload().defaultPrevented, false, "the server confirmed the menu");
+});
+
+// Selects Recipes in the sidebar, and returns the click event.
+function clickRecipesLink(init = {}) {
+  const link = page.document.querySelector('.page-link[href="/recipes.html"]');
+  const event = new page.window.MouseEvent("click", {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    ...init,
+  });
+  link.dispatchEvent(event);
+  return event;
+}
+
+test("opening another page with an unsaved slot asks first, and Stay keeps the page", async () => {
+  await openWeekWithUnsavedLunch();
+  const alert = page.document.getElementById("leave-alert");
+
+  const event = clickRecipesLink();
+  await waitFor(() => alert.open);
+
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(
+    alert.querySelector(".alert-message").textContent,
+    "Monday lunch couldn't be saved. If you leave this page, it goes back to its last saved menu.",
+  );
+  alert.querySelector(".stay").click();
+  await tick();
+  assert.equal(page.window.location.pathname, "/");
+  assert.deepEqual(slotItems("mon", "lunch"), [
+    ["Soup", "×1"],
+    ["Salad", "×1"],
+  ]);
+});
+
+test("a click with a modifier key or another button on a page link keeps the browser's default and asks nothing", async () => {
+  await openWeekWithUnsavedLunch();
+  const alert = page.document.getElementById("leave-alert");
+
+  assert.equal(clickRecipesLink({ ctrlKey: true }).defaultPrevented, false);
+  assert.equal(clickRecipesLink({ metaKey: true }).defaultPrevented, false);
+  assert.equal(clickRecipesLink({ shiftKey: true }).defaultPrevented, false);
+  assert.equal(clickRecipesLink({ altKey: true }).defaultPrevented, false);
+  assert.equal(clickRecipesLink({ button: 1 }).defaultPrevented, false);
+  await tick();
+  assert.equal(alert.open, false);
+});
+
 // How long app.js keeps the "saved" check mark up before reverting to idle.
 // Kept in sync with SAVED_BADGE_MS in public/app.js.
 const SAVED_BADGE_MS = 3000;
