@@ -19,9 +19,17 @@ const NEXT_WEEK_NUMBERS = ["28", "29", "30", "1", "2", "3", "4"];
 const THURSDAY = "2026-09-24T10:00:00+02:00";
 const NEXT_MONDAY = "2026-09-28T10:00:00+02:00";
 
+/**
+ * The header of `day`'s column in the grid. It has no role or name. In the
+ * grid, only a header has a day and no meal.
+ */
+function headerOf(page, day) {
+  return page.getByRole("main").locator(`[data-day="${day}"]:not([data-meal])`);
+}
+
 /** The name and the number of `day`'s header in the grid, such as `MON` and `21`. */
 function dayHeader(page, day) {
-  const header = page.getByRole("main").locator(`.day-header[data-day="${day}"]`);
+  const header = headerOf(page, day);
   return { name: header.locator("span").first(), number: header.locator("span").nth(1) };
 }
 
@@ -66,8 +74,12 @@ function band(page) {
 
 /** Where the column of `day` starts and ends: from its header to its last slot. */
 async function columnOf(page, day) {
-  const header = await page.locator(`.day-header[data-day="${day}"]`).boundingBox();
-  const last = await page.locator(`.slot[data-day="${day}"][data-meal="dinner"]`).boundingBox();
+  const header = await headerOf(page, day).boundingBox();
+  // The slot of the last meal, which has no role of its own.
+  const last = await page
+    .getByRole("main")
+    .locator(`[data-day="${day}"][data-meal="dinner"]`)
+    .boundingBox();
   return { height: last.y + last.height - header.y, width: header.width };
 }
 
@@ -85,9 +97,12 @@ test("marks today in the current week", async ({ page }) => {
   const shading = await band(page);
   expect(shading.column).toBe("3");
   const column = await columnOf(page, "wed");
-  // The shading reaches 6 px above the header and below the last slot, and 4 px to each side.
-  expect(shading.height).toBeCloseTo(column.height + 12, 0);
-  expect(shading.width).toBeCloseTo(column.width + 8, 0);
+  // The shading covers the whole column, and stays behind its slots, which
+  // still take a click.
+  expect(shading.height).toBeGreaterThanOrEqual(column.height);
+  expect(shading.width).toBeGreaterThanOrEqual(column.width);
+  await page.getByRole("button", { name: "Wednesday, Lunch: empty" }).click();
+  await expect(page.getByRole("dialog", { name: "Lunch" })).toBeVisible();
 });
 
 test("marks no day in another week", async ({ page }) => {

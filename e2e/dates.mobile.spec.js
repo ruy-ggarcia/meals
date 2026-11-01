@@ -22,14 +22,17 @@ const DAY_NAMES = [
   "Sunday, September 27",
 ];
 
-/** The parts of the day bar button named `name`: its letter, its number, and its dot. */
+/**
+ * The parts of the day bar button named `name`: its letter, its number, and
+ * its dot, the only part that screen readers skip.
+ */
 function dayButton(page, name) {
   const button = page.getByRole("navigation", { name: "Day" }).getByRole("button", { name });
   return {
     button,
     letter: button.getByText(/^[MTWFS]$/),
     number: button.getByText(/^\d+$/),
-    dot: button.locator("span").last(),
+    dot: button.locator('[aria-hidden="true"]'),
   };
 }
 
