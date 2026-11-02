@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { rm, utimes } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertWaitsForLock, createHost, skipAsRoot, withMode } from "./host-helpers.js";
+import { assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
 
 let host;
 
@@ -66,11 +66,10 @@ test("meals-backup fails on invalid JSON, and keeps no archive or .partial file"
   assert.deepEqual(await host.backups(), []);
 });
 
-test("meals-backup fails, and keeps no archive or .partial file, when it can't read the data", {
-  skip: skipAsRoot("root can read any directory"),
-}, async () => {
-  const weeks = path.join(host.root, "data", "v2", "weeks");
-  const result = await withMode(weeks, 0o000, () => host.run("meals-backup", "daily"));
+test("meals-backup fails, and keeps no archive or .partial file, when it can't read the data", async () => {
+  await host.failArchiving();
+
+  const result = await host.run("meals-backup", "daily");
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Error: Couldn't archive the data, so no backup was kept\./);
@@ -187,12 +186,10 @@ test("meals-backup fails, and keeps no .partial file, when it can't move the bac
   assert.deepEqual(await host.backups(), []);
 });
 
-test("meals-backup keeps the new backup, and fails, when it can't list the old ones", {
-  skip: skipAsRoot("root can read any directory"),
-}, async () => {
-  // Without read permission, backups/ takes new files but can't be listed.
-  const backups = path.join(host.root, "backups");
-  const result = await withMode(backups, 0o300, () => host.run("meals-backup", "daily"));
+test("meals-backup keeps the new backup, and fails, when it can't list the old ones", async () => {
+  await host.failCommand("find", "$* == *'-v*.tar.gz'*");
+
+  const result = await host.run("meals-backup", "daily");
 
   assert.equal(result.status, 1);
   assert.match(result.stdout, /Backed up the data to backups\//);

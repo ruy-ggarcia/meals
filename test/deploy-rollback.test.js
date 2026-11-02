@@ -2,13 +2,8 @@ import assert from "node:assert/strict";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import {
-  blockEnvWrite,
-  dockerCalls,
-  migrateOnUp,
-  runWithReadOnlyBackups,
-} from "./deploy-helpers.js";
-import { createHost, DATA, imageFor, skipAsRoot, withMode } from "./host-helpers.js";
+import { blockEnvWrite, dockerCalls, migrateOnUp } from "./deploy-helpers.js";
+import { createHost, DATA, imageFor } from "./host-helpers.js";
 
 let host;
 
@@ -39,12 +34,11 @@ test("meals-deploy fails without stopping the app when the data has invalid JSON
   assert.equal(await host.exists("failed"), false);
 });
 
-test("meals-deploy fails without stopping the app when it can't read the data", {
-  skip: skipAsRoot("root can read any directory"),
-}, async () => {
+test("meals-deploy fails without stopping the app when it can't read the data", async () => {
   await host.addRelease("0.3.0");
-  const weeks = path.join(host.root, "data", "v2", "weeks");
-  const result = await withMode(weeks, 0o000, () => host.run("meals-deploy"));
+  await host.failCommand("find", "$* == *'-name *.json'*");
+
+  const result = await host.run("meals-deploy");
 
   assert.equal(result.status, 1);
   assert.match(result.stdout, /Couldn't read every file in /);
@@ -56,12 +50,11 @@ test("meals-deploy fails without stopping the app when it can't read the data", 
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
 });
 
-test("meals-deploy starts the previous version again when the pre-deploy backup fails", {
-  skip: skipAsRoot("root can write to any directory"),
-}, async () => {
+test("meals-deploy starts the previous version again when the pre-deploy backup fails", async () => {
   await host.addRelease("0.3.0");
+  await host.failArchiving();
 
-  const result = await runWithReadOnlyBackups(host);
+  const result = await host.run("meals-deploy");
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /The pre-deploy backup failed, so version 0\.2\.0 runs again/);
@@ -70,13 +63,12 @@ test("meals-deploy starts the previous version again when the pre-deploy backup 
   assert.match((await dockerCalls(host)).at(-1), / compose .* up --detach$/);
 });
 
-test("meals-deploy says when the previous version doesn't start again after the pre-deploy backup fails", {
-  skip: skipAsRoot("root can write to any directory"),
-}, async () => {
+test("meals-deploy says when the previous version doesn't start again after the pre-deploy backup fails", async () => {
   await host.addRelease("0.3.0");
   await host.stub("broken", "0.2.0\n");
+  await host.failArchiving();
 
-  const result = await runWithReadOnlyBackups(host);
+  const result = await host.run("meals-deploy");
 
   assert.equal(result.status, 1);
   assert.match(

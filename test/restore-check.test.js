@@ -1,15 +1,8 @@
 import assert from "node:assert/strict";
-import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import {
-  assertWaitsForLock,
-  createHost,
-  DATA,
-  imageFor,
-  skipAsRoot,
-  withMode,
-} from "./host-helpers.js";
+import { assertWaitsForLock, createHost, DATA, imageFor } from "./host-helpers.js";
 
 const OLDER = "2026-10-01T033000Z-daily-v0.2.0.tar.gz";
 const LATEST = "2026-10-02T033000Z-pre-deploy-v0.2.0.tar.gz";
@@ -113,16 +106,14 @@ test("meals-restore-check first removes what an interrupted check left", async (
   assert.ok(docker[0].endsWith(" down"), docker.join("\n"));
 });
 
-test("meals-restore-check goes on, and says so, when it can't remove a stale copy", {
-  skip: skipAsRoot("root can remove any file"),
-}, async () => {
+test("meals-restore-check goes on, and says so, when it can't remove a stale copy", async () => {
   await host.makeBackup(LATEST);
   // As after a backup with a read-only directory: its files can't go.
   const stale = path.join(host.root, ".restore-check.AbC123");
-  const readOnly = path.join(stale, "data", "v2");
-  await mkdir(readOnly, { recursive: true });
-  await writeFile(path.join(readOnly, "recipes.json"), "{}\n");
-  const result = await withMode(readOnly, 0o555, () => host.run("meals-restore-check"));
+  await mkdir(path.join(stale, "data", "v2"), { recursive: true });
+  await host.failCommand("rm", "$last == */.restore-check.AbC123");
+
+  const result = await host.run("meals-restore-check");
 
   assert.equal(result.status, 0, result.stderr);
   assert.ok(
@@ -258,12 +249,11 @@ test("meals-restore-check fails, and cleans up, when it can't get the address of
   }
 });
 
-test("meals-restore-check fails when it can't create the directory for the copy", {
-  skip: skipAsRoot("root can write to any directory"),
-}, async () => {
+test("meals-restore-check fails when it can't create the directory for the copy", async () => {
   await host.makeBackup(LATEST);
-  await host.writeRootFile(".lock", "");
-  const result = await withMode(host.root, 0o555, () => host.run("meals-restore-check"));
+  await host.failCommand("mktemp");
+
+  const result = await host.run("meals-restore-check");
 
   assert.equal(result.status, 1);
   assert.ok(
@@ -275,12 +265,11 @@ test("meals-restore-check fails when it can't create the directory for the copy"
   assert.deepEqual(await host.calls(), []);
 });
 
-test("meals-restore-check fails when it can't list the backups", {
-  skip: skipAsRoot("root can read any directory"),
-}, async () => {
+test("meals-restore-check fails when it can't list the backups", async () => {
   await host.makeBackup(LATEST);
-  const backups = path.join(host.root, "backups");
-  const result = await withMode(backups, 0o300, () => host.run("meals-restore-check"));
+  await host.failCommand("find", "$* == *'-v*.tar.gz'*");
+
+  const result = await host.run("meals-restore-check");
 
   assert.equal(result.status, 1);
   assert.ok(

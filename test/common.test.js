@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { createHost, skipAsRoot, withMode } from "./host-helpers.js";
+import { createHost } from "./host-helpers.js";
 
 const COMMON = fileURLToPath(new URL("../scripts/lib/common.sh", import.meta.url));
 
@@ -51,16 +51,13 @@ test("MEALS_SCRIPTS is the directory of a script run by a relative path", async 
   assert.equal(result.stdout, `${dir}\n`);
 });
 
-test("validate_data fails when it can't read a directory under the data", {
-  skip: skipAsRoot("root can read any directory"),
-}, async () => {
-  const weeks = path.join(host.root, "data", "v2", "weeks");
-  const result = await withMode(weeks, 0o000, () =>
-    runWithCommon('validate_data "$MEALS_ROOT/data"'),
+test("validate_data fails when it can't read a directory under the data", () => {
+  // As find does for an unreadable directory: it lists the other files, and fails.
+  const result = runWithCommon(
+    'find() { command find "$@"; return 1; }\nvalidate_data "$MEALS_ROOT/data"',
   );
 
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /Permission denied/);
   assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
 });
 

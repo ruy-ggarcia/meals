@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rename, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, symlink } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { createHost, DATA, skipAsRoot, withMode } from "./host-helpers.js";
+import { createHost, DATA } from "./host-helpers.js";
 import { assertOriginalData as assertDataOf, BACKUP } from "./restore-helpers.js";
 
 let host;
@@ -20,13 +20,12 @@ function assertOriginalData() {
   return assertDataOf(host);
 }
 
-test("meals-restore starts the app again when the pre-restore backup fails", {
-  skip: skipAsRoot("root can write to any directory"),
-}, async () => {
+test("meals-restore starts the app again when the pre-restore backup fails", async () => {
   await host.makeBackup(BACKUP);
   await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
-  const backups = path.join(host.root, "backups");
-  const result = await withMode(backups, 0o555, () => host.run("meals-restore", BACKUP));
+  await host.failArchiving();
+
+  const result = await host.run("meals-restore", BACKUP);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /The pre-restore backup failed, so nothing changed/);
@@ -34,13 +33,12 @@ test("meals-restore starts the app again when the pre-restore backup fails", {
   assert.match((await host.calls()).at(-1), / compose .* up --detach$/);
 });
 
-test("meals-restore says so when the app doesn't start again after a failed pre-restore backup", {
-  skip: skipAsRoot("root can write to any directory"),
-}, async () => {
+test("meals-restore says so when the app doesn't start again after a failed pre-restore backup", async () => {
   await host.makeBackup(BACKUP);
   await host.stub("broken", "0.2.0\n");
-  const backups = path.join(host.root, "backups");
-  const result = await withMode(backups, 0o555, () => host.run("meals-restore", BACKUP));
+  await host.failArchiving();
+
+  const result = await host.run("meals-restore", BACKUP);
 
   assert.equal(result.status, 1);
   assert.match(
@@ -79,13 +77,11 @@ test("meals-restore fails without changing anything when it can't create its sta
   assert.deepEqual(await host.calls(), []);
 });
 
-test("meals-restore fails without changing anything when it can't list the backups", {
-  skip: skipAsRoot("root can read any directory"),
-}, async () => {
+test("meals-restore fails without changing anything when it can't list the backups", async () => {
   await host.makeBackup(BACKUP);
-  // Without read permission, backups/ still gives access to BACKUP by name.
-  const backups = path.join(host.root, "backups");
-  const result = await withMode(backups, 0o300, () => host.run("meals-restore", BACKUP));
+  await host.failCommand("find", "$* == *'-v*.tar.gz'*");
+
+  const result = await host.run("meals-restore", BACKUP);
 
   assert.equal(result.status, 1);
   assert.ok(
@@ -147,13 +143,11 @@ test("meals-restore starts the app again when it can't list the backups after th
   assert.match((await host.calls()).at(-1), / compose .* up --detach$/);
 });
 
-test("meals-restore keeps data/ and says how to start the app when the swap fails", {
-  skip: skipAsRoot("root can move any directory"),
-}, async () => {
-  // A read-only directory can't move to another parent directory, so the
-  // swap fails after it moved data/ aside.
-  await host.makeBackup(BACKUP, {}, { dataMode: 0o555 });
+test("meals-restore keeps data/ and says how to start the app when the swap fails", async () => {
+  // The new data can't move in, so the swap fails after it moved data/ aside.
+  await host.makeBackup(BACKUP, {});
   await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
+  await host.failCommand("mv", "$1 == */.restore.*/data");
 
   const result = await host.run("meals-restore", BACKUP);
 
@@ -174,12 +168,10 @@ test("meals-restore keeps data/ and says how to start the app when the swap fail
   assert.equal(await host.exists("data.old"), false);
 });
 
-test("meals-restore says where the data is when it can't move data.old back", {
-  skip: skipAsRoot("root can move any directory"),
-}, async () => {
+test("meals-restore says where the data is when it can't move data.old back", async () => {
   // The swap fails as in the test above, and then data.old can't move back.
-  await host.makeBackup(BACKUP, {}, { dataMode: 0o555 });
-  await host.failCommand("mv", "$1 == */data.old");
+  await host.makeBackup(BACKUP, {});
+  await host.failCommand("mv", "$1 == */.restore.*/data || $1 == */data.old");
 
   const result = await host.run("meals-restore", BACKUP);
 
@@ -352,17 +344,15 @@ test("meals-restore names the pre-restore backup when the app doesn't come back 
   assert.ok(result.stderr.includes(`meals-restore ${preRestore[0]}`), result.stderr);
 });
 
-test("meals-restore goes on, and says so, when it can't remove a stale staging directory", {
-  skip: skipAsRoot("root can remove any file"),
-}, async () => {
+test("meals-restore goes on, and says so, when it can't remove a stale staging directory", async () => {
   await host.makeBackup(BACKUP);
   await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
   // As after an archive with a read-only directory: its files can't go.
   const stale = path.join(host.root, ".restore.AbC123");
-  const readOnly = path.join(stale, "data", "v2");
-  await mkdir(readOnly, { recursive: true });
-  await writeFile(path.join(readOnly, "recipes.json"), "{}\n");
-  const result = await withMode(readOnly, 0o555, () => host.run("meals-restore", BACKUP));
+  await mkdir(path.join(stale, "data", "v2"), { recursive: true });
+  await host.failCommand("rm", "$last == */.restore.AbC123");
+
+  const result = await host.run("meals-restore", BACKUP);
 
   assert.equal(result.status, 0, result.stderr);
   await assertOriginalData();

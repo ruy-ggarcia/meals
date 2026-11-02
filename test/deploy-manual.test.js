@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { blockEnvWrite, dockerCalls, runWithReadOnlyBackups } from "./deploy-helpers.js";
-import { createHost, imageFor, skipAsRoot } from "./host-helpers.js";
+import { blockEnvWrite, dockerCalls } from "./deploy-helpers.js";
+import { createHost, imageFor } from "./host-helpers.js";
 
 let host;
 
@@ -25,12 +25,11 @@ test("meals-deploy VERSION doesn't put the host on hold when the data has invali
   assert.ok(!(await dockerCalls(host)).some((call) => / compose .* stop$/.test(call)));
 });
 
-test("meals-deploy VERSION doesn't put the host on hold when the pre-deploy backup fails", {
-  skip: skipAsRoot("root can write to any directory"),
-}, async () => {
+test("meals-deploy VERSION doesn't put the host on hold when the pre-deploy backup fails", async () => {
   await host.addRelease("0.3.0");
+  await host.failArchiving();
 
-  const result = await runWithReadOnlyBackups(host, "0.3.0");
+  const result = await host.run("meals-deploy", "0.3.0");
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /The pre-deploy backup failed, so version 0\.2\.0 runs again/);

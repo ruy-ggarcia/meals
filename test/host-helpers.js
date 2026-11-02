@@ -5,7 +5,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { once } from "node:events";
 import {
   access,
   chmod,
@@ -44,17 +43,6 @@ export function imageFor(version) {
  */
 export function skipAsRoot(reason) {
   return process.getuid?.() === 0 ? reason : false;
-}
-
-/** Runs FN with the mode of FILE set to MODE, and then sets it back. */
-export async function withMode(file, mode, fn) {
-  const original = (await stat(file)).mode & 0o7777;
-  await chmod(file, mode);
-  try {
-    return await fn();
-  } finally {
-    await chmod(file, original);
-  }
 }
 
 // Whether a process waits for the lock on FILE: /proc/locks lists a blocked
@@ -306,6 +294,25 @@ class Host {
   }
 
   /**
+   * Replaces tar with a stub that fails when it creates an archive, after
+   * it created the file, as tar does when it can't read the data.
+   */
+  failArchiving() {
+    const lines = [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      // tar -C DIR -czf ARCHIVE data
+      `if [[ \${3-} == -czf ]]; then`,
+      '  : >"$4"',
+      "  exit 2",
+      "fi",
+      'command -p tar "$@"',
+      "",
+    ];
+    return this.stub("bin/tar", lines.join("\n"), { executable: true });
+  }
+
+  /**
    * Replaces COMMAND with a stub that logs each call as "COMMAND ARGS" in the
    * calls, and then runs COMMAND.
    */
@@ -381,18 +388,15 @@ class Host {
   }
 
   /**
-   * Writes backups/NAME as a real archive of FILES under data/, with
-   * DATAMODE as the mode of data/ if given.
+   * Writes backups/NAME as a real archive of FILES under data/.
    *
    * @param {string} name
    * @param {Record<string, string>} [files]
-   * @param {{ dataMode?: number }} [options]
    */
-  async makeBackup(name, files = DATA, { dataMode } = {}) {
+  async makeBackup(name, files = DATA) {
     const dir = await mkdtemp(path.join(os.tmpdir(), "meals-archive-"));
     await mkdir(path.join(dir, "data"));
     await writeFiles(path.join(dir, "data"), files);
-    if (dataMode !== undefined) await chmod(path.join(dir, "data"), dataMode);
     try {
       tar(["-C", dir, "-czf", path.join(this.root, "backups", name), "data"]);
     } finally {
