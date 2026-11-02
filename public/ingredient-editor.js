@@ -11,7 +11,7 @@ import { createEditorDialog, sendArchive } from "./editor-dialog.js";
 import { sendJson } from "./http.js";
 import { conflictText } from "./messages.js";
 import { cleanName, nameKey } from "./name-search.js";
-import { MAX_MEASURES, parseQuantity } from "./quantities.js";
+import { convertedAmount, MAX_MEASURES, parseQuantity } from "./quantities.js";
 
 const AMOUNT_MESSAGE = "Enter an amount from 0.01 to 10000, with up to two decimals.";
 const CONVERSION_MESSAGE = "Enter a number from 0.01 to 10000, with up to two decimals.";
@@ -120,16 +120,13 @@ export function createIngredientEditor(dialog) {
   }
 
   // The amount that a measure row shows: the stored amount, or its preview in
-  // the new unit while the conversion row shows and both numbers parse. The
-  // preview multiplies and rounds as the server does, so it shows the amount
-  // that the server saves.
+  // the new unit while the conversion row shows and both numbers parse.
   function shownAmount(row) {
     if (!needsConversion()) return row.amountText;
     const from = parseQuantity(conversionFrom.value);
     const to = parseQuantity(conversionTo.value);
     if (from === null || to === null) return row.amountText;
-    const factor = to / from;
-    return String(Math.round(Number(row.amountText) * factor * 100) / 100);
+    return convertedAmount(row.amountText, from, to);
   }
 
   // Disables Remove on the measures in use, and Add measure at the limit.

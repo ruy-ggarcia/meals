@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { readFile } from "node:fs/promises";
+import { describe, test } from "node:test";
 import {
+  convertedAmount,
   MAX_QUANTITY,
   MIN_QUANTITY,
   parseQuantity,
@@ -88,4 +90,23 @@ test("the arithmetic stays exact where decimals don't", () => {
   assert.equal(wholeUnits(scaledAmount(0.1, 1) + scaledAmount(2.7, 1) + scaledAmount(0.2, 1)), 3);
   assert.equal(Math.ceil(0.56 * 12.5), 8);
   assert.equal(wholeUnits(scaledAmount(0.56, 12.5)), 7);
+});
+
+// public/quantities.js converts the preview of the ingredient editor on
+// purpose with its own function, because the browser never imports from
+// server/. Both sides' tests read test/fixtures/converted-amounts.json, so the
+// preview shows the amount that the server saves.
+describe("convertedAmount", () => {
+  test("multiplies the amount by to ÷ from, rounded to two decimals", async () => {
+    const cases = JSON.parse(
+      await readFile(new URL("./fixtures/converted-amounts.json", import.meta.url), "utf8"),
+    );
+    for (const { amount, from, to, converted } of cases) {
+      assert.equal(
+        convertedAmount(String(amount), from, to),
+        String(converted),
+        `${amount} × ${to} ÷ ${from}`,
+      );
+    }
+  });
 });

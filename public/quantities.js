@@ -38,3 +38,13 @@ export function scaledAmount(quantity, servings, amount = 1) {
 export function wholeUnits(scaled) {
   return Math.ceil(scaled / 20000);
 }
+
+/**
+ * The amount of a measure after a unit change, as text: `amountText` times
+ * `to` ÷ `from`, rounded to two decimals. The server rounds the same way in
+ * server/ingredients.js, so the preview shows the amount that it saves.
+ */
+export function convertedAmount(amountText, from, to) {
+  const factor = to / from;
+  return String(Math.round(Number(amountText) * factor * 100) / 100);
+}
