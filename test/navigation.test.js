@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { afterEach, test } from "node:test";
+import { afterEach, describe, test } from "node:test";
 import { Window } from "happy-dom";
 import { fakeFetch, loadPage } from "./dom-helpers.js";
 
@@ -121,4 +121,19 @@ test("a page without storage still opens, and the sidebar still switches", async
   page.document.querySelector(".hide-sidebar").click();
 
   assert.equal(page.document.documentElement.dataset.sidebar, "hidden");
+});
+
+describe("manifest.webmanifest", () => {
+  async function readManifest() {
+    const file = new URL("../public/manifest.webmanifest", import.meta.url);
+    return JSON.parse(await readFile(file, "utf8"));
+  }
+
+  test("names the app Meals", async () => {
+    assert.equal((await readManifest()).name, "Meals");
+  });
+
+  test("displays the app standalone", async () => {
+    assert.equal((await readManifest()).display, "standalone");
+  });
 });
