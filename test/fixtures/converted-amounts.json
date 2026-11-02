@@ -1,0 +1,15 @@
+[
+  { "amount": 1.5, "from": 20, "to": 3, "converted": 0.22 },
+  { "amount": 5.5, "from": 20, "to": 3, "converted": 0.83 },
+  { "amount": 6, "from": 20, "to": 3, "converted": 0.9 },
+  { "amount": 1.5, "from": 100, "to": 3, "converted": 0.05 },
+  { "amount": 5.5, "from": 100, "to": 3, "converted": 0.16 },
+  { "amount": 6, "from": 100, "to": 3, "converted": 0.18 },
+  { "amount": 1.5, "from": 80, "to": 3, "converted": 0.06 },
+  { "amount": 5.5, "from": 80, "to": 3, "converted": 0.21 },
+  { "amount": 6, "from": 80, "to": 3, "converted": 0.22 },
+  { "amount": 250, "from": 150, "to": 1, "converted": 1.67 },
+  { "amount": 4, "from": 1, "to": 120, "converted": 480 },
+  { "amount": 0.03, "from": 3, "to": 1, "converted": 0.01 },
+  { "amount": 15, "from": 0.15, "to": 100, "converted": 10000 }
+]

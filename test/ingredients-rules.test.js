@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { ValidationError } from "../server/errors.js";
 import {
@@ -422,10 +423,22 @@ describe("validChanges", () => {
 describe("convertedAmount", () => {
   const hint = "Change the recipes first.";
 
-  test("multiplies the amount by the factor, rounded to two decimals", () => {
-    // 250 ÷ 150 is 1.666..., rounded to two decimals.
-    assert.equal(convertedAmount({ name: "large", amount: 250 }, 1 / 150, "pcs"), 1.67);
-    assert.equal(convertedAmount({ name: "net", amount: 4 }, 120, "g"), 480);
+  // public/quantities.js converts the preview of the ingredient editor on
+  // purpose with its own function, because the browser never imports from
+  // server/. Both sides' tests read test/fixtures/converted-amounts.json, so
+  // the preview shows the amount that the server saves.
+  test("multiplies the amount by to ÷ from, rounded to two decimals", async () => {
+    const cases = JSON.parse(
+      await readFile(new URL("./fixtures/converted-amounts.json", import.meta.url), "utf8"),
+    );
+    for (const { amount, from, to, converted } of cases) {
+      const measure = { name: "measure", amount };
+      assert.equal(
+        convertedAmount(measure, to / from, "g"),
+        converted,
+        `${amount} × ${to} ÷ ${from}`,
+      );
+    }
   });
 
   test("accepts an amount exactly at a limit despite binary floating point", () => {
