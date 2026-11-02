@@ -252,67 +252,55 @@ test("update returns the recipe without the ingredients that the catalog doesn't
   assert.deepEqual(onDisk.recipes[0].ingredients, [entry(onion.id, 100), entry("gone", 5)]);
 });
 
-test("create and update store measureId, and keep lines without it in the unit", async () => {
+/**
+ * Starts, before awaiting either, a save of a recipe that uses the measure
+ * "medium" of a new ingredient and the removal of that measure, so that they
+ * meet in the shared queue, in the order of `order`. Resolves to the measure
+ * and the results of the save and of the removal.
+ * @param {"recipe first" | "removal first"} order
+ */
+async function raceSaveAndRemoval(order) {
   const onion = await ingredients.create({
     name: "Onion",
     unit: "g",
-    measures: [{ name: "medium", amount: 150 }],
+    measures: [
+      { name: "medium", amount: 150 },
+      { name: "small", amount: 80 },
+    ],
   });
-  const inMeasure = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
-
-  const soup = await recipes.create({ name: "Soup", ingredients: [inMeasure] });
-  assert.deepEqual(soup.ingredients, [inMeasure]);
-
-  const inUnit = await recipes.update(soup.id, { ingredients: [entry(onion.id, 100)] });
-  assert.deepEqual(inUnit.ingredients, [entry(onion.id, 100)]);
-  assert.equal("measureId" in inUnit.ingredients[0], false);
-
-  const back = await recipes.update(soup.id, { ingredients: [inMeasure] });
-  assert.deepEqual(back.ingredients, [inMeasure]);
-  assert.deepEqual((await recipes.list())[0].ingredients, [inMeasure]);
-});
-
-test("a recipe save that uses a measure and a removal of that measure never both succeed", async () => {
-  for (const recipeFirst of [true, false]) {
-    const onion = await ingredients.create({
-      name: recipeFirst ? "Onion" : "Leek",
-      unit: "g",
-      measures: [
-        { name: "medium", amount: 150 },
-        { name: "small", amount: 80 },
-      ],
+  const [medium, small] = onion.measures;
+  const soup = await recipes.create({ name: "Onion soup" });
+  const save = () =>
+    recipes.update(soup.id, {
+      ingredients: [{ ingredientId: onion.id, measureId: medium.id, quantity: 2 }],
     });
-    const [medium, small] = onion.measures;
-    const soup = await recipes.create({ name: `${onion.name} soup` });
-    const useMedium = () =>
-      recipes.update(soup.id, {
-        ingredients: [{ ingredientId: onion.id, measureId: medium.id, quantity: 2 }],
-      });
-    const removeMedium = () => ingredients.update(onion.id, { measures: [small] });
-
-    // Both start before either is awaited, so they meet in the shared queue.
-    const results = await Promise.allSettled(
-      recipeFirst ? [useMedium(), removeMedium()] : [removeMedium(), useMedium()],
-    );
-
-    const failures = results.filter((result) => result.status === "rejected");
-    assert.equal(failures.length, 1, `recipe first: ${recipeFirst}`);
-    if (recipeFirst) {
-      assert.equal(failures[0].reason.name, "ConflictError");
-    } else {
-      assert.equal(failures[0].reason.message, `Unknown measure: ${medium.id}`);
-    }
-    const measureIds = new Set(
-      (await ingredients.list()).flatMap((ingredient) => ingredient.measures.map(({ id }) => id)),
-    );
-    const onDisk = JSON.parse(await readFile(recipesFile(), "utf8"));
-    for (const line of onDisk.recipes.flatMap((recipe) => recipe.ingredients)) {
-      if ("measureId" in line) assert.ok(measureIds.has(line.measureId), line.measureId);
-    }
+  const removal = () => ingredients.update(onion.id, { measures: [small] });
+  let saving;
+  let removing;
+  if (order === "recipe first") {
+    saving = save();
+    removing = removal();
+  } else {
+    removing = removal();
+    saving = save();
   }
-});
+  const [saved, removed] = await Promise.allSettled([saving, removing]);
+  return { medium, removed, saved };
+}
 
-test("list drops a line whose measureId the catalog doesn't have, and keeps it in the file", async () => {
+/** Every measure that a recipe uses on disk still belongs to an ingredient of the catalog. */
+async function assertNoMissingMeasure() {
+  const measureIds = new Set(
+    (await ingredients.list()).flatMap((ingredient) => ingredient.measures.map(({ id }) => id)),
+  );
+  const onDisk = JSON.parse(await readFile(recipesFile(), "utf8"));
+  for (const line of onDisk.recipes.flatMap((recipe) => recipe.ingredients)) {
+    if ("measureId" in line) assert.ok(measureIds.has(line.measureId), line.measureId);
+  }
+}
+
+/** Writes a catalog with one ingredient in a measure, and a recipe book with a recipe that uses it and one whose measure is gone. */
+async function writeStaleMeasure() {
   const onion = await ingredients.create({
     name: "Onion",
     unit: "g",
@@ -329,17 +317,24 @@ test("list drops a line whose measureId the catalog doesn't have, and keeps it i
       ],
     }),
   );
-
-  const [soup, stew] = await recipes.list();
-
-  assert.deepEqual(soup.ingredients, [good]);
-  assert.deepEqual(stew.ingredients, []);
-  await recipes.update("a", { name: "Onion soup" });
-  const onDisk = JSON.parse(await readFile(recipesFile(), "utf8"));
-  assert.deepEqual(onDisk.recipes[1].ingredients, [stale]);
-});
+  return { good, stale };
+}
 
 describe("create", () => {
+  test("stores the measureId of an ingredient in a measure", async () => {
+    const onion = await ingredients.create({
+      name: "Onion",
+      unit: "g",
+      measures: [{ name: "medium", amount: 150 }],
+    });
+    const inMeasure = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
+
+    const soup = await recipes.create({ name: "Soup", ingredients: [inMeasure] });
+
+    assert.deepEqual(soup.ingredients, [inMeasure]);
+    assert.deepEqual((await recipes.list())[0].ingredients, [inMeasure]);
+  });
+
   test("rejects invalid fields, and stores nothing", async () => {
     await assert.rejects(recipes.create({ name: "Soup", archived: false }), ValidationError);
 
@@ -369,6 +364,63 @@ describe("create", () => {
 });
 
 describe("update", () => {
+  test("stores the measureId of an ingredient in a measure", async () => {
+    const onion = await ingredients.create({
+      name: "Onion",
+      unit: "g",
+      measures: [{ name: "medium", amount: 150 }],
+    });
+    const inMeasure = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
+    const soup = await recipes.create({ name: "Soup" });
+
+    const updated = await recipes.update(soup.id, { ingredients: [inMeasure] });
+
+    assert.deepEqual(updated.ingredients, [inMeasure]);
+    assert.deepEqual((await recipes.list())[0].ingredients, [inMeasure]);
+  });
+
+  test("keeps an ingredient without a measureId in the unit", async () => {
+    const onion = await ingredients.create({
+      name: "Onion",
+      unit: "g",
+      measures: [{ name: "medium", amount: 150 }],
+    });
+    const inMeasure = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
+    const soup = await recipes.create({ name: "Soup", ingredients: [inMeasure] });
+
+    const updated = await recipes.update(soup.id, { ingredients: [entry(onion.id, 100)] });
+
+    assert.deepEqual(updated.ingredients, [entry(onion.id, 100)]);
+    assert.equal("measureId" in updated.ingredients[0], false);
+  });
+
+  test("rejects a measure that a removal in the queue already dropped", async () => {
+    const { medium, removed, saved } = await raceSaveAndRemoval("removal first");
+
+    assert.equal(removed.status, "fulfilled");
+    assert.equal(saved.status, "rejected");
+    assert.equal(saved.reason.message, `Unknown measure: ${medium.id}`);
+    await assertNoMissingMeasure();
+  });
+
+  test("fails the removal of a measure that a saved recipe uses", async () => {
+    const { removed, saved } = await raceSaveAndRemoval("recipe first");
+
+    assert.equal(saved.status, "fulfilled");
+    assert.equal(removed.status, "rejected");
+    assert.equal(removed.reason.name, "ConflictError");
+    await assertNoMissingMeasure();
+  });
+
+  test("keeps in the file an ingredient whose measure the catalog lacks", async () => {
+    const { stale } = await writeStaleMeasure();
+
+    await recipes.update("a", { name: "Onion soup" });
+
+    const onDisk = JSON.parse(await readFile(recipesFile(), "utf8"));
+    assert.deepEqual(onDisk.recipes[1].ingredients, [stale]);
+  });
+
   test("rejects invalid changes, and leaves the recipe unchanged", async () => {
     const soup = await recipes.create({ name: "Soup" });
 
@@ -411,6 +463,15 @@ describe("update", () => {
 });
 
 describe("list", () => {
+  test("drops an ingredient whose measureId the catalog doesn't have", async () => {
+    const { good } = await writeStaleMeasure();
+
+    const [soup, stew] = await recipes.list();
+
+    assert.deepEqual(soup.ingredients, [good]);
+    assert.deepEqual(stew.ingredients, []);
+  });
+
   test("drops an ingredient that the catalog doesn't have", async () => {
     const onion = await ingredients.create({ name: "Onion", unit: "g" });
     await mkdir(path.join(dataDir, "v2"), { recursive: true });
