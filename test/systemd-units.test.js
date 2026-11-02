@@ -48,26 +48,30 @@ const TIMERS = {
   "meals-restore-check": { OnCalendar: ["Sun *-*-* 04:00:00"], Persistent: ["true"] },
 };
 
-test("deploy/systemd has a service and a timer for each host script that runs on a schedule", async () => {
-  const expected = Object.keys(SERVICES).flatMap((name) => [`${name}.service`, `${name}.timer`]);
+describe("deploy/systemd", () => {
+  test("has a service and a timer for each host script that runs on a schedule", async () => {
+    const expected = Object.keys(SERVICES).flatMap((name) => [`${name}.service`, `${name}.timer`]);
 
-  assert.deepEqual((await readdir(UNITS)).sort(), expected.sort());
+    assert.deepEqual((await readdir(UNITS)).sort(), expected.sort());
+  });
 });
 
 for (const [name, { args, docker, timeout }] of Object.entries(SERVICES)) {
-  test(`${name}.service runs the installed script once as deployer, with a start timeout`, async () => {
-    const { Service, Unit } = await readUnit(`${name}.service`);
+  describe(`${name}.service`, () => {
+    test("runs the installed script once as deployer, with a start timeout", async () => {
+      const { Service, Unit } = await readUnit(`${name}.service`);
 
-    assert.deepEqual(Service, {
-      ExecStart: [`${await installRoot()}/scripts/${name}${args}`],
-      Group: ["docker"],
-      TimeoutStartSec: [timeout],
-      Type: ["oneshot"],
-      UMask: ["0002"],
-      User: ["deployer"],
+      assert.deepEqual(Service, {
+        ExecStart: [`${await installRoot()}/scripts/${name}${args}`],
+        Group: ["docker"],
+        TimeoutStartSec: [timeout],
+        Type: ["oneshot"],
+        UMask: ["0002"],
+        User: ["deployer"],
+      });
+      const after = (Unit.After ?? []).flatMap((value) => value.split(/\s+/));
+      assert.equal(after.includes("docker.service"), docker, "After=docker.service");
     });
-    const after = (Unit.After ?? []).flatMap((value) => value.split(/\s+/));
-    assert.equal(after.includes("docker.service"), docker, "After=docker.service");
   });
 
   describe(name, () => {
