@@ -16,6 +16,9 @@ import { createStores } from "../server/stores.js";
 import { within } from "./helpers.js";
 
 const INDEX = fileURLToPath(new URL("../server/index.js", import.meta.url));
+const SIGNAL_LISTENERS_HOOK = fileURLToPath(
+  new URL("./hooks/signal-listeners.js", import.meta.url),
+);
 const { version: PACKAGE_VERSION } = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8"),
 );
@@ -250,4 +253,27 @@ test("node server/index.js logs its start, and on SIGTERM stops and exits with 0
       { time: "string", level: "info", msg: "server stopped" },
     ],
   );
+});
+
+test("node server/index.js registers the SIGINT and SIGTERM handlers before it logs its start", async (t) => {
+  const child = spawn(process.execPath, ["--import", SIGNAL_LISTENERS_HOOK, INDEX], {
+    env: { ...process.env, DATA_DIR: dataDir, PORT: "0" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  t.after(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  const lines = createInterface({ input: child.stdout });
+  await once(lines, "line");
+  // Listen first: the streams can close before the exit event's handlers run.
+  const closed = Promise.all([once(lines, "close"), once(child.stderr, "close")]);
+  child.kill("SIGTERM");
+  await once(child, "exit");
+  await closed;
+
+  assert.deepEqual(JSON.parse(stderr), { listeners: { SIGINT: 1, SIGTERM: 1 } });
 });

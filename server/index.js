@@ -20,8 +20,10 @@ try {
   logger.error("server failed to start", { error: error?.stack ?? String(error) });
   process.exit(1);
 }
-logger.info("server started", { version, port: server.port, dataDir });
 
+// Register the handlers before the log: whoever reads "server started" can
+// send a signal at once, and a signal without a handler kills the process.
 const shutdown = createShutdown({ exit: process.exit, logger, stop: server.stop });
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+logger.info("server started", { version, port: server.port, dataDir });
