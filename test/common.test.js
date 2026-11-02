@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { createHost } from "./host-helpers.js";
+import { assertExit, createHost } from "./host-helpers.js";
 
 const COMMON = fileURLToPath(new URL("../scripts/lib/common.sh", import.meta.url));
 
@@ -47,7 +47,7 @@ test("MEALS_SCRIPTS is the directory of a script run by a relative path", async 
     env: { ...process.env, MEALS_ROOT: host.root },
   });
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.equal(result.stdout, `${dir}\n`);
 });
 
@@ -57,7 +57,7 @@ test("validate_data fails when it can't read a directory under the data", () => 
     'find() { command find "$@"; return 1; }\nvalidate_data "$MEALS_ROOT/data"',
   );
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
 });
 
@@ -67,7 +67,7 @@ describe("validate_data", () => {
     // prints the status of find.
     const result = runWithCommon('set -e\nfind() { return 1; }\nvalidate_data "$MEALS_ROOT/data"');
 
-    assert.equal(result.status, 1);
+    assertExit(result, 1);
     assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
   });
 });
@@ -78,6 +78,6 @@ test("validate_data says so when jq isn't installed", () => {
     `ln -s "$(command -v find)" "${dir}/find"\nPATH="${dir}" validate_data "$MEALS_ROOT/data"`,
   );
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /jq: command not found/);
 });

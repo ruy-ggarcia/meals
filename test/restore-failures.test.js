@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, rename, symlink } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { createHost, DATA } from "./host-helpers.js";
+import { assertExit, createHost, DATA } from "./host-helpers.js";
 import { assertOriginalData as assertDataOf, BACKUP } from "./restore-helpers.js";
 
 let host;
@@ -27,7 +27,7 @@ test("meals-restore starts the app again when the pre-restore backup fails", asy
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /The pre-restore backup failed, so nothing changed/);
   assert.equal(await host.exists("data/v2/weeks/2026-09-28.json"), true);
   assert.match((await host.calls()).at(-1), / compose .* up --detach$/);
@@ -40,7 +40,7 @@ test("meals-restore says so when the app doesn't start again after a failed pre-
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /The pre-restore backup failed, so nothing changed, but version 0\.2\.0 didn't start again/,
@@ -55,7 +55,7 @@ test("meals-restore fails without changing anything when the app doesn't stop", 
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /Couldn't stop version 0\.2\.0, so nothing changed/);
   assert.deepEqual(await host.backups(), [BACKUP]);
   assert.equal(await host.exists("data/v2/weeks/2026-09-28.json"), true);
@@ -67,7 +67,7 @@ test("meals-restore fails without changing anything when it can't create its sta
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.ok(
     result.stderr.includes(
       `Error: Couldn't create a staging directory in ${host.root}, so nothing changed.`,
@@ -83,7 +83,7 @@ test("meals-restore fails without changing anything when it can't list the backu
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.ok(
     result.stderr.includes(
       `Error: Couldn't list the backups in ${host.root}/backups, so nothing changed.`,
@@ -107,7 +107,7 @@ test("meals-restore starts the app again when the retention deletes the new pre-
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /Error: Couldn't find the new pre-restore backup, so nothing changed, and version 0\.2\.0 runs again\./,
@@ -134,7 +134,7 @@ test("meals-restore starts the app again when it can't list the backups after th
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /Error: Couldn't find the new pre-restore backup, so nothing changed, and version 0\.2\.0 runs again\./,
@@ -151,7 +151,7 @@ test("meals-restore keeps data/ and says how to start the app when the swap fail
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /data\/ wasn't replaced, and the app is stopped\./);
   // meals-deploy might not start it: the host can be on hold, GitHub can be
   // down, or the latest release can be a failed version.
@@ -175,7 +175,7 @@ test("meals-restore says where the data is when it can't move data.old back", as
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.ok(
     result.stdout.includes(
       `Couldn't move data.old back to data/. The data is in ${host.root}/data.old: move it back to ${host.root}/data before you start the app.`,
@@ -206,7 +206,7 @@ test("meals-restore restores the data, and says so, when it can't set the mode o
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
   assert.ok(
     result.stdout.includes(
@@ -225,7 +225,7 @@ test("meals-restore restores the data, and says so, when it can't remove data.ol
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
   assert.ok(
     result.stdout.includes(`Couldn't remove the old data in ${host.root}/data.old.`),
@@ -243,7 +243,7 @@ test("meals-restore keeps data.old when data/ is missing", async () => {
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /data\/ wasn't replaced, and the app is stopped\./);
   for (const [relPath, content] of Object.entries(DATA)) {
     assert.equal(
@@ -261,7 +261,7 @@ test("meals-restore fails without changing anything when no version is deployed"
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /No version is deployed\. .*meals-deploy VERSION/);
   assert.deepEqual(await host.calls(), []);
 });
@@ -271,7 +271,7 @@ test("meals-restore fails without changing anything on a damaged archive", async
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /The archive is damaged/);
   assert.deepEqual(await host.calls(), []);
   await assertOriginalData();
@@ -283,7 +283,7 @@ test("meals-restore fails without changing anything on invalid JSON", async () =
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Invalid JSON: v2\/recipes\.json/);
   assert.deepEqual(await host.calls(), []);
   assert.equal(await host.exists("data/v2/weeks/2026-09-28.json"), true);
@@ -294,7 +294,7 @@ test("meals-restore refuses a backup from a newer version", async () => {
 
   const result = await host.run("meals-restore", "2026-10-01T033000Z-daily-v0.10.0.tar.gz");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /from version 0\.10\.0, which is newer .* meals-deploy 0\.10\.0/);
   assert.deepEqual(await host.calls(), []);
 });
@@ -302,7 +302,7 @@ test("meals-restore refuses a backup from a newer version", async () => {
 test("meals-restore fails on a backup that doesn't exist", async () => {
   const result = await host.run("meals-restore", "no-such-backup.tar.gz");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /No backup named no-such-backup\.tar\.gz/);
   assert.deepEqual(await host.calls(), []);
 });
@@ -312,7 +312,7 @@ test("meals-restore fails without changing anything on a backup name without a v
 
   const result = await host.run("meals-restore", "foo.tar.gz");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /Error: The name of foo\.tar\.gz has no version\./);
   assert.deepEqual(await host.calls(), []);
 });
@@ -323,7 +323,7 @@ test("meals-restore rejects anything but one backup", async () => {
   for (const args of [[], [BACKUP, BACKUP]]) {
     const result = await host.run("meals-restore", ...args);
 
-    assert.equal(result.status, 1, `${args.length} arguments`);
+    assertExit(result, 1, `${args.length} arguments`);
     assert.match(result.stderr, /Error: Usage: meals-restore BACKUP/, `${args.length} arguments`);
   }
   assert.deepEqual(await host.calls(), []);
@@ -336,7 +336,7 @@ test("meals-restore names the pre-restore backup when the app doesn't come back 
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /didn't come back healthy/);
   await assertOriginalData();
   const preRestore = (await host.backups()).filter((name) => name.includes("-pre-restore-v0.2.0"));
@@ -354,7 +354,7 @@ test("meals-restore goes on, and says so, when it can't remove a stale staging d
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
   assert.ok(
     result.stdout.includes(

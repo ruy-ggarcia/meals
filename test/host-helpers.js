@@ -38,6 +38,28 @@ export function imageFor(version) {
 }
 
 /**
+ * Checks that a script ended with exit status STATUS. A failure prints the
+ * status, the standard output, and the standard error, and CONTEXT, when
+ * given, so the message tells what the script did without a rerun.
+ *
+ * @param {{ status: number | null, stdout?: string | null, stderr?: string | null, error?: Error }} result
+ * @param {number} status
+ * @param {string} [context] What the script ran with, such as "2 arguments".
+ */
+export function assertExit(result, status, context) {
+  const stderr = result.stderr || result.error?.message || "";
+  assert.equal(
+    result.status,
+    status,
+    [
+      `expected exit status ${status}, got ${result.status}${context ? ` (${context})` : ""}`,
+      `stdout:\n${result.stdout ?? ""}`,
+      `stderr:\n${stderr}`,
+    ].join("\n"),
+  );
+}
+
+/**
  * The `skip` option of a test that relies on file permissions: REASON as
  * root, who has every permission, and false otherwise.
  */
@@ -140,7 +162,7 @@ export async function assertWaitsForLock(t, host, script, args = []) {
   }
 
   const result = await run;
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   const calls = await host.calls();
   assert.equal(calls[0], "released the lock", `${script} didn't wait:\n${calls.join("\n")}`);
   return calls;

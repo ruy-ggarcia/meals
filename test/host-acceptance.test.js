@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { skipAsRoot } from "./host-helpers.js";
+import { assertExit, skipAsRoot } from "./host-helpers.js";
 
 const SCRIPT = fileURLToPath(new URL("../scripts/host-acceptance.sh", import.meta.url));
 
@@ -28,7 +28,7 @@ describe("host-acceptance.sh", () => {
 
     const result = runAcceptance(env);
 
-    assert.equal(result.status, 1, result.stderr);
+    assertExit(result, 1);
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, "Run the host acceptance test only on a GitHub Actions runner.\n");
   });
@@ -40,7 +40,7 @@ describe("host-acceptance.sh", () => {
       RUNNER_ENVIRONMENT: "self-hosted",
     });
 
-    assert.equal(result.status, 1, result.stderr);
+    assertExit(result, 1);
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, "Run the host acceptance test only on a GitHub Actions runner.\n");
   });
@@ -54,7 +54,7 @@ describe("host-acceptance.sh", () => {
       RUNNER_ENVIRONMENT: "github-hosted",
     });
 
-    assert.equal(result.status, 1, result.stderr);
+    assertExit(result, 1);
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, "Run the host acceptance test as root.\n");
   });

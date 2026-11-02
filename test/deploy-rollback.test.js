@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { blockEnvWrite, dockerCalls, migrateOnUp } from "./deploy-helpers.js";
-import { createHost, DATA, imageFor } from "./host-helpers.js";
+import { assertExit, createHost, DATA, imageFor } from "./host-helpers.js";
 
 let host;
 
@@ -21,7 +21,7 @@ test("meals-deploy fails without stopping the app when the data has invalid JSON
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Invalid JSON: v2\/recipes\.json/);
   assert.match(result.stderr, /The data failed validation, so version 0\.3\.0 wasn't deployed\./);
   assert.match(result.stderr, /Nothing changed\./);
@@ -40,7 +40,7 @@ test("meals-deploy fails without stopping the app when it can't read the data", 
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Couldn't read every file in /);
   assert.match(result.stderr, /The data failed validation, so version 0\.3\.0 wasn't deployed\./);
   assert.ok(
@@ -56,7 +56,7 @@ test("meals-deploy starts the previous version again when the pre-deploy backup 
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /The pre-deploy backup failed, so version 0\.2\.0 runs again/);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.equal(await host.exists("failed"), false);
@@ -70,7 +70,7 @@ test("meals-deploy says when the previous version doesn't start again after the 
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /The pre-deploy backup failed, so nothing changed, but version 0\.2\.0 didn't start again\./,
@@ -93,7 +93,7 @@ test("meals-deploy starts the previous version again when the retention deletes 
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /Error: Couldn't find the new pre-deploy backup, so version 0\.2\.0 runs again\./,
@@ -110,7 +110,7 @@ test("meals-deploy says so when it can't record the version that failed", async 
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Rolled back to version 0\.2\.0 and its data\./);
   assert.ok(
     result.stderr.includes(
@@ -126,7 +126,7 @@ test("meals-deploy changes nothing when it can't stop the previous version", asy
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /Couldn't stop version 0\.2\.0, so nothing changed\./);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.deepEqual(await host.backups(), []);
@@ -140,7 +140,7 @@ test("meals-deploy says when the previous version doesn't start again after it c
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /Couldn't write \.env, so nothing changed, but version 0\.2\.0 didn't start again\./,
@@ -157,7 +157,7 @@ test("a first deployment that can't write .env starts nothing", async () => {
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /Couldn't write \.env, so version 0\.2\.0 wasn't deployed\./);
   assert.equal((await host.readEnv()).MEALS_VERSION, "");
   assert.ok(!(await dockerCalls(host)).some((call) => call.includes(" compose ")));
@@ -169,7 +169,7 @@ test("meals-deploy changes nothing, and doesn't record a failed version, when th
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /Couldn't pull/);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.deepEqual(await host.backups(), []);
@@ -187,7 +187,7 @@ test("meals-deploy rolls back the image and the data when the new version isn't 
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Rolled back to version 0\.2\.0 and its data\./);
   assert.match(result.stderr, /Version 0\.3\.0 failed/);
   const env = await host.readEnv();
@@ -217,7 +217,7 @@ test("meals-deploy leaves the data alone when it can't stop the version that fai
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /The rollback failed too\./);
   assert.doesNotMatch(result.stdout, /Rolled back/);
   assert.match(result.stderr, /Version 0\.3\.0 failed/);
@@ -233,7 +233,7 @@ test("meals-deploy rolls back when the new version reports another version", asy
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Rolled back to version 0\.2\.0 and its data\./);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.equal(await readFile(path.join(host.root, "failed"), "utf8"), "0.3.0\n");
@@ -245,7 +245,7 @@ test("meals-deploy says so when the previous version doesn't start again in the 
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /The rollback failed too\./);
   assert.doesNotMatch(result.stdout, /Rolled back/);
   assert.match(result.stderr, /Version 0\.3\.0 failed/);
@@ -274,7 +274,7 @@ test("meals-deploy leaves the data alone when the pre-deploy backup fails valida
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Invalid JSON: v2\/recipes\.json/);
   assert.match(result.stdout, /The rollback failed too\./);
   assert.doesNotMatch(result.stdout, /Rolled back/);
@@ -296,7 +296,7 @@ test("a failed first deployment leaves the data as it is and starts nothing", as
 
   const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   const env = await host.readEnv();
   assert.equal(env.MEALS_IMAGE, "");
   assert.equal(env.MEALS_VERSION, "");

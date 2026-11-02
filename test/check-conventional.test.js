@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { assertExit } from "./host-helpers.js";
 
 const SCRIPT = fileURLToPath(new URL("../scripts/check-conventional.sh", import.meta.url));
 
@@ -24,20 +25,20 @@ test("check-conventional.sh accepts Conventional Commits subjects", () => {
     "refactor!: drop the free-text weeks",
   );
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.equal(result.stderr, "");
 });
 
 test("check-conventional.sh accepts no input", () => {
   const result = check();
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
 });
 
 test("check-conventional.sh checks a last line without a newline", () => {
   const result = spawnSync(SCRIPT, [], { encoding: "utf8", input: "Update README.md" });
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.equal(result.stderr, "Not a Conventional Commits subject: Update README.md\n");
 });
 
@@ -53,7 +54,7 @@ test("check-conventional.sh names every subject that doesn't follow Conventional
     'Revert "feat: show the grid"',
   );
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.deepEqual(result.stderr.trimEnd().split("\n"), [
     "Not a Conventional Commits subject: Feat: Track ingredients and build a shopping list",
     "Not a Conventional Commits subject: feat: Track ingredients",

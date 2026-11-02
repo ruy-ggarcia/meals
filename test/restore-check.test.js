@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertWaitsForLock, createHost, DATA, imageFor } from "./host-helpers.js";
+import { assertExit, assertWaitsForLock, createHost, DATA, imageFor } from "./host-helpers.js";
 
 const OLDER = "2026-10-01T033000Z-daily-v0.2.0.tar.gz";
 const LATEST = "2026-10-02T033000Z-pre-deploy-v0.2.0.tar.gz";
@@ -54,7 +54,7 @@ test("meals-restore-check checks the latest backup, each of its weeks, and clean
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.deepEqual(await requestedPaths(), [
     "/api/health",
     "/api/recipes",
@@ -85,7 +85,7 @@ test("meals-restore-check runs the deployed image as the app's user, on a free l
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   // Not the live port 3000, and not on every address.
   assert.equal(
     await readFile(path.join(host.stubDir, "up-env"), "utf8"),
@@ -99,7 +99,7 @@ test("meals-restore-check first removes what an interrupted check left", async (
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.deepEqual(await leftovers(), []);
   assert.match(result.stdout, /Removed \.restore-check\.AbC123, which an interrupted check left\./);
   const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
@@ -115,7 +115,7 @@ test("meals-restore-check goes on, and says so, when it can't remove a stale cop
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.ok(
     result.stdout.includes(
       `Couldn't remove ${stale}, which an interrupted check left. To free the space, run sudo rm -rf ${stale}.`,
@@ -134,7 +134,7 @@ test("meals-restore-check removes what an interrupted check left, also with noth
 
   const noBackup = await host.run("meals-restore-check");
 
-  assert.equal(noBackup.status, 0, noBackup.stderr);
+  assertExit(noBackup, 0);
   assert.match(noBackup.stdout, /There are no backups to check\./);
   assert.match(
     noBackup.stdout,
@@ -151,7 +151,7 @@ test("meals-restore-check removes what an interrupted check left, also with noth
 
   const noVersion = await host.run("meals-restore-check");
 
-  assert.equal(noVersion.status, 0, noVersion.stderr);
+  assertExit(noVersion, 0);
   assert.match(noVersion.stdout, /No version is deployed/);
   assert.match(
     noVersion.stdout,
@@ -168,7 +168,7 @@ test("meals-restore-check fails when it can't remove the containers of an interr
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /Error: Couldn't remove the containers that an interrupted check left\./,
@@ -183,7 +183,7 @@ test("meals-restore-check fails, and cleans up, when a request fails", async () 
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /GET \/api\/weeks\/2026-09-28 failed/);
   assert.ok((await host.calls()).at(-1).endsWith(" down"));
   assert.equal(await appRuns({ check: true }), false, "the check's app stopped");
@@ -203,7 +203,7 @@ for (const [damage, writeLatest] of damages) {
 
     const result = await host.run("meals-restore-check");
 
-    assert.equal(result.status, 1);
+    assertExit(result, 1);
     assert.ok(
       result.stderr.includes(`Error: The backup ${LATEST} failed validation.`),
       result.stderr,
@@ -220,7 +220,7 @@ test("meals-restore-check fails when the app doesn't become healthy on the backu
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /didn't become healthy/);
   assert.deepEqual(await leftovers(), []);
 });
@@ -237,7 +237,7 @@ test("meals-restore-check fails, and cleans up, when it can't get the address of
 
     const result = await host.run("meals-restore-check");
 
-    assert.equal(result.status, 1, file);
+    assertExit(result, 1, file);
     assert.ok(
       result.stderr.includes(
         `Error: Couldn't get the address of version 0.2.0 on the backup ${LATEST}.`,
@@ -255,7 +255,7 @@ test("meals-restore-check fails when it can't create the directory for the copy"
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.ok(
     result.stderr.includes(
       `Error: Couldn't create a directory for the copy of the backup in ${host.root}.`,
@@ -271,7 +271,7 @@ test("meals-restore-check fails when it can't list the backups", async () => {
 
   const result = await host.run("meals-restore-check");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.ok(
     result.stderr.includes(`Error: Couldn't list the backups in ${host.root}/backups.`),
     result.stderr,
@@ -281,14 +281,14 @@ test("meals-restore-check fails when it can't list the backups", async () => {
 
 test("meals-restore-check does nothing without a deployed version or a backup", async () => {
   const noBackup = await host.run("meals-restore-check");
-  assert.equal(noBackup.status, 0, noBackup.stderr);
+  assertExit(noBackup, 0);
   assert.match(noBackup.stdout, /There are no backups to check\./);
 
   await host.cleanup();
   host = await createHost({ version: "" });
   await host.makeBackup(LATEST);
   const noVersion = await host.run("meals-restore-check");
-  assert.equal(noVersion.status, 0, noVersion.stderr);
+  assertExit(noVersion, 0);
   assert.match(noVersion.stdout, /No version is deployed/);
   assert.deepEqual(await host.calls(), []);
 });

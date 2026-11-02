@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { rm, utimes } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
+import { assertExit, assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
 
 let host;
 
@@ -22,7 +22,7 @@ function oldBackup(day, kind) {
 test("meals-backup archives the data directory, named after the time, the kind, and the version", async () => {
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   const backups = await host.backups();
   assert.equal(backups.length, 1);
   assert.match(backups[0], /^\d{4}-\d{2}-\d{2}T\d{6}Z-daily-v0\.2\.0\.tar\.gz$/);
@@ -40,7 +40,7 @@ test("meals-backup takes no backup when no version is deployed", async () => {
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.match(result.stdout, /No version is deployed/);
   assert.deepEqual(await host.backups(), []);
 });
@@ -50,7 +50,7 @@ test("meals-backup takes no backup when .env doesn't exist", async () => {
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.match(result.stdout, /No version is deployed/);
   assert.deepEqual(await host.backups(), []);
 });
@@ -60,7 +60,7 @@ test("meals-backup fails on invalid JSON, and keeps no archive or .partial file"
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Invalid JSON: v2\/recipes\.json/);
   assert.match(result.stderr, /failed validation/);
   assert.deepEqual(await host.backups(), []);
@@ -71,7 +71,7 @@ test("meals-backup fails, and keeps no archive or .partial file, when it can't r
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /Error: Couldn't archive the data, so no backup was kept\./);
   assert.deepEqual(await host.backups(), []);
 });
@@ -81,7 +81,7 @@ test("a pre-restore backup keeps invalid JSON, so a restore can replace damaged 
 
   const result = await host.run("meals-backup", "pre-restore");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   const backups = await host.backups();
   assert.equal(backups.length, 1);
   assert.match(backups[0], /-pre-restore-v0\.2\.0\.tar\.gz$/);
@@ -94,7 +94,7 @@ test("meals-backup keeps the 14 newest daily backups, and leaves other kinds and
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   const backups = await host.backups();
   const daily = backups.filter((name) => name.includes("-daily-") && name.endsWith(".tar.gz"));
   assert.equal(daily.length, 14);
@@ -119,7 +119,7 @@ test("meals-backup deletes nothing while a kind has no more backups than its ret
 
     const result = await host.run("meals-backup", kind);
 
-    assert.equal(result.status, 0, result.stderr);
+    assertExit(result, 0);
     const ofKind = (await host.backups()).filter((name) => name.includes(`-${kind}-`));
     assert.equal(ofKind.length, keep, kind);
     assert.ok(ofKind.includes(oldBackup(1, kind)), kind);
@@ -137,7 +137,7 @@ test("meals-backup deletes the .partial files older than one day", async () => {
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   const backups = await host.backups();
   assert.ok(!backups.includes(old), backups.join("\n"));
   assert.ok(backups.includes(fresh), backups.join("\n"));
@@ -153,7 +153,7 @@ test("meals-backup keeps the 10 newest pre-deploy and pre-restore backups", asyn
 
     const result = await host.run("meals-backup", kind);
 
-    assert.equal(result.status, 0, result.stderr);
+    assertExit(result, 0);
     const ofKind = (await host.backups()).filter((name) => name.includes(`-${kind}-`));
     assert.equal(ofKind.length, 10, kind);
     assert.ok(!ofKind.includes(oldBackup(1, kind)), kind);
@@ -165,7 +165,7 @@ test("meals-backup fails, and keeps no backup, when it can't create its temporar
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /Error: Couldn't create a temporary directory for the validation, so no backup was kept\./,
@@ -178,7 +178,7 @@ test("meals-backup fails, and keeps no .partial file, when it can't move the bac
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(
     result.stderr,
     /Error: Couldn't move the backup to backups\/\S+-daily-v0\.2\.0\.tar\.gz, so it wasn't kept\./,
@@ -191,7 +191,7 @@ test("meals-backup keeps the new backup, and fails, when it can't list the old o
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stdout, /Backed up the data to backups\//);
   assert.ok(
     result.stderr.includes(
@@ -208,7 +208,7 @@ test("meals-backup fails when it can't delete an old backup", async () => {
 
   const result = await host.run("meals-backup", "daily");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.ok(
     result.stderr.includes(
       `Error: Couldn't delete the old backup backups/${oldBackup(1, "daily")}.`,
@@ -223,14 +223,14 @@ test("meals-backup works from a working directory that it can't read", {
 }, async () => {
   const result = await host.runFromUnreadableDir("meals-backup", "daily");
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.equal((await host.backups()).length, 1);
 });
 
 test("meals-backup rejects an unknown kind", async () => {
   const result = await host.run("meals-backup", "weekly");
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   assert.match(result.stderr, /Usage: meals-backup daily\|pre-deploy\|pre-restore/);
   assert.deepEqual(await host.backups(), []);
 });

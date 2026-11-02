@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
+import { assertExit, assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
 import { assertOriginalData as assertDataOf, BACKUP } from "./restore-helpers.js";
 
 let host;
@@ -27,7 +27,7 @@ test("meals-restore brings back the data of a backup, after a pre-restore backup
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
   const preRestore = (await host.backups()).filter((name) => name.includes("-pre-restore-v0.2.0"));
   assert.equal(preRestore.length, 1);
@@ -41,14 +41,14 @@ test("meals-restore brings back the data of a backup, after a pre-restore backup
 });
 
 test("a backup by meals-backup and a restore by meals-restore give back identical data", async () => {
-  assert.equal((await host.run("meals-backup", "daily")).status, 0);
+  assertExit(await host.run("meals-backup", "daily"), 0);
   const [daily] = await host.backups();
   await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
   await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
 
   const result = await host.run("meals-restore", daily);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
 });
 
@@ -58,7 +58,7 @@ test("meals-restore replaces data with invalid JSON", async () => {
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
 });
 
@@ -70,7 +70,7 @@ test("meals-restore works from a working directory that it can't read", {
 
   const result = await host.runFromUnreadableDir("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
 });
 
@@ -81,7 +81,7 @@ test("meals-restore accepts an absolute path, and a backup from an older version
 
   const result = await host.run("meals-restore", `${host.root}/backups/${older}`);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   await assertOriginalData();
 });
 
@@ -91,7 +91,7 @@ test("meals-restore removes the staging directories that an interrupted restore 
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.equal(await host.exists(".restore.AbC123"), false);
   assert.match(result.stdout, /Removed \.restore\.AbC123, which an interrupted restore left\./);
 });
@@ -103,7 +103,7 @@ test("meals-restore checks the health at the address that Compose publishes", as
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.match((await host.calls()).at(-1), / http:\/\/127\.0\.0\.1:49153\/api\/health$/);
 });
 
@@ -113,7 +113,7 @@ test("meals-restore checks the health on 127.0.0.1 when Compose publishes on eve
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 0, result.stderr);
+  assertExit(result, 0);
   assert.match((await host.calls()).at(-1), / http:\/\/127\.0\.0\.1:3000\/api\/health$/);
 });
 
@@ -127,7 +127,7 @@ test("meals-restore names the new pre-restore backup, whatever the clock says", 
 
   const result = await host.run("meals-restore", BACKUP);
 
-  assert.equal(result.status, 1);
+  assertExit(result, 1);
   const preRestore = (await host.backups()).filter(
     (name) => name.includes("-pre-restore-v0.2.0") && name !== later,
   );
