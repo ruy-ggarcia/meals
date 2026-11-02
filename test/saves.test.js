@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import { sameMenu } from "../public/menus.js";
 import { createSaves } from "../public/saves.js";
 import { useQuietConsole } from "./dom-helpers.js";
@@ -86,21 +86,32 @@ test("loaded copies the menu, so mutating the object afterward doesn't change th
   );
 });
 
-test("queueSave sends the current menu and marks the slot as saved", async () => {
-  const { saves, server, menus, statuses } = setup();
-  menus.set(KEY, SOUP);
+describe("queueSave", () => {
+  test("sends a PUT with the slot URL and the current menu", async () => {
+    const { saves, server, menus } = setup();
+    menus.set(KEY, SOUP);
 
-  const done = saves.queueSave(KEY);
-  await tick();
-  assert.equal(statuses.get(KEY), "saving");
-  assert.equal(server.requests.length, 1);
-  assert.equal(server.requests[0].url, "/api/mon/lunch");
-  assert.equal(server.requests[0].method, "PUT");
-  assert.deepEqual(server.requests[0].body, SOUP);
+    saves.queueSave(KEY);
+    await tick();
 
-  server.requests[0].ok();
-  await done;
-  assert.equal(statuses.get(KEY), "saved");
+    assert.equal(server.requests.length, 1);
+    assert.equal(server.requests[0].url, "/api/mon/lunch");
+    assert.equal(server.requests[0].method, "PUT");
+    assert.deepEqual(server.requests[0].body, SOUP);
+  });
+
+  test("reports saving while the PUT runs, and saved when it succeeds", async () => {
+    const { saves, server, menus, statuses } = setup();
+    menus.set(KEY, SOUP);
+
+    const done = saves.queueSave(KEY);
+    await tick();
+    assert.equal(statuses.get(KEY), "saving");
+
+    server.requests[0].ok();
+    await done;
+    assert.equal(statuses.get(KEY), "saved");
+  });
 });
 
 test("the PUT body holds exactly the menu items, nothing else the menu carries", async () => {
@@ -157,23 +168,37 @@ test("changing a menu object after its save doesn't change what counts as saved"
   assert.deepEqual(server.requests[1].body, SOUP_AND_BREAD);
 });
 
-test("a failed save marks the slot as an error, and a retry saves it", async () => {
-  quiet.expect(1);
-  const { saves, server, menus, statuses } = setup();
-  menus.set(KEY, SOUP);
+describe("queueSave after a failed save", () => {
+  test("reports an error", async () => {
+    quiet.expect(1);
+    const { saves, server, menus, statuses } = setup();
+    menus.set(KEY, SOUP);
 
-  const first = saves.queueSave(KEY);
-  await tick();
-  server.requests[0].fail();
-  await first;
-  assert.equal(statuses.get(KEY), "error");
+    const first = saves.queueSave(KEY);
+    await tick();
+    server.requests[0].fail();
+    await first;
 
-  const retry = saves.queueSave(KEY);
-  await tick();
-  assert.equal(server.requests.length, 2);
-  server.requests[1].ok();
-  await retry;
-  assert.equal(statuses.get(KEY), "saved");
+    assert.equal(statuses.get(KEY), "error");
+  });
+
+  test("sends the menu again, and reports saved when that succeeds", async () => {
+    quiet.expect(1);
+    const { saves, server, menus, statuses } = setup();
+    menus.set(KEY, SOUP);
+    const first = saves.queueSave(KEY);
+    await tick();
+    server.requests[0].fail();
+    await first;
+
+    const retry = saves.queueSave(KEY);
+    await tick();
+    assert.equal(server.requests.length, 2);
+    server.requests[1].ok();
+    await retry;
+
+    assert.equal(statuses.get(KEY), "saved");
+  });
 });
 
 test("a save gives up after the timeout", async () => {
@@ -218,17 +243,34 @@ test("saves of one slot run in order: a newer save waits for the older one", asy
   await second;
 });
 
-test("flush sends each changed slot with keepalive and skips unchanged slots", async () => {
-  const { saves, server, menus } = setup();
-  saves.loaded([["tue/lunch", RICE]]);
-  menus.set("tue/lunch", RICE);
-  menus.set(KEY, SOUP);
+describe("flush", () => {
+  // Flushes a slot that changed and a slot that didn't.
+  async function flushChangedAndUnchanged() {
+    const { saves, server, menus } = setup();
+    saves.loaded([["tue/lunch", RICE]]);
+    menus.set("tue/lunch", RICE);
+    menus.set(KEY, SOUP);
 
-  saves.flush([KEY, "tue/lunch"]);
-  await tick();
-  assert.equal(server.requests.length, 1);
-  assert.deepEqual(server.requests[0].body, SOUP);
-  assert.equal(server.requests[0].keepalive, true);
+    saves.flush([KEY, "tue/lunch"]);
+    await tick();
+    return server;
+  }
+
+  test("sends a changed slot with keepalive", async () => {
+    const server = await flushChangedAndUnchanged();
+
+    assert.deepEqual(server.requests[0].body, SOUP);
+    assert.equal(server.requests[0].keepalive, true);
+  });
+
+  test("skips an unchanged slot", async () => {
+    const server = await flushChangedAndUnchanged();
+
+    assert.deepEqual(
+      server.requests.map((request) => request.url),
+      ["/api/mon/lunch"],
+    );
+  });
 });
 
 test("flush copies the menu, so mutating it afterward doesn't change the saved state", async () => {
@@ -362,7 +404,7 @@ test("settle waits for queued saves and page-hide saves", async () => {
 
 test("settle also waits for page-hide saves that start while it waits", async () => {
   quiet.expect(1);
-  const { saves, server, menus, statuses } = setup();
+  const { saves, server, menus } = setup();
   saves.loaded([["tue/lunch", EMPTY]]);
   menus.set(KEY, SOUP);
   saves.queueSave(KEY);
@@ -380,8 +422,6 @@ test("settle also waits for page-hide saves that start while it waits", async ()
 
   server.requestWith(RICE).fail();
   await done;
-  assert.equal(statuses.get("tue/lunch"), "error");
-  assert.deepEqual(saves.unsaved([KEY, "tue/lunch"]), ["tue/lunch"]);
 });
 
 test("a failed page-hide save marks the slot as an error and leaves it unsaved", async () => {
@@ -552,23 +592,43 @@ test("discard returns a copy, so mutating it afterward doesn't change the saved 
   );
 });
 
-test("discard returns the saved menu and clears the error, so no later save sends the discarded menu", async () => {
-  quiet.expect(1);
-  const { saves, server, menus, statuses } = setup();
-  menus.set(KEY, SOUP);
-  const failed = saves.queueSave(KEY);
-  await tick();
-  server.requests[0].fail();
-  await failed;
+describe("discard after a failed save", () => {
+  // Fails the save of Soup over the saved empty menu, and discards it.
+  async function discardFailedSave() {
+    quiet.expect(1);
+    const { saves, server, menus, statuses } = setup();
+    menus.set(KEY, SOUP);
+    const failed = saves.queueSave(KEY);
+    await tick();
+    server.requests[0].fail();
+    await failed;
 
-  menus.set(KEY, saves.discard(KEY));
-  assert.deepEqual(menus.get(KEY), EMPTY);
-  assert.equal(statuses.get(KEY), "idle");
+    const discarded = saves.discard(KEY);
+    menus.set(KEY, discarded);
+    return { saves, server, menus, statuses, discarded };
+  }
 
-  await saves.queueSave(KEY); // for example, a later Done without changes
-  saves.flush([KEY]);
-  await tick();
-  assert.equal(server.requests.length, 1);
+  test("returns the menu that the server confirmed", async () => {
+    const { discarded } = await discardFailedSave();
+
+    assert.deepEqual(discarded, EMPTY);
+  });
+
+  test("clears the error", async () => {
+    const { statuses } = await discardFailedSave();
+
+    assert.equal(statuses.get(KEY), "idle");
+  });
+
+  test("keeps every later save from sending the discarded menu", async () => {
+    const { saves, server } = await discardFailedSave();
+
+    await saves.queueSave(KEY); // for example, a later Done without changes
+    saves.flush([KEY]);
+    await tick();
+
+    assert.equal(server.requests.length, 1, "only the failed save");
+  });
 });
 
 test("a late successful page-hide save keeps the error of a newer menu that failed", async () => {
