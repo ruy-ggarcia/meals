@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
-import { createHost, skipAsRoot } from "./host-helpers.js";
+import { afterEach, beforeEach, describe, test } from "node:test";
+import { assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
 import { assertOriginalData as assertDataOf, BACKUP } from "./restore-helpers.js";
 
 let host;
@@ -135,14 +135,10 @@ test("meals-restore names the new pre-restore backup, whatever the clock says", 
   assert.ok(result.stderr.includes(`meals-restore ${preRestore[0]}.`), result.stderr);
 });
 
-test("meals-restore waits for the lock that another script holds", async () => {
-  await host.makeBackup(BACKUP);
-  const { released } = await host.holdLock(200);
+describe("meals-restore", () => {
+  test("waits for the lock that another script holds", async (t) => {
+    await host.makeBackup(BACKUP);
 
-  const result = await host.run("meals-restore", BACKUP);
-
-  assert.equal(result.status, 0, result.stderr);
-  const calls = await host.calls();
-  assert.equal(calls[0], "released the lock", calls.join("\n"));
-  await released;
+    await assertWaitsForLock(t, host, "meals-restore", [BACKUP]);
+  });
 });

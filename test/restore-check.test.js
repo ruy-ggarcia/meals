@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
-import { createHost, DATA, imageFor, skipAsRoot, withMode } from "./host-helpers.js";
+import { afterEach, beforeEach, describe, test } from "node:test";
+import {
+  assertWaitsForLock,
+  createHost,
+  DATA,
+  imageFor,
+  skipAsRoot,
+  withMode,
+} from "./host-helpers.js";
 
 const OLDER = "2026-10-01T033000Z-daily-v0.2.0.tar.gz";
 const LATEST = "2026-10-02T033000Z-pre-deploy-v0.2.0.tar.gz";
@@ -297,14 +304,10 @@ test("meals-restore-check does nothing without a deployed version or a backup", 
   assert.deepEqual(await host.calls(), []);
 });
 
-test("meals-restore-check waits for the lock that another script holds", async () => {
-  await host.makeBackup(LATEST);
-  const { released } = await host.holdLock(200);
+describe("meals-restore-check", () => {
+  test("waits for the lock that another script holds", async (t) => {
+    await host.makeBackup(LATEST);
 
-  const result = await host.run("meals-restore-check");
-
-  assert.equal(result.status, 0, result.stderr);
-  const calls = await host.calls();
-  assert.equal(calls[0], "released the lock", calls.join("\n"));
-  await released;
+    await assertWaitsForLock(t, host, "meals-restore-check");
+  });
 });

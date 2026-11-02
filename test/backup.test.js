@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { rm, utimes } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
-import { createHost, skipAsRoot, withMode } from "./host-helpers.js";
+import { afterEach, beforeEach, describe, test } from "node:test";
+import { assertWaitsForLock, createHost, skipAsRoot, withMode } from "./host-helpers.js";
 
 let host;
 
@@ -238,27 +238,25 @@ test("meals-backup rejects an unknown kind", async () => {
   assert.deepEqual(await host.backups(), []);
 });
 
-test("meals-backup waits for the lock that another script holds", async () => {
-  // meals-backup calls no docker or curl, so date, which names the backup
-  // right after the lock, logs its calls too.
-  const date = [
-    "#!/usr/bin/env bash",
-    "set -euo pipefail",
-    'echo "date $*" >>"$STUB_DIR/calls"',
-    'command -p date "$@"',
-    "",
-  ];
-  await host.stub("bin/date", date.join("\n"), { executable: true });
-  const { released } = await host.holdLock(200);
+describe("meals-backup", () => {
+  test("waits for the lock that another script holds", async (t) => {
+    // meals-backup calls no docker or curl, so date, which names the backup
+    // right after the lock, logs its calls too.
+    const date = [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      'echo "date $*" >>"$STUB_DIR/calls"',
+      'command -p date "$@"',
+      "",
+    ];
+    await host.stub("bin/date", date.join("\n"), { executable: true });
 
-  const result = await host.run("meals-backup", "daily");
+    const calls = await assertWaitsForLock(t, host, "meals-backup", ["daily"]);
 
-  assert.equal(result.status, 0, result.stderr);
-  const calls = await host.calls();
-  assert.equal(calls[0], "released the lock", calls.join("\n"));
-  assert.ok(
-    calls.some((call) => call.startsWith("date ")),
-    calls.join("\n"),
-  );
-  await released;
+    const afterRelease = calls.slice(calls.indexOf("released the lock"));
+    assert.ok(
+      afterRelease.some((call) => call.startsWith("date ")),
+      calls.join("\n"),
+    );
+  });
 });

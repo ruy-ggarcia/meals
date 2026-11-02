@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { dockerCalls } from "./deploy-helpers.js";
-import { createHost, imageFor } from "./host-helpers.js";
+import { assertWaitsForLock, createHost, imageFor } from "./host-helpers.js";
 
 let host;
 
@@ -268,14 +268,10 @@ test("a deployment succeeds when it can't list the old images", async () => {
   assert.match(result.stdout, /Deployed version 0\.3\.0\./);
 });
 
-test("meals-deploy waits for the lock that another script holds", async () => {
-  await host.addRelease("0.3.0");
-  const { released } = await host.holdLock(200);
+describe("meals-deploy", () => {
+  test("waits for the lock that another script holds", async (t) => {
+    await host.addRelease("0.3.0");
 
-  const result = await host.run("meals-deploy");
-
-  assert.equal(result.status, 0, result.stderr);
-  const calls = await host.calls();
-  assert.equal(calls[0], "released the lock", calls.join("\n"));
-  await released;
+    await assertWaitsForLock(t, host, "meals-deploy");
+  });
 });
