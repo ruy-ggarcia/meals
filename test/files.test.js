@@ -41,26 +41,48 @@ describe("readJson", () => {
 });
 
 describe("writeJson", () => {
-  test("creates the directory, and readJson reads the value back", async (t) => {
-    const file = path.join(await tempDir(t), "a", "b", "value.json");
+  test("creates the missing directories of the file", async (t) => {
+    const dir = await tempDir(t);
+
+    await writeJson(path.join(dir, "a", "b", "value.json"), { list: [1, 2] });
+
+    assert.deepEqual(await readdir(path.join(dir, "a", "b")), ["value.json"]);
+  });
+
+  test("writes a value that readJson reads back", async (t) => {
+    const file = path.join(await tempDir(t), "value.json");
 
     await writeJson(file, { name: "Café", list: [1, 2] });
 
     assert.deepEqual(await readJson(file), { name: "Café", list: [1, 2] });
+  });
+
+  test("writes JSON with two spaces of indentation and a final newline", async (t) => {
+    const file = path.join(await tempDir(t), "value.json");
+
+    await writeJson(file, { name: "Café", list: [1, 2] });
+
     assert.equal(
       await readFile(file, "utf8"),
       '{\n  "name": "Café",\n  "list": [\n    1,\n    2\n  ]\n}\n',
     );
   });
 
-  test("replaces the file and leaves no temporary file behind", async (t) => {
-    const dir = await tempDir(t);
-    const file = path.join(dir, "value.json");
+  test("replaces the value of an existing file", async (t) => {
+    const file = path.join(await tempDir(t), "value.json");
 
     await writeJson(file, { version: 1 });
     await writeJson(file, { version: 2 });
 
     assert.deepEqual(await readJson(file), { version: 2 });
+  });
+
+  test("leaves no temporary file behind", async (t) => {
+    const dir = await tempDir(t);
+
+    await writeJson(path.join(dir, "value.json"), { version: 1 });
+    await writeJson(path.join(dir, "value.json"), { version: 2 });
+
     assert.deepEqual(await readdir(dir), ["value.json"]);
   });
 

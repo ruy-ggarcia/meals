@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { describe, mock, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { createShutdown } from "../server/shutdown.js";
 import { collectingLogger } from "./helpers.js";
@@ -17,28 +17,58 @@ function controlledStop() {
   return control;
 }
 
-test("shutdown logs the signal, waits for stop(), logs the stop, and exits with 0", async () => {
-  const { entries, logger } = collectingLogger();
-  const exit = mock.fn();
-  const control = controlledStop();
-  const shutdown = createShutdown({ exit, logger, stop: control.stop });
+describe("createShutdown", () => {
+  test("doesn't exit before stop() resolves", async (t) => {
+    // Mock timers, so the 10-second deadline doesn't keep the test file running.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const exit = mock.fn();
+    const control = controlledStop();
+    const shutdown = createShutdown({
+      exit,
+      logger: collectingLogger().logger,
+      stop: control.stop,
+    });
 
-  shutdown("SIGTERM");
-  await setImmediate();
-  assert.equal(control.stop.mock.callCount(), 1);
-  assert.equal(exit.mock.callCount(), 0);
+    shutdown("SIGTERM");
+    await setImmediate();
 
-  control.resolve();
-  await setImmediate();
+    assert.equal(control.stop.mock.callCount(), 1);
+    assert.equal(exit.mock.callCount(), 0);
+  });
 
-  assert.deepEqual(
-    exit.mock.calls.map((call) => call.arguments),
-    [[0]],
-  );
-  assert.deepEqual(entries, [
-    { level: "info", msg: "server stopping", signal: "SIGTERM" },
-    { level: "info", msg: "server stopped" },
-  ]);
+  test("logs the signal and the stop", async () => {
+    const { entries, logger } = collectingLogger();
+    const control = controlledStop();
+    const shutdown = createShutdown({ exit: mock.fn(), logger, stop: control.stop });
+
+    shutdown("SIGTERM");
+    control.resolve();
+    await setImmediate();
+
+    assert.deepEqual(entries, [
+      { level: "info", msg: "server stopping", signal: "SIGTERM" },
+      { level: "info", msg: "server stopped" },
+    ]);
+  });
+
+  test("exits with 0 after stop() resolves", async () => {
+    const exit = mock.fn();
+    const control = controlledStop();
+    const shutdown = createShutdown({
+      exit,
+      logger: collectingLogger().logger,
+      stop: control.stop,
+    });
+
+    shutdown("SIGTERM");
+    control.resolve();
+    await setImmediate();
+
+    assert.deepEqual(
+      exit.mock.calls.map((call) => call.arguments),
+      [[0]],
+    );
+  });
 });
 
 test("a second signal doesn't stop the server again", (t) => {
