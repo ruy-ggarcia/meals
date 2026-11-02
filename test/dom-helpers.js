@@ -138,7 +138,10 @@ function installGlobals(window, fetch) {
   for (const key of Object.keys(globals)) previous[key] = globalThis[key];
   Object.assign(globalThis, globals);
 
+  let cleaned = false;
   return async function cleanup() {
+    if (cleaned) return; // a second call must not undo the globals of a later page
+    cleaned = true;
     await window.happyDOM.close(); // cancels any pending happy-dom timer, such as a stray hashchange
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) delete globalThis[key];
@@ -184,8 +187,13 @@ export async function loadPage({
   const { document } = window;
 
   const cleanup = installGlobals(window, fetch);
-  beforeScript(window);
-  await import(`../public/${script}?instance=${nextInstanceId++}`);
+  try {
+    beforeScript(window);
+    await import(`../public/${script}?instance=${nextInstanceId++}`);
+  } catch (error) {
+    await cleanup(); // the caller never gets `cleanup`, so nothing else restores the globals
+    throw error;
+  }
 
   return { window, document, cleanup };
 }
@@ -209,7 +217,13 @@ export async function loadDialog({ html, id, script, fetch }) {
   const { document } = window;
 
   const cleanup = installGlobals(window, fetch);
-  const module = await import(`../public/${script}?instance=${nextInstanceId++}`);
+  let module;
+  try {
+    module = await import(`../public/${script}?instance=${nextInstanceId++}`);
+  } catch (error) {
+    await cleanup(); // the caller never gets `cleanup`, so nothing else restores the globals
+    throw error;
+  }
 
   return { window, document, dialog: document.getElementById(id), module, cleanup };
 }
