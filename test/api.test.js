@@ -47,348 +47,6 @@ function assertJsonError(res, status, label) {
   assert.equal(typeof res.body.error, "string", label);
 }
 
-// ---------- Logs ----------
-
-test("each /api request is logged with its method, path, status, and duration", async () => {
-  const { entries, logger } = collectingLogger();
-  const loggedApp = createApp(createStores({ dataDir: dataDir() }), { logger });
-
-  await request(loggedApp).get("/api/recipes?ignored=1");
-  await request(loggedApp).put(`/api/weeks/${WEEK}/mon/lunch`).send({ items: [] });
-  await request(loggedApp).get("/api/nope");
-
-  assert.deepEqual(
-    entries.map((entry) => ({ ...entry, ms: typeof entry.ms })),
-    [
-      {
-        level: "info",
-        msg: "request",
-        method: "GET",
-        path: "/api/recipes",
-        status: 200,
-        ms: "number",
-      },
-      {
-        level: "info",
-        msg: "request",
-        method: "PUT",
-        path: `/api/weeks/${WEEK}/mon/lunch`,
-        status: 200,
-        ms: "number",
-      },
-      {
-        level: "info",
-        msg: "request",
-        method: "GET",
-        path: "/api/nope",
-        status: 404,
-        ms: "number",
-      },
-    ],
-  );
-  assert.deepEqual(
-    entries.filter(({ ms }) => !(Number.isInteger(ms) && ms >= 0)),
-    [],
-    "the entries whose ms isn't a whole number of milliseconds from 0",
-  );
-});
-
-test("errors that map to a 4xx status are logged as requests, and not as failures", async () => {
-  const { entries, logger } = collectingLogger();
-  let thrown;
-  const throwing = {
-    recipes: {
-      list: async () => {
-        throw thrown;
-      },
-    },
-    weeks: {},
-  };
-  const loggedApp = createApp(throwing, { logger });
-  /** @type {[Error, number][]} */
-  const cases = [
-    [new ValidationError("Invalid"), 400],
-    [new NotFoundError("Missing"), 404],
-    [new NameConflictError("Taken", "recipe", { id: "r1" }), 409],
-    [new ConflictError("In use"), 409],
-    [Object.assign(new Error("Gone"), { status: 404 }), 404],
-  ];
-
-  for (const [error] of cases) {
-    thrown = error;
-    await request(loggedApp).get("/api/recipes");
-  }
-  await request(loggedApp)
-    .post("/api/recipes")
-    .set("Content-Type", "application/json")
-    .send('{"name":');
-
-  assert.deepEqual(
-    entries.map(({ level, msg, status }) => ({ level, msg, status })),
-    [...cases.map(([, status]) => status), 400].map((status) => ({
-      level: "info",
-      msg: "request",
-      status,
-    })),
-  );
-});
-
-test("a request that the client aborts is logged once", async () => {
-  const { entries, logger } = collectingLogger();
-  /** @type {PromiseWithResolvers<void>} */
-  const logged = Promise.withResolvers();
-  /** @type {PromiseWithResolvers<void>} */
-  const handlerStarted = Promise.withResolvers();
-  /** @type {PromiseWithResolvers<void>} */
-  const release = Promise.withResolvers();
-  /** @type {PromiseWithResolvers<void>} */
-  const handlerDone = Promise.withResolvers();
-  const loggingInfo = logger.info;
-  logger.info = (msg, fields) => {
-    loggingInfo(msg, fields);
-    logged.resolve();
-  };
-  const slow = {
-    recipes: {
-      list: async () => {
-        handlerStarted.resolve();
-        await release.promise;
-        handlerDone.resolve();
-        return [];
-      },
-    },
-  };
-  const server = createApp(slow, { logger }).listen(0, "127.0.0.1");
-  await once(server, "listening");
-
-  try {
-    const socket = net.connect(server.address().port, "127.0.0.1");
-    socket.write("GET /api/recipes HTTP/1.1\r\nHost: localhost\r\n\r\n");
-    await handlerStarted.promise;
-    socket.destroy();
-    await within(logged.promise, "The request wasn't logged after the client aborted it");
-    // Let the handler finish after the abort, to catch a second entry for the same request.
-    release.resolve();
-    await handlerDone.promise;
-    await setImmediate();
-    await setImmediate();
-  } finally {
-    server.close();
-  }
-
-  assert.deepEqual(
-    entries.map((entry) => ({ ...entry, ms: typeof entry.ms })),
-    [
-      {
-        level: "info",
-        msg: "request",
-        method: "GET",
-        path: "/api/recipes",
-        aborted: true,
-        ms: "number",
-      },
-    ],
-  );
-  assert.equal("status" in entries[0], false);
-});
-
-test("static files aren't logged", async () => {
-  const { entries, logger } = collectingLogger();
-  const loggedApp = createApp(createStores({ dataDir: dataDir() }), { logger });
-
-  assert.equal((await request(loggedApp).get("/")).status, 200);
-  assert.equal((await request(loggedApp).get("/styles.css")).status, 200);
-
-  assert.deepEqual(entries, []);
-});
-
-describe("GET /manifest.webmanifest", () => {
-  test("serves the web app manifest with its media type", async () => {
-    const res = await request(app).get("/manifest.webmanifest");
-
-    assert.equal(res.status, 200);
-    assert.match(res.headers["content-type"], /^application\/manifest\+json/);
-  });
-
-  test("serves every icon that the manifest names with its type", async () => {
-    const manifest = JSON.parse((await request(app).get("/manifest.webmanifest")).text);
-
-    for (const icon of manifest.icons) {
-      const file = await request(app).get(`/${icon.src}`);
-      assert.equal(file.status, 200, icon.src);
-      assert.equal(file.headers["content-type"], icon.type, icon.src);
-    }
-  });
-});
-
-// ---------- Health ----------
-
-test("GET /api/health returns 200 with the version when the data directory is writable", async () => {
-  const healthApp = createApp(createStores({ dataDir: dataDir() }), {
-    dataDir: dataDir(),
-    version: "1.2.3",
-  });
-
-  const res = await request(healthApp).get("/api/health");
-
-  assert.equal(res.status, 200);
-  assert.match(res.headers["content-type"], /application\/json/);
-  assert.deepEqual(res.body, { status: "ok", version: "1.2.3" });
-});
-
-test("GET /api/health returns 503 when the data directory isn't writable", {
-  skip: skipAsRoot("root can write to any directory"),
-}, async () => {
-  // afterEach removes the directory, which is empty, so the mode can stay.
-  await chmod(dataDir(), 0o500);
-  const healthApp = createApp(createStores({ dataDir: dataDir() }), {
-    dataDir: dataDir(),
-    version: "1.2.3",
-  });
-
-  const res = await request(healthApp).get("/api/health");
-
-  assert.equal(res.status, 503);
-  assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
-});
-
-test("GET /api/health returns 503 when the data directory can't be entered", {
-  skip: skipAsRoot("root can enter any directory"),
-}, async () => {
-  // afterEach removes the directory, which is empty, so the mode can stay.
-  await chmod(dataDir(), 0o600);
-  const healthApp = createApp(createStores({ dataDir: dataDir() }), {
-    dataDir: dataDir(),
-    version: "1.2.3",
-  });
-
-  const res = await request(healthApp).get("/api/health");
-
-  assert.equal(res.status, 503);
-  assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
-});
-
-test("GET /api/health returns 503 when the data directory doesn't exist", async () => {
-  const missing = path.join(dataDir(), "missing");
-  const healthApp = createApp(createStores({ dataDir: missing }), {
-    dataDir: missing,
-    version: "1.2.3",
-  });
-
-  const res = await request(healthApp).get("/api/health");
-
-  assert.equal(res.status, 503);
-  assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
-});
-
-describe("GET /api/health", () => {
-  test("logs nothing for a successful check", async () => {
-    const { entries, logger } = collectingLogger();
-
-    await request(
-      createApp(createStores({ dataDir: dataDir() }), { dataDir: dataDir(), logger }),
-    ).get("/api/health");
-
-    assert.deepEqual(entries, []);
-  });
-
-  test("logs the error code of a failed check, and then the request", async () => {
-    const { entries, logger } = collectingLogger();
-    const missing = path.join(dataDir(), "missing");
-
-    await request(createApp(createStores({ dataDir: missing }), { dataDir: missing, logger })).get(
-      "/api/health",
-    );
-
-    assert.deepEqual(
-      entries.map((entry) => ({
-        level: entry.level,
-        msg: entry.msg,
-        path: entry.path,
-        status: entry.status,
-        error: entry.error,
-      })),
-      [
-        {
-          level: "error",
-          msg: "health check failed",
-          path: undefined,
-          status: undefined,
-          error: "ENOENT",
-        },
-        { level: "info", msg: "request", path: "/api/health", status: 503, error: undefined },
-      ],
-    );
-  });
-});
-
-// ---------- Recipes ----------
-
-test("GET /api/recipes returns an empty recipe book at first", async () => {
-  const res = await request(app).get("/api/recipes");
-
-  assert.equal(res.status, 200);
-  assert.match(res.headers["content-type"], /application\/json/);
-  assert.deepEqual(res.body, { recipes: [] });
-});
-
-test("POST /api/recipes returns 201 with the new recipe, and GET lists it", async () => {
-  const res = await request(app).post("/api/recipes").send({ name: "  Gnocchi  carbonara " });
-
-  assert.equal(res.status, 201);
-  assert.equal(typeof res.body.id, "string");
-  assert.deepEqual(res.body, {
-    id: res.body.id,
-    name: "Gnocchi carbonara",
-    archived: false,
-    ingredients: [],
-  });
-
-  const get = await request(app).get("/api/recipes");
-  assert.deepEqual(get.body, { recipes: [res.body] });
-});
-
-describe("POST /api/recipes", () => {
-  test("returns 400 JSON without a body", async () => {
-    assertJsonError(await request(app).post("/api/recipes"), 400, "no body at all");
-  });
-});
-
-test("PATCH /api/recipes/ID renames a recipe", async () => {
-  const soup = await addRecipe("Soup");
-
-  const res = await request(app).patch(`/api/recipes/${soup.id}`).send({ name: "Tomato soup" });
-
-  assert.equal(res.status, 200);
-  assert.deepEqual(res.body, { ...soup, name: "Tomato soup" });
-});
-
-test("PATCH /api/recipes/ID accepts a name with the recipe's own name key", async () => {
-  const cafe = await addRecipe("Cafe");
-  const res = await request(app).patch(`/api/recipes/${cafe.id}`).send({ name: "Café" });
-  assert.equal(res.status, 200);
-  assert.deepEqual(res.body, { ...cafe, name: "Café" });
-});
-
-test("PATCH /api/recipes/ID archives and restores a recipe", async () => {
-  const soup = await addRecipe("Soup");
-
-  const archive = await request(app).patch(`/api/recipes/${soup.id}`).send({ archived: true });
-  assert.equal(archive.status, 200);
-  assert.deepEqual(archive.body, { ...soup, archived: true });
-
-  const restore = await request(app).patch(`/api/recipes/${soup.id}`).send({ archived: false });
-  assert.deepEqual(restore.body, soup);
-});
-
-describe("PATCH /api/recipes/:id", () => {
-  test("returns 400 JSON without a body", async () => {
-    const soup = await addRecipe("Soup");
-
-    assertJsonError(await request(app).patch(`/api/recipes/${soup.id}`), 400, "no body at all");
-  });
-});
-
 /**
  * An app whose only store, the recipe book, throws `error` when a request lists it.
  * @param {Error} error
@@ -408,7 +66,174 @@ function appThrowing(error, options) {
   );
 }
 
+async function addIngredient(name, unit = "g") {
+  const res = await request(app).post("/api/ingredients").send({ name, unit });
+  assert.equal(res.status, 201, name);
+  return res.body;
+}
+
+async function addOnionWithMedium() {
+  const res = await request(app)
+    .post("/api/ingredients")
+    .send({ name: "Onion", unit: "g", measures: [{ name: "medium", amount: 150 }] });
+  assert.equal(res.status, 201);
+  return res.body;
+}
+
 describe("createApp", () => {
+  test("logs each /api request with its method, path, status, and duration", async () => {
+    const { entries, logger } = collectingLogger();
+    const loggedApp = createApp(createStores({ dataDir: dataDir() }), { logger });
+
+    await request(loggedApp).get("/api/recipes?ignored=1");
+    await request(loggedApp).put(`/api/weeks/${WEEK}/mon/lunch`).send({ items: [] });
+    await request(loggedApp).get("/api/nope");
+
+    assert.deepEqual(
+      entries.map((entry) => ({ ...entry, ms: typeof entry.ms })),
+      [
+        {
+          level: "info",
+          msg: "request",
+          method: "GET",
+          path: "/api/recipes",
+          status: 200,
+          ms: "number",
+        },
+        {
+          level: "info",
+          msg: "request",
+          method: "PUT",
+          path: `/api/weeks/${WEEK}/mon/lunch`,
+          status: 200,
+          ms: "number",
+        },
+        {
+          level: "info",
+          msg: "request",
+          method: "GET",
+          path: "/api/nope",
+          status: 404,
+          ms: "number",
+        },
+      ],
+    );
+    assert.deepEqual(
+      entries.filter(({ ms }) => !(Number.isInteger(ms) && ms >= 0)),
+      [],
+      "the entries whose ms isn't a whole number of milliseconds from 0",
+    );
+  });
+
+  test("logs a request with a 4xx error as a request, not as a failure", async () => {
+    const { entries, logger } = collectingLogger();
+    let thrown;
+    const throwing = {
+      recipes: {
+        list: async () => {
+          throw thrown;
+        },
+      },
+      weeks: {},
+    };
+    const loggedApp = createApp(throwing, { logger });
+    /** @type {[Error, number][]} */
+    const cases = [
+      [new ValidationError("Invalid"), 400],
+      [new NotFoundError("Missing"), 404],
+      [new NameConflictError("Taken", "recipe", { id: "r1" }), 409],
+      [new ConflictError("In use"), 409],
+      [Object.assign(new Error("Gone"), { status: 404 }), 404],
+    ];
+
+    for (const [error] of cases) {
+      thrown = error;
+      await request(loggedApp).get("/api/recipes");
+    }
+    await request(loggedApp)
+      .post("/api/recipes")
+      .set("Content-Type", "application/json")
+      .send('{"name":');
+
+    assert.deepEqual(
+      entries.map(({ level, msg, status }) => ({ level, msg, status })),
+      [...cases.map(([, status]) => status), 400].map((status) => ({
+        level: "info",
+        msg: "request",
+        status,
+      })),
+    );
+  });
+
+  test("logs a request that the client aborts once", async () => {
+    const { entries, logger } = collectingLogger();
+    /** @type {PromiseWithResolvers<void>} */
+    const logged = Promise.withResolvers();
+    /** @type {PromiseWithResolvers<void>} */
+    const handlerStarted = Promise.withResolvers();
+    /** @type {PromiseWithResolvers<void>} */
+    const release = Promise.withResolvers();
+    /** @type {PromiseWithResolvers<void>} */
+    const handlerDone = Promise.withResolvers();
+    const loggingInfo = logger.info;
+    logger.info = (msg, fields) => {
+      loggingInfo(msg, fields);
+      logged.resolve();
+    };
+    const slow = {
+      recipes: {
+        list: async () => {
+          handlerStarted.resolve();
+          await release.promise;
+          handlerDone.resolve();
+          return [];
+        },
+      },
+    };
+    const server = createApp(slow, { logger }).listen(0, "127.0.0.1");
+    await once(server, "listening");
+
+    try {
+      const socket = net.connect(server.address().port, "127.0.0.1");
+      socket.write("GET /api/recipes HTTP/1.1\r\nHost: localhost\r\n\r\n");
+      await handlerStarted.promise;
+      socket.destroy();
+      await within(logged.promise, "The request wasn't logged after the client aborted it");
+      // Let the handler finish after the abort, to catch a second entry for the same request.
+      release.resolve();
+      await handlerDone.promise;
+      await setImmediate();
+      await setImmediate();
+    } finally {
+      server.close();
+    }
+
+    assert.deepEqual(
+      entries.map((entry) => ({ ...entry, ms: typeof entry.ms })),
+      [
+        {
+          level: "info",
+          msg: "request",
+          method: "GET",
+          path: "/api/recipes",
+          aborted: true,
+          ms: "number",
+        },
+      ],
+    );
+    assert.equal("status" in entries[0], false);
+  });
+
+  test("logs nothing for a static file", async () => {
+    const { entries, logger } = collectingLogger();
+    const loggedApp = createApp(createStores({ dataDir: dataDir() }), { logger });
+
+    assert.equal((await request(loggedApp).get("/")).status, 200);
+    assert.equal((await request(loggedApp).get("/styles.css")).status, 200);
+
+    assert.deepEqual(entries, []);
+  });
+
   test("maps a ValidationError to 400 JSON with its message", async () => {
     const res = await request(appThrowing(new ValidationError("Invalid"))).get("/api/recipes");
 
@@ -453,72 +278,301 @@ describe("createApp", () => {
     assert.equal(failures[0].path, "/api/recipes");
     assert.match(failures[0].error, /^SyntaxError: boom/);
   });
-});
 
-test("a thrown string is logged as the error of a failed request", async () => {
-  const { entries, logger } = collectingLogger();
-  const throwing = {
-    recipes: {
-      list: async () => {
-        throw "disk on fire";
+  test("logs a thrown string as the error of a failed request", async () => {
+    const { entries, logger } = collectingLogger();
+    const throwing = {
+      recipes: {
+        list: async () => {
+          throw "disk on fire";
+        },
       },
-    },
-  };
+    };
 
-  const res = await request(createApp(throwing, { logger })).get("/api/recipes");
+    const res = await request(createApp(throwing, { logger })).get("/api/recipes");
 
-  assert.equal(res.status, 500);
-  const failures = entries.filter((entry) => entry.msg === "request failed");
-  assert.equal(failures.length, 1);
-  assert.equal(failures[0].error, "disk on fire");
-});
-
-test("an error with a status outside 400-499 maps to 500", async () => {
-  const boomApp = createApp({
-    recipes: {
-      list: async () => {
-        throw Object.assign(new Error("boom"), { status: 501 });
-      },
-    },
-    weeks: {},
+    assert.equal(res.status, 500);
+    const failures = entries.filter((entry) => entry.msg === "request failed");
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0].error, "disk on fire");
   });
 
-  const res = await request(boomApp).get("/api/recipes");
-
-  assert.equal(res.status, 500);
-  assert.deepEqual(res.body, { error: "Internal server error" });
-});
-
-test("an error with a 4xx status keeps that status and its own message", async () => {
-  const notFoundApp = createApp({
-    recipes: {
-      list: async () => {
-        throw Object.assign(new Error("Gone"), { status: 404 });
+  test("maps an error with a status outside 400-499 to 500", async () => {
+    const boomApp = createApp({
+      recipes: {
+        list: async () => {
+          throw Object.assign(new Error("boom"), { status: 501 });
+        },
       },
-    },
-    weeks: {},
+      weeks: {},
+    });
+
+    const res = await request(boomApp).get("/api/recipes");
+
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { error: "Internal server error" });
   });
 
-  const res = await request(notFoundApp).get("/api/recipes");
+  test("keeps the status and message of an error with a 4xx status", async () => {
+    const notFoundApp = createApp({
+      recipes: {
+        list: async () => {
+          throw Object.assign(new Error("Gone"), { status: 404 });
+        },
+      },
+      weeks: {},
+    });
 
-  assert.equal(res.status, 404);
-  assert.deepEqual(res.body, { error: "Gone" });
+    const res = await request(notFoundApp).get("/api/recipes");
+
+    assert.equal(res.status, 404);
+    assert.deepEqual(res.body, { error: "Gone" });
+  });
+
+  test("returns 404 JSON for an unknown /api route", async () => {
+    assertJsonError(await request(app).get("/api/nope"), 404, "GET /api/nope");
+    assertJsonError(await request(app).delete("/api/recipes/x"), 404, "DELETE a recipe");
+  });
 });
 
-// ---------- Ingredients ----------
+describe("GET /manifest.webmanifest", () => {
+  test("serves the web app manifest with its media type", async () => {
+    const res = await request(app).get("/manifest.webmanifest");
 
-async function addIngredient(name, unit = "g") {
-  const res = await request(app).post("/api/ingredients").send({ name, unit });
-  assert.equal(res.status, 201, name);
-  return res.body;
-}
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /^application\/manifest\+json/);
+  });
 
-test("GET /api/ingredients returns an empty catalog at first", async () => {
-  const res = await request(app).get("/api/ingredients");
+  test("serves every icon that the manifest names with its type", async () => {
+    const manifest = JSON.parse((await request(app).get("/manifest.webmanifest")).text);
 
-  assert.equal(res.status, 200);
-  assert.match(res.headers["content-type"], /application\/json/);
-  assert.deepEqual(res.body, { ingredients: [] });
+    for (const icon of manifest.icons) {
+      const file = await request(app).get(`/${icon.src}`);
+      assert.equal(file.status, 200, icon.src);
+      assert.equal(file.headers["content-type"], icon.type, icon.src);
+    }
+  });
+});
+
+describe("GET /api/health", () => {
+  test("returns 200 with the version when the data directory is writable", async () => {
+    const healthApp = createApp(createStores({ dataDir: dataDir() }), {
+      dataDir: dataDir(),
+      version: "1.2.3",
+    });
+
+    const res = await request(healthApp).get("/api/health");
+
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /application\/json/);
+    assert.deepEqual(res.body, { status: "ok", version: "1.2.3" });
+  });
+
+  test("returns 503 when the data directory isn't writable", {
+    skip: skipAsRoot("root can write to any directory"),
+  }, async () => {
+    // afterEach removes the directory, which is empty, so the mode can stay.
+    await chmod(dataDir(), 0o500);
+    const healthApp = createApp(createStores({ dataDir: dataDir() }), {
+      dataDir: dataDir(),
+      version: "1.2.3",
+    });
+
+    const res = await request(healthApp).get("/api/health");
+
+    assert.equal(res.status, 503);
+    assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
+  });
+
+  test("returns 503 when the data directory can't be entered", {
+    skip: skipAsRoot("root can enter any directory"),
+  }, async () => {
+    // afterEach removes the directory, which is empty, so the mode can stay.
+    await chmod(dataDir(), 0o600);
+    const healthApp = createApp(createStores({ dataDir: dataDir() }), {
+      dataDir: dataDir(),
+      version: "1.2.3",
+    });
+
+    const res = await request(healthApp).get("/api/health");
+
+    assert.equal(res.status, 503);
+    assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
+  });
+
+  test("returns 503 when the data directory doesn't exist", async () => {
+    const missing = path.join(dataDir(), "missing");
+    const healthApp = createApp(createStores({ dataDir: missing }), {
+      dataDir: missing,
+      version: "1.2.3",
+    });
+
+    const res = await request(healthApp).get("/api/health");
+
+    assert.equal(res.status, 503);
+    assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
+  });
+
+  test("logs nothing for a successful check", async () => {
+    const { entries, logger } = collectingLogger();
+
+    await request(
+      createApp(createStores({ dataDir: dataDir() }), { dataDir: dataDir(), logger }),
+    ).get("/api/health");
+
+    assert.deepEqual(entries, []);
+  });
+
+  test("logs the error code of a failed check", async () => {
+    const { entries, logger } = collectingLogger();
+    const missing = path.join(dataDir(), "missing");
+
+    await request(createApp(createStores({ dataDir: missing }), { dataDir: missing, logger })).get(
+      "/api/health",
+    );
+
+    assert.deepEqual(
+      entries.map((entry) => ({
+        level: entry.level,
+        msg: entry.msg,
+        path: entry.path,
+        status: entry.status,
+        error: entry.error,
+      })),
+      [
+        {
+          level: "error",
+          msg: "health check failed",
+          path: undefined,
+          status: undefined,
+          error: "ENOENT",
+        },
+        { level: "info", msg: "request", path: "/api/health", status: 503, error: undefined },
+      ],
+    );
+  });
+});
+
+describe("GET /api/recipes", () => {
+  test("returns an empty recipe book at first", async () => {
+    const res = await request(app).get("/api/recipes");
+
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /application\/json/);
+    assert.deepEqual(res.body, { recipes: [] });
+  });
+});
+
+describe("POST /api/recipes", () => {
+  test("returns 201 with the new recipe, which GET lists", async () => {
+    const res = await request(app).post("/api/recipes").send({ name: "  Gnocchi  carbonara " });
+
+    assert.equal(res.status, 201);
+    assert.equal(typeof res.body.id, "string");
+    assert.deepEqual(res.body, {
+      id: res.body.id,
+      name: "Gnocchi carbonara",
+      archived: false,
+      ingredients: [],
+    });
+
+    const get = await request(app).get("/api/recipes");
+    assert.deepEqual(get.body, { recipes: [res.body] });
+  });
+
+  test("returns 400 JSON without a body", async () => {
+    assertJsonError(await request(app).post("/api/recipes"), 400, "no body at all");
+  });
+
+  test("stores the measureId of an ingredient, which GET returns", async () => {
+    const onion = await addOnionWithMedium();
+    const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
+
+    const created = await request(app)
+      .post("/api/recipes")
+      .send({ name: "Soup", ingredients: [line] });
+
+    assert.equal(created.status, 201);
+    assert.deepEqual((await request(app).get("/api/recipes")).body.recipes[0].ingredients, [line]);
+  });
+});
+
+describe("PATCH /api/recipes/:id", () => {
+  test("renames a recipe", async () => {
+    const soup = await addRecipe("Soup");
+
+    const res = await request(app).patch(`/api/recipes/${soup.id}`).send({ name: "Tomato soup" });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { ...soup, name: "Tomato soup" });
+  });
+
+  test("accepts a name with the recipe's own name key", async () => {
+    const cafe = await addRecipe("Cafe");
+    const res = await request(app).patch(`/api/recipes/${cafe.id}`).send({ name: "Café" });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { ...cafe, name: "Café" });
+  });
+
+  test("archives and restores a recipe", async () => {
+    const soup = await addRecipe("Soup");
+
+    const archive = await request(app).patch(`/api/recipes/${soup.id}`).send({ archived: true });
+    assert.equal(archive.status, 200);
+    assert.deepEqual(archive.body, { ...soup, archived: true });
+
+    const restore = await request(app).patch(`/api/recipes/${soup.id}`).send({ archived: false });
+    assert.deepEqual(restore.body, soup);
+  });
+
+  test("returns 400 JSON without a body", async () => {
+    const soup = await addRecipe("Soup");
+
+    assertJsonError(await request(app).patch(`/api/recipes/${soup.id}`), 400, "no body at all");
+  });
+
+  test("saves the ingredients that it sets", async () => {
+    const onion = await addIngredient("Onion");
+    const egg = await addIngredient("Egg", "pcs");
+
+    const created = await request(app)
+      .post("/api/recipes")
+      .send({ name: "Omelette", ingredients: [{ ingredientId: egg.id, quantity: 2 }] });
+    assert.equal(created.status, 201);
+    assert.deepEqual(created.body.ingredients, [{ ingredientId: egg.id, quantity: 2 }]);
+
+    const updated = await request(app)
+      .patch(`/api/recipes/${created.body.id}`)
+      .send({
+        name: "Onion omelette",
+        ingredients: [
+          { ingredientId: egg.id, quantity: 2 },
+          { ingredientId: onion.id, quantity: 50.5 },
+        ],
+      });
+    assert.equal(updated.status, 200);
+    assert.deepEqual((await request(app).get("/api/recipes")).body, { recipes: [updated.body] });
+  });
+});
+
+describe("GET /api/ingredients", () => {
+  test("returns an empty catalog at first", async () => {
+    const res = await request(app).get("/api/ingredients");
+
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /application\/json/);
+    assert.deepEqual(res.body, { ingredients: [] });
+  });
+
+  test("returns 500 for a corrupt ingredients file, like GET /api/recipes", async () => {
+    await writeDataFile(dataDir(), "v2/ingredients.json", "{ not json");
+
+    for (const url of ["/api/ingredients", "/api/recipes"]) {
+      const res = await request(app).get(url);
+      assert.equal(res.status, 500, url);
+      assert.deepEqual(res.body, { error: "Internal server error" }, url);
+    }
+  });
 });
 
 describe("POST /api/ingredients", () => {
@@ -537,6 +591,14 @@ describe("POST /api/ingredients", () => {
 
   test("returns 400 JSON without a body", async () => {
     assertJsonError(await request(app).post("/api/ingredients"), 400, "no body at all");
+  });
+
+  test("returns each measure that it saves with an ID", async () => {
+    const onion = await addOnionWithMedium();
+
+    assert.equal(onion.measures.length, 1);
+    assert.equal(typeof onion.measures[0].id, "string");
+    assert.deepEqual(onion.measures[0], { id: onion.measures[0].id, name: "medium", amount: 150 });
   });
 });
 
@@ -569,189 +631,121 @@ describe("PATCH /api/ingredients/:id", () => {
     assert.equal(res.status, 200);
     assert.deepEqual(res.body, { ...milk, archived: true });
   });
+
+  test("returns 409 when it removes a measure that an archived recipe uses", async () => {
+    const onion = await addOnionWithMedium();
+    const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 1 };
+    const soup = await request(app)
+      .post("/api/recipes")
+      .send({ name: "Soup", ingredients: [line] });
+    await request(app).patch(`/api/recipes/${soup.body.id}`).send({ archived: true });
+
+    const res = await request(app).patch(`/api/ingredients/${onion.id}`).send({ measures: [] });
+
+    assertJsonError(res, 409, "measure in use");
+    assert.match(res.body.error, /medium/);
+    const listed = await request(app).get("/api/ingredients");
+    assert.deepEqual(listed.body.ingredients[0].measures, onion.measures);
+  });
 });
 
-test("POST and PATCH /api/recipes save ingredients, and GET returns them", async () => {
-  const onion = await addIngredient("Onion");
-  const egg = await addIngredient("Egg", "pcs");
+describe("GET /api/weeks/:week", () => {
+  test("returns 200 with a complete week of empty menus", async () => {
+    const res = await request(app).get(`/api/weeks/${WEEK}`);
 
-  const created = await request(app)
-    .post("/api/recipes")
-    .send({ name: "Omelette", ingredients: [{ ingredientId: egg.id, quantity: 2 }] });
-  assert.equal(created.status, 201);
-  assert.deepEqual(created.body.ingredients, [{ ingredientId: egg.id, quantity: 2 }]);
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /application\/json/);
+    assert.deepEqual(res.body, blankWeek());
+  });
 
-  const updated = await request(app)
-    .patch(`/api/recipes/${created.body.id}`)
-    .send({
-      name: "Onion omelette",
-      ingredients: [
-        { ingredientId: egg.id, quantity: 2 },
-        { ingredientId: onion.id, quantity: 50.5 },
-      ],
-    });
-  assert.equal(updated.status, 200);
-  assert.deepEqual((await request(app).get("/api/recipes")).body, { recipes: [updated.body] });
-});
-
-async function addOnionWithMedium() {
-  const res = await request(app)
-    .post("/api/ingredients")
-    .send({ name: "Onion", unit: "g", measures: [{ name: "medium", amount: 150 }] });
-  assert.equal(res.status, 201);
-  return res.body;
-}
-
-test("POST /api/ingredients with measures returns them with IDs", async () => {
-  const onion = await addOnionWithMedium();
-
-  assert.equal(onion.measures.length, 1);
-  assert.equal(typeof onion.measures[0].id, "string");
-  assert.deepEqual(onion.measures[0], { id: onion.measures[0].id, name: "medium", amount: 150 });
-});
-
-test("POST /api/recipes with a measureId returns it in GET /api/recipes", async () => {
-  const onion = await addOnionWithMedium();
-  const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 2 };
-
-  const created = await request(app)
-    .post("/api/recipes")
-    .send({ name: "Soup", ingredients: [line] });
-
-  assert.equal(created.status, 201);
-  assert.deepEqual((await request(app).get("/api/recipes")).body.recipes[0].ingredients, [line]);
-});
-
-test("PATCH /api/ingredients/ID removing a measure that an archived recipe uses returns 409", async () => {
-  const onion = await addOnionWithMedium();
-  const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 1 };
-  const soup = await request(app)
-    .post("/api/recipes")
-    .send({ name: "Soup", ingredients: [line] });
-  await request(app).patch(`/api/recipes/${soup.body.id}`).send({ archived: true });
-
-  const res = await request(app).patch(`/api/ingredients/${onion.id}`).send({ measures: [] });
-
-  assertJsonError(res, 409, "measure in use");
-  assert.match(res.body.error, /medium/);
-  const listed = await request(app).get("/api/ingredients");
-  assert.deepEqual(listed.body.ingredients[0].measures, onion.measures);
-});
-
-test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes return 500", async () => {
-  await writeDataFile(dataDir(), "v2/ingredients.json", "{ not json");
-
-  for (const url of ["/api/ingredients", "/api/recipes"]) {
-    const res = await request(app).get(url);
-    assert.equal(res.status, 500, url);
-    assert.deepEqual(res.body, { error: "Internal server error" }, url);
-  }
-});
-
-// ---------- Weeks ----------
-
-test("GET /api/weeks/WEEK returns 200 with a complete week of empty menus", async () => {
-  const res = await request(app).get(`/api/weeks/${WEEK}`);
-
-  assert.equal(res.status, 200);
-  assert.match(res.headers["content-type"], /application\/json/);
-  assert.deepEqual(res.body, blankWeek());
-});
-
-test("PUT a valid menu returns 200 with the saved slot and a later GET reflects it", async () => {
-  const soup = await addRecipe("Soup");
-  const salad = await addRecipe("Salad");
-  const items = [
-    { recipeId: soup.id, servings: 1.5 },
-    { recipeId: salad.id, servings: 2 },
-  ];
-
-  const put = await request(app).put(`/api/weeks/${WEEK}/wed/lunch`).send({ items });
-  assert.equal(put.status, 200);
-  assert.match(put.headers["content-type"], /application\/json/);
-  assert.deepEqual(put.body, { week: WEEK, day: "wed", meal: "lunch", items });
-
-  const get = await request(app).get(`/api/weeks/${WEEK}`);
-  const expected = blankWeek();
-  expected.wed.lunch = { items };
-  assert.deepEqual(get.body, expected);
-});
-
-test("a PUT in one week doesn't change another week", async () => {
-  const soup = await addRecipe("Soup");
-  await request(app)
-    .put(`/api/weeks/${WEEK}/wed/lunch`)
-    .send({ items: [{ recipeId: soup.id, servings: 1 }] });
-
-  const get = await request(app).get(`/api/weeks/${OTHER_WEEK}`);
-  assert.equal(get.status, 200);
-  assert.deepEqual(get.body, blankWeek());
-});
-
-test("PUT accepts an empty menu (clearing a slot)", async () => {
-  const soup = await addRecipe("Soup");
-  await request(app)
-    .put(`/api/weeks/${WEEK}/mon/dinner`)
-    .send({ items: [{ recipeId: soup.id, servings: 1 }] });
-
-  const put = await request(app).put(`/api/weeks/${WEEK}/mon/dinner`).send({ items: [] });
-  assert.equal(put.status, 200);
-
-  const get = await request(app).get(`/api/weeks/${WEEK}`);
-  assert.deepEqual(get.body.mon.dinner, { items: [] });
-});
-
-test("PUT accepts an archived recipe, so older menus stay savable", async () => {
-  const soup = await addRecipe("Soup");
-  await request(app).patch(`/api/recipes/${soup.id}`).send({ archived: true });
-
-  const put = await request(app)
-    .put(`/api/weeks/${WEEK}/tue/lunch`)
-    .send({ items: [{ recipeId: soup.id, servings: 3 }] });
-
-  assert.equal(put.status, 200);
-});
-
-test("GET with an invalid week returns 404 JSON", async () => {
-  for (const week of INVALID_WEEKS) {
-    assertJsonError(await request(app).get(`/api/weeks/${week}`), 404, week);
-  }
-});
-
-test("PUT with an unknown week, day, or meal returns 404 JSON and saves nothing", async () => {
-  const urls = [
-    ...INVALID_WEEKS.map((week) => `/api/weeks/${week}/mon/lunch`),
-    `/api/weeks/${WEEK}/funday/lunch`,
-    `/api/weeks/${WEEK}/mon/brunch`,
-  ];
-  for (const url of urls) {
-    assertJsonError(await request(app).put(url).send({ items: [] }), 404, url);
-  }
-  assert.deepEqual(await readdir(dataDir()), []);
+  test("returns 404 JSON for an invalid week", async () => {
+    for (const week of INVALID_WEEKS) {
+      assertJsonError(await request(app).get(`/api/weeks/${week}`), 404, week);
+    }
+  });
 });
 
 describe("PUT /api/weeks/:week/:day/:meal", () => {
+  test("returns 200 with the saved slot, which a later GET returns", async () => {
+    const soup = await addRecipe("Soup");
+    const salad = await addRecipe("Salad");
+    const items = [
+      { recipeId: soup.id, servings: 1.5 },
+      { recipeId: salad.id, servings: 2 },
+    ];
+
+    const put = await request(app).put(`/api/weeks/${WEEK}/wed/lunch`).send({ items });
+    assert.equal(put.status, 200);
+    assert.match(put.headers["content-type"], /application\/json/);
+    assert.deepEqual(put.body, { week: WEEK, day: "wed", meal: "lunch", items });
+
+    const get = await request(app).get(`/api/weeks/${WEEK}`);
+    const expected = blankWeek();
+    expected.wed.lunch = { items };
+    assert.deepEqual(get.body, expected);
+  });
+
+  test("leaves another week unchanged", async () => {
+    const soup = await addRecipe("Soup");
+    await request(app)
+      .put(`/api/weeks/${WEEK}/wed/lunch`)
+      .send({ items: [{ recipeId: soup.id, servings: 1 }] });
+
+    const get = await request(app).get(`/api/weeks/${OTHER_WEEK}`);
+    assert.equal(get.status, 200);
+    assert.deepEqual(get.body, blankWeek());
+  });
+
+  test("accepts an empty menu to clear a slot", async () => {
+    const soup = await addRecipe("Soup");
+    await request(app)
+      .put(`/api/weeks/${WEEK}/mon/dinner`)
+      .send({ items: [{ recipeId: soup.id, servings: 1 }] });
+
+    const put = await request(app).put(`/api/weeks/${WEEK}/mon/dinner`).send({ items: [] });
+    assert.equal(put.status, 200);
+
+    const get = await request(app).get(`/api/weeks/${WEEK}`);
+    assert.deepEqual(get.body.mon.dinner, { items: [] });
+  });
+
+  test("accepts an archived recipe, so older menus stay savable", async () => {
+    const soup = await addRecipe("Soup");
+    await request(app).patch(`/api/recipes/${soup.id}`).send({ archived: true });
+
+    const put = await request(app)
+      .put(`/api/weeks/${WEEK}/tue/lunch`)
+      .send({ items: [{ recipeId: soup.id, servings: 3 }] });
+
+    assert.equal(put.status, 200);
+  });
+
+  test("returns 404 JSON and saves nothing for an unknown week, day, or meal", async () => {
+    const urls = [
+      ...INVALID_WEEKS.map((week) => `/api/weeks/${week}/mon/lunch`),
+      `/api/weeks/${WEEK}/funday/lunch`,
+      `/api/weeks/${WEEK}/mon/brunch`,
+    ];
+    for (const url of urls) {
+      assertJsonError(await request(app).put(url).send({ items: [] }), 404, url);
+    }
+    assert.deepEqual(await readdir(dataDir()), []);
+  });
+
   test("returns 400 JSON without a body", async () => {
     const res = await request(app).put(`/api/weeks/${WEEK}/mon/lunch`);
 
     assertJsonError(res, 400, "no body at all");
   });
-});
 
-test("PUT with a malformed JSON body returns 400 JSON", async () => {
-  const res = await request(app)
-    .put(`/api/weeks/${WEEK}/mon/lunch`)
-    .set("Content-Type", "application/json")
-    .send('{"items":');
+  test("returns 400 JSON for a malformed JSON body", async () => {
+    const res = await request(app)
+      .put(`/api/weeks/${WEEK}/mon/lunch`)
+      .set("Content-Type", "application/json")
+      .send('{"items":');
 
-  assertJsonError(res, 400, "malformed JSON");
-});
-
-// ---------- Other routes ----------
-
-test("unknown /api routes return 404 JSON", async () => {
-  assertJsonError(await request(app).get("/api/nope"), 404, "GET /api/nope");
-  assertJsonError(await request(app).delete("/api/recipes/x"), 404, "DELETE a recipe");
+    assertJsonError(res, 400, "malformed JSON");
+  });
 });
 
 describe("GET /:file", () => {
