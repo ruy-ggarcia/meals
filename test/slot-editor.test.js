@@ -3,7 +3,7 @@
 // for the harness and the DOM library choice.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { assertFocus, loadSlotEditorDialog } from "./dom-helpers.js";
 
 function recipe(id, name, archived = false) {
@@ -327,4 +327,52 @@ test("a recipe name with HTML renders as text, not markup", () => {
   const name = itemRows()[0].querySelector(".recipe-name");
   assert.equal(name.textContent, "<b>Bold</b> soup");
   assert.equal(name.querySelector("b"), null);
+});
+
+describe("slot editor", () => {
+  test("moves the focus to Done when the 20th recipe fills the menu", () => {
+    const recipes = [
+      ...RECIPES,
+      ...Array.from({ length: 20 }, (_, index) => recipe(`filler-${index}`, `Filler ${index}`)),
+    ];
+    const items = recipes.slice(4, 23).map((r) => [r.id, 1]);
+    openEditor({ menu: menu(...items), recipes });
+    assert.equal(itemRows().length, 19);
+    type("Filler");
+
+    keydownOn(search(), "Enter");
+
+    assert.equal(itemRows().length, 20);
+    assert.equal(search().disabled, true);
+    assertFocus(document, document.querySelector(".done"));
+  });
+
+  test("stops offering a recipe once you add it", () => {
+    openEditor();
+    type("sal");
+
+    keydownOn(search(), "Enter");
+
+    assert.deepEqual(
+      optionEls().map((option) => option.textContent),
+      ["Lentil soup", "Omelette"],
+    );
+  });
+
+  test("points aria-activedescendant at the highlighted recipe", () => {
+    openEditor();
+    const highlightedId = () => search().getAttribute("aria-activedescendant");
+    assert.equal(highlightedId(), optionEls()[0].id);
+
+    keydownOn(search(), "ArrowDown");
+
+    assert.equal(highlightedId(), optionEls()[1].id);
+    assert.ok(optionEls()[1].id, "the option has an ID");
+  });
+
+  test("announces the servings through a polite live region", () => {
+    openEditor({ menu: menu(["soup", 2]) });
+
+    assert.equal(document.querySelector(".servings").getAttribute("aria-live"), "polite");
+  });
 });
