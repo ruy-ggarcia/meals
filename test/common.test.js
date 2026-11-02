@@ -12,11 +12,15 @@ const COMMON = fileURLToPath(new URL("../scripts/lib/common.sh", import.meta.url
 let host;
 let dir;
 
-/** Runs the bash SCRIPT after it sources common.sh, with the host as MEALS_ROOT. */
+/**
+ * Runs the bash SCRIPT after it sources common.sh, with the host as MEALS_ROOT.
+ * The C locale keeps the messages of find and bash in English, as the tests
+ * expect them, whatever language the machine speaks.
+ */
 function runWithCommon(script) {
   return spawnSync("bash", ["-c", `source "${COMMON}"\n${script}`], {
     encoding: "utf8",
-    env: { ...process.env, MEALS_ROOT: host.root },
+    env: { ...process.env, LC_ALL: "C", MEALS_ROOT: host.root },
   });
 }
 

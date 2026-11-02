@@ -138,6 +138,8 @@ class Host {
     /** @type {NodeJS.ProcessEnv} */
     const env = {
       ...process.env,
+      // The messages of the host tools, such as those of find, stay in English.
+      LC_ALL: "C",
       MEALS_ROOT: this.root,
       MEALS_VERIFY_TIMEOUT: "5",
       // A test can replace any other command with an executable stub in bin/.
