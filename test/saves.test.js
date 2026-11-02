@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { sameMenu } from "../public/menus.js";
 import { createSaves } from "../public/saves.js";
+import { within } from "./helpers.js";
 
 function menu(...recipeIds) {
   return { items: recipeIds.map((recipeId) => ({ recipeId, servings: 1 })) };
@@ -40,11 +41,6 @@ function fakeServer() {
 // Lets pending promise callbacks run.
 function tick() {
   return new Promise((resolve) => setImmediate(resolve));
-}
-
-// Waits with a timer that keeps Node.js running: AbortSignal.timeout doesn't.
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function setup({ timeoutMs = 1000 } = {}) {
@@ -188,8 +184,7 @@ test("a save gives up after the timeout", async () => {
   const { saves, menus, statuses } = setup({ timeoutMs: 20 });
   menus.set(KEY, SOUP);
   const done = saves.queueSave(KEY); // the fake server never answers
-  await sleep(50);
-  await done;
+  await within(done, "the save never gave up"); // its timer also keeps Node.js running
   assert.equal(statuses.get(KEY), "error");
 });
 
@@ -402,8 +397,7 @@ test("a page-hide save gives up after the timeout", async () => {
   const { saves, menus, statuses } = setup({ timeoutMs: 20 });
   menus.set(KEY, SOUP);
   saves.flush([KEY]); // the fake server never answers
-  await sleep(50);
-  await saves.settle();
+  await within(saves.settle(), "the page-hide save never gave up");
   assert.equal(statuses.get(KEY), "error");
 });
 
