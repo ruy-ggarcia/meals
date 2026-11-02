@@ -1,0 +1,15 @@
+{
+  "measure": {
+    "MAX_MEASURES": 20
+  },
+  "menu": {
+    "MAX_ITEMS": 20,
+    "MAX_SERVINGS": 99,
+    "MIN_SERVINGS": 0.5
+  },
+  "recipe": {
+    "MAX_INGREDIENTS": 50,
+    "MAX_QUANTITY": 10000,
+    "MIN_QUANTITY": 0.01
+  }
+}
