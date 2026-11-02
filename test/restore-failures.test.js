@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rename, symlink } from "node:fs/promises";
+import { mkdir, rename, symlink } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { assertExit, createHost, DATA, replaceHost } from "./host-helpers.js";
-import { assertOriginalData as assertDataOf, BACKUP } from "./restore-helpers.js";
+import {
+  assertDataFiles,
+  assertExit,
+  assertOriginalData,
+  BACKUP,
+  composeCall,
+  createHost,
+  DATA,
+  replaceHost,
+} from "./host-helpers.js";
 
 let host;
 
@@ -15,11 +23,6 @@ afterEach(async () => {
   await host.cleanup();
 });
 
-/** Fails unless the data directory holds exactly DATA. */
-function assertOriginalData() {
-  return assertDataOf(host);
-}
-
 test("meals-restore starts the app again when the pre-restore backup fails", async () => {
   await host.makeBackup(BACKUP);
   await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
@@ -30,7 +33,7 @@ test("meals-restore starts the app again when the pre-restore backup fails", asy
   assertExit(result, 1);
   assert.match(result.stderr, /The pre-restore backup failed, so nothing changed/);
   assert.equal(await host.exists("data/v2/weeks/2026-09-28.json"), true);
-  assert.match((await host.calls()).at(-1), / compose .* up --detach$/);
+  assert.match((await host.calls()).at(-1), composeCall("up"));
 });
 
 test("meals-restore says so when the app doesn't start again after a failed pre-restore backup", async () => {
@@ -113,7 +116,7 @@ test("meals-restore starts the app again when the retention deletes the new pre-
     /Error: Couldn't find the new pre-restore backup, so nothing changed, and version 0\.2\.0 runs again\./,
   );
   assert.equal(await host.exists("data/v2/weeks/2026-09-28.json"), true);
-  assert.match((await host.calls()).at(-1), / compose .* up --detach$/);
+  assert.match((await host.calls()).at(-1), composeCall("up"));
 });
 
 test("meals-restore starts the app again when it can't list the backups after the pre-restore backup", async () => {
@@ -140,7 +143,7 @@ test("meals-restore starts the app again when it can't list the backups after th
     /Error: Couldn't find the new pre-restore backup, so nothing changed, and version 0\.2\.0 runs again\./,
   );
   assert.equal(await host.exists("data/v2/weeks/2026-09-28.json"), true);
-  assert.match((await host.calls()).at(-1), / compose .* up --detach$/);
+  assert.match((await host.calls()).at(-1), composeCall("up"));
 });
 
 test("meals-restore keeps data/ and says how to start the app when the swap fails", async () => {
@@ -161,9 +164,7 @@ test("meals-restore keeps data/ and says how to start the app when the swap fail
     ),
     result.stderr,
   );
-  for (const [relPath, content] of Object.entries(DATA)) {
-    assert.equal(await host.readData(relPath), content, relPath);
-  }
+  await assertDataFiles(host);
   assert.equal(await host.exists("data/v2/weeks/2026-09-28.json"), true);
   assert.equal(await host.exists("data.old"), false);
 });
@@ -190,13 +191,7 @@ test("meals-restore says where the data is when it can't move data.old back", as
     result.stderr,
   );
   assert.doesNotMatch(result.stderr, /wasn't replaced|To start it again/);
-  for (const [relPath, content] of Object.entries(DATA)) {
-    assert.equal(
-      await readFile(path.join(host.root, "data.old", relPath), "utf8"),
-      content,
-      relPath,
-    );
-  }
+  await assertDataFiles(host, "data.old");
 });
 
 test("meals-restore restores the data, and says so, when it can't set the mode of data/", async () => {
@@ -207,7 +202,7 @@ test("meals-restore restores the data, and says so, when it can't set the mode o
   const result = await host.run("meals-restore", BACKUP);
 
   assertExit(result, 0);
-  await assertOriginalData();
+  await assertOriginalData(host);
   assert.ok(
     result.stdout.includes(
       `Couldn't set the mode of data/ to 2775. To set it, run sudo chmod 2775 ${host.root}/data.`,
@@ -226,7 +221,7 @@ test("meals-restore restores the data, and says so, when it can't remove data.ol
   const result = await host.run("meals-restore", BACKUP);
 
   assertExit(result, 0);
-  await assertOriginalData();
+  await assertOriginalData(host);
   assert.ok(
     result.stdout.includes(`Couldn't remove the old data in ${host.root}/data.old.`),
     result.stdout,
@@ -245,13 +240,7 @@ test("meals-restore keeps data.old when data/ is missing", async () => {
 
   assertExit(result, 1);
   assert.match(result.stderr, /data\/ wasn't replaced, and the app is stopped\./);
-  for (const [relPath, content] of Object.entries(DATA)) {
-    assert.equal(
-      await readFile(path.join(host.root, "data.old", relPath), "utf8"),
-      content,
-      relPath,
-    );
-  }
+  await assertDataFiles(host, "data.old");
 });
 
 test("meals-restore fails without changing anything on a damaged archive", async () => {
@@ -262,7 +251,7 @@ test("meals-restore fails without changing anything on a damaged archive", async
   assertExit(result, 1);
   assert.match(result.stdout, /The archive is damaged/);
   assert.deepEqual(await host.calls(), []);
-  await assertOriginalData();
+  await assertOriginalData(host);
 });
 
 test("meals-restore fails without changing anything on invalid JSON", async () => {
@@ -326,7 +315,7 @@ test("meals-restore names the pre-restore backup when the app doesn't come back 
 
   assertExit(result, 1);
   assert.match(result.stderr, /didn't come back healthy/);
-  await assertOriginalData();
+  await assertOriginalData(host);
   const preRestore = (await host.backups()).filter((name) => name.includes("-pre-restore-v0.2.0"));
   assert.equal(preRestore.length, 1);
   assert.ok(result.stderr.includes(`meals-restore ${preRestore[0]}`), result.stderr);
@@ -343,7 +332,7 @@ test("meals-restore goes on, and says so, when it can't remove a stale staging d
   const result = await host.run("meals-restore", BACKUP);
 
   assertExit(result, 0);
-  await assertOriginalData();
+  await assertOriginalData(host);
   assert.ok(
     result.stdout.includes(
       `Couldn't remove ${stale}, which an interrupted restore left. To free the space, run sudo rm -rf ${stale}.`,

@@ -76,7 +76,7 @@ test("meals-restore-check first removes what an interrupted check left", async (
   assertExit(result, 0);
   assert.deepEqual(await leftovers(), []);
   assert.match(result.stdout, /Removed \.restore-check\.AbC123, which an interrupted check left\./);
-  const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
+  const docker = await host.dockerCalls();
   assert.ok(docker[0].endsWith(" down"), docker.join("\n"));
 });
 
@@ -213,9 +213,7 @@ async function checkLatestBackup() {
 /** The calls to docker that the check made in its own Compose project. */
 async function checkComposeCalls() {
   const project = `--project-name meals-restore-check --project-directory ${host.root}/.restore-check.`;
-  return (await host.calls()).filter(
-    (call) => call.startsWith("docker ") && call.includes(project),
-  );
+  return (await host.dockerCalls()).filter((call) => call.includes(project));
 }
 
 describe("meals-restore-check", () => {
@@ -243,7 +241,7 @@ describe("meals-restore-check", () => {
   test("keeps every Docker call in its own Compose project", async () => {
     await checkLatestBackup();
 
-    const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
+    const docker = await host.dockerCalls();
     assert.deepEqual(
       await checkComposeCalls(),
       docker,
@@ -293,7 +291,7 @@ describe("meals-restore-check", () => {
       /Removed \.restore-check\.AbC123, which an interrupted check left\./,
     );
     assert.deepEqual(await leftovers(), []);
-    const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
+    const docker = await host.dockerCalls();
     assert.ok(docker[0].endsWith(" down"), docker.join("\n"));
   });
 

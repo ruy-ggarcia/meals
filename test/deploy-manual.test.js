@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { blockEnvWrite, dockerCalls } from "./deploy-helpers.js";
-import { assertExit, createHost, imageFor, replaceHost } from "./host-helpers.js";
+import {
+  assertExit,
+  blockEnvWrite,
+  composeCall,
+  createHost,
+  imageFor,
+  replaceHost,
+} from "./host-helpers.js";
 
 let host;
 
@@ -32,7 +38,7 @@ test("meals-deploy VERSION doesn't put the host on hold when the data has invali
   assertExit(result, 1);
   assert.match(result.stderr, /The data failed validation/);
   assert.equal(await host.exists("hold"), false);
-  assert.ok(!(await dockerCalls(host)).some((call) => / compose .* stop$/.test(call)));
+  assert.deepEqual(await host.composeCalls("stop"), []);
 });
 
 test("meals-deploy VERSION doesn't put the host on hold when the pre-deploy backup fails", async () => {
@@ -77,7 +83,7 @@ test("meals-deploy VERSION starts the previous version again, without a hold, wh
   assert.equal(env.MEALS_VERSION, "0.2.0");
   assert.equal(await host.exists("hold"), false);
   assert.equal(await host.exists("failed"), false);
-  assert.match((await dockerCalls(host)).at(-1), / compose .* up --detach$/);
+  assert.match((await host.dockerCalls()).at(-1), composeCall("up"));
   assert.match(result.stdout, /Put the host on hold/);
   assert.match(result.stdout, /Ended the hold, because version 0\.3\.0 wasn't deployed\./);
 });
@@ -115,7 +121,7 @@ test("meals-deploy VERSION fails on a release without image.txt", async () => {
 
   assertExit(result, 1);
   assert.match(result.stderr, /Error: Version 0\.3\.0 has no image\.txt\./);
-  assert.deepEqual(await dockerCalls(host), []);
+  assert.deepEqual(await host.dockerCalls(), []);
   assert.equal(await host.exists("hold"), false);
 });
 

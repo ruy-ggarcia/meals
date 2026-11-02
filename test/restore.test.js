@@ -2,8 +2,15 @@ import assert from "node:assert/strict";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertExit, assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
-import { assertOriginalData as assertDataOf, BACKUP } from "./restore-helpers.js";
+import {
+  assertExit,
+  assertOriginalData,
+  assertWaitsForLock,
+  BACKUP,
+  composeCall,
+  createHost,
+  skipAsRoot,
+} from "./host-helpers.js";
 
 let host;
 
@@ -15,11 +22,6 @@ afterEach(async () => {
   await host.cleanup();
 });
 
-/** Fails unless the data directory holds exactly DATA. */
-function assertOriginalData() {
-  return assertDataOf(host);
-}
-
 test("a backup by meals-backup and a restore by meals-restore give back identical data", async () => {
   assertExit(await host.run("meals-backup", "daily"), 0);
   const [daily] = await host.backups();
@@ -29,7 +31,7 @@ test("a backup by meals-backup and a restore by meals-restore give back identica
   const result = await host.run("meals-restore", daily);
 
   assertExit(result, 0);
-  await assertOriginalData();
+  await assertOriginalData(host);
 });
 
 test("meals-restore replaces data with invalid JSON", async () => {
@@ -39,7 +41,7 @@ test("meals-restore replaces data with invalid JSON", async () => {
   const result = await host.run("meals-restore", BACKUP);
 
   assertExit(result, 0);
-  await assertOriginalData();
+  await assertOriginalData(host);
 });
 
 test("meals-restore works from a working directory that it can't read", {
@@ -51,7 +53,7 @@ test("meals-restore works from a working directory that it can't read", {
   const result = await host.runFromUnreadableDir("meals-restore", BACKUP);
 
   assertExit(result, 0);
-  await assertOriginalData();
+  await assertOriginalData(host);
 });
 
 test("meals-restore removes the staging directories that an interrupted restore left", async () => {
@@ -123,7 +125,7 @@ describe("meals-restore", () => {
   test("replaces the data with the data of the backup", async () => {
     await restoreChangedData();
 
-    await assertOriginalData();
+    await assertOriginalData(host);
   });
 
   test("takes a pre-restore backup of the previous data", async () => {
@@ -140,8 +142,8 @@ describe("meals-restore", () => {
     await restoreChangedData();
 
     const calls = await host.calls();
-    const stop = calls.findIndex((call) => / compose .* stop$/.test(call));
-    const up = calls.findIndex((call) => / compose .* up --detach --wait /.test(call));
+    const stop = calls.findIndex((call) => composeCall("stop").test(call));
+    const up = calls.findIndex((call) => composeCall("up --wait").test(call));
     assert.ok(stop >= 0 && up > stop, calls.join("\n"));
   });
 
@@ -164,7 +166,7 @@ describe("meals-restore", () => {
     const result = await host.run("meals-restore", `${host.root}/backups/${BACKUP}`);
 
     assertExit(result, 0);
-    await assertOriginalData();
+    await assertOriginalData(host);
   });
 
   test("restores a backup of an older version", async () => {
@@ -175,7 +177,7 @@ describe("meals-restore", () => {
     const result = await host.run("meals-restore", older);
 
     assertExit(result, 0);
-    await assertOriginalData();
+    await assertOriginalData(host);
   });
 
   test("waits for the lock that another script holds", async (t) => {

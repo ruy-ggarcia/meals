@@ -31,6 +31,9 @@ export const DATA = {
   "v2/weeks/2026-09-21.json": "{}\n",
 };
 
+/** The backup that the meals-restore tests restore. */
+export const BACKUP = "2026-10-01T033000Z-daily-v0.2.0.tar.gz";
+
 /** The image reference by digest of VERSION in the tests. */
 export function imageFor(version) {
   const digest = createHash("sha256").update(version).digest("hex");
@@ -57,6 +60,65 @@ export function assertExit(result, status, context) {
       `stderr:\n${stderr}`,
     ].join("\n"),
   );
+}
+
+/**
+ * Fails unless each file of DATA is in the directory DIR of HOST, which is
+ * `data` or `data.old`, with its content.
+ *
+ * @param {Host} host
+ * @param {string} [dir]
+ */
+export async function assertDataFiles(host, dir = "data") {
+  for (const [relPath, content] of Object.entries(DATA)) {
+    assert.equal(await readFile(path.join(host.root, dir, relPath), "utf8"), content, relPath);
+  }
+}
+
+/**
+ * Fails unless the directory DIR of HOST, which is `data` or `data.old`, holds
+ * DATA and nothing that a test added, such as the week of a restore.
+ *
+ * @param {Host} host
+ * @param {string} [dir]
+ */
+export async function assertOriginalData(host, dir = "data") {
+  await assertDataFiles(host, dir);
+  assert.equal(await host.exists(`${dir}/v2/weeks/2026-09-28.json`), false);
+}
+
+// The calls of `docker compose` that stop and start the app, by kind.
+const COMPOSE_CALLS = {
+  stop: / compose .* stop$/,
+  up: / compose .* up --detach$/,
+  "up --wait": / compose .* up --detach --wait /,
+};
+
+/**
+ * The pattern of a call of `docker compose` of KIND: `stop`, `up`, or `up
+ * --wait`.
+ *
+ * @param {keyof typeof COMPOSE_CALLS} kind
+ */
+export function composeCall(kind) {
+  return COMPOSE_CALLS[kind];
+}
+
+/** An on-up stub that rewrites the recipe book when VERSION starts. */
+export function migrateOnUp(version) {
+  return [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    `if grep -qx 'MEALS_VERSION=${version}' "$MEALS_ROOT/.env"; then`,
+    `  echo '{ "recipes": "migrated" }' > "$MEALS_ROOT/data/v2/recipes.json"`,
+    "fi",
+    "",
+  ].join("\n");
+}
+
+/** Makes writing .env fail on HOST: its temporary file is a directory. */
+export function blockEnvWrite(host) {
+  return mkdir(path.join(host.root, ".env.tmp"));
 }
 
 /**
@@ -307,6 +369,22 @@ class Host {
     const file = path.join(this.stubDir, "calls");
     if (!(await exists(file))) return [];
     return (await readFile(file, "utf8")).split("\n").filter(Boolean);
+  }
+
+  /** The calls of docker that the stubs received, in order. */
+  async dockerCalls() {
+    return (await this.calls()).filter((call) => call.startsWith("docker "));
+  }
+
+  /**
+   * The calls of `docker compose` of KIND, in order: `stop`, `up`, or `up
+   * --wait`. Without KIND, every call of `docker compose`.
+   *
+   * @param {keyof typeof COMPOSE_CALLS} [kind]
+   */
+  async composeCalls(kind) {
+    const matches = kind === undefined ? / compose / : COMPOSE_CALLS[kind];
+    return (await this.dockerCalls()).filter((call) => matches.test(call));
   }
 
   /** Writes a file that the stubs read, such as "broken" or "github/releases/latest". */

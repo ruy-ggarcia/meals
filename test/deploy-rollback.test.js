@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { blockEnvWrite, dockerCalls, migrateOnUp } from "./deploy-helpers.js";
-import { assertExit, createHost, DATA, imageFor, replaceHost } from "./host-helpers.js";
+import {
+  assertExit,
+  blockEnvWrite,
+  composeCall,
+  createHost,
+  DATA,
+  imageFor,
+  migrateOnUp,
+  replaceHost,
+} from "./host-helpers.js";
 
 let host;
 
@@ -25,10 +33,7 @@ test("meals-deploy fails without stopping the app when the data has invalid JSON
   assert.match(result.stdout, /Invalid JSON: v2\/recipes\.json/);
   assert.match(result.stderr, /The data failed validation, so version 0\.3\.0 wasn't deployed\./);
   assert.match(result.stderr, /Nothing changed\./);
-  assert.ok(
-    !(await dockerCalls(host)).some((call) => / compose .* stop$/.test(call)),
-    (await dockerCalls(host)).join("\n"),
-  );
+  assert.deepEqual(await host.composeCalls("stop"), []);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.deepEqual(await host.backups(), []);
   assert.equal(await host.exists("failed"), false);
@@ -43,10 +48,7 @@ test("meals-deploy fails without stopping the app when it can't read the data", 
   assertExit(result, 1);
   assert.match(result.stdout, /Couldn't read every file in /);
   assert.match(result.stderr, /The data failed validation, so version 0\.3\.0 wasn't deployed\./);
-  assert.ok(
-    !(await dockerCalls(host)).some((call) => / compose .* stop$/.test(call)),
-    (await dockerCalls(host)).join("\n"),
-  );
+  assert.deepEqual(await host.composeCalls("stop"), []);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
 });
 
@@ -60,7 +62,7 @@ test("meals-deploy starts the previous version again when the pre-deploy backup 
   assert.match(result.stderr, /The pre-deploy backup failed, so version 0\.2\.0 runs again/);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.equal(await host.exists("failed"), false);
-  assert.match((await dockerCalls(host)).at(-1), / compose .* up --detach$/);
+  assert.match((await host.dockerCalls()).at(-1), composeCall("up"));
 });
 
 test("meals-deploy says when the previous version doesn't start again after the pre-deploy backup fails", async () => {
@@ -100,7 +102,7 @@ test("meals-deploy starts the previous version again when the retention deletes 
   );
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.equal(await host.exists("failed"), false);
-  assert.match((await dockerCalls(host)).at(-1), / compose .* up --detach$/);
+  assert.match((await host.dockerCalls()).at(-1), composeCall("up"));
 });
 
 test("meals-deploy says so when it can't record the version that failed", async () => {
@@ -160,10 +162,7 @@ test("meals-deploy changes nothing, and doesn't record a failed version, when th
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.deepEqual(await host.backups(), []);
   assert.equal(await host.exists("failed"), false);
-  assert.deepEqual(
-    (await dockerCalls(host)).filter((call) => call.includes(" compose ")),
-    [],
-  );
+  assert.deepEqual(await host.composeCalls(), []);
 });
 
 test("meals-deploy rolls back the image and the data when the new version isn't healthy", async () => {
@@ -210,7 +209,7 @@ test("meals-deploy leaves the data alone when it can't stop the version that fai
   assert.equal(await host.readData("v2/recipes.json"), '{ "recipes": "migrated" }\n');
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.equal(await readFile(path.join(host.root, "failed"), "utf8"), "0.3.0\n");
-  assert.match((await dockerCalls(host)).at(-1), / compose .* stop$/);
+  assert.match((await host.dockerCalls()).at(-1), composeCall("stop"));
 });
 
 test("meals-deploy rolls back when the new version reports another version", async () => {
@@ -237,7 +236,7 @@ test("meals-deploy says so when the previous version doesn't start again in the 
   assert.match(result.stderr, /Version 0\.3\.0 failed/);
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
   assert.equal(await readFile(path.join(host.root, "failed"), "utf8"), "0.3.0\n");
-  assert.match((await dockerCalls(host)).at(-1), / compose .* up --detach --wait /);
+  assert.match((await host.dockerCalls()).at(-1), composeCall("up --wait"));
 });
 
 test("meals-deploy leaves the data alone when the pre-deploy backup fails validation in the rollback", async () => {
@@ -283,7 +282,7 @@ test("meals-deploy starts nothing when no version is deployed and it can't write
   assertExit(result, 1);
   assert.match(result.stderr, /Couldn't write \.env, so version 0\.2\.0 wasn't deployed\./);
   assert.equal((await host.readEnv()).MEALS_VERSION, "");
-  assert.ok(!(await dockerCalls(host)).some((call) => call.includes(" compose ")));
+  assert.deepEqual(await host.composeCalls(), []);
 });
 
 test("meals-deploy stops the app and leaves the data when the first version fails", async (t) => {
@@ -301,5 +300,5 @@ test("meals-deploy stops the app and leaves the data when the first version fail
   assert.equal(await host.readData("v2/recipes.json"), '{ "recipes": "migrated" }\n');
   assert.deepEqual(await host.backups(), []);
   assert.equal(await readFile(path.join(host.root, "failed"), "utf8"), "0.2.0\n");
-  assert.match((await dockerCalls(host)).at(-1), / compose .* stop$/);
+  assert.match((await host.dockerCalls()).at(-1), composeCall("stop"));
 });
