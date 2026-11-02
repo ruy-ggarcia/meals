@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -40,14 +40,10 @@ test("healthcheck.js exits with 0 when the server is healthy", async (t) => {
 });
 
 test("healthcheck.js exits with 1 when the health check returns 503", async (t) => {
-  if (process.getuid?.() === 0) {
-    t.skip("root can write to any directory");
-    return;
-  }
   const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
   t.after(() => server.stop());
-  // afterEach removes the directory, which is empty, so the mode can stay.
-  await chmod(dataDir, 0o500);
+  // The server is running, and its data directory is gone.
+  await rm(dataDir, { recursive: true });
 
   // An empty stderr shows a failed check, and not a crash that also exits with 1.
   assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });

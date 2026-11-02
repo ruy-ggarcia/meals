@@ -15,7 +15,7 @@ import {
   ValidationError,
 } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
-import { blankWeek, collectingLogger, within } from "./helpers.js";
+import { blankWeek, collectingLogger, skipAsRoot, within } from "./helpers.js";
 
 const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
@@ -228,11 +228,9 @@ test("GET /api/health returns 200 with the version when the data directory is wr
   assert.deepEqual(res.body, { status: "ok", version: "1.2.3" });
 });
 
-test("GET /api/health returns 503 when the data directory isn't writable", async (t) => {
-  if (process.getuid?.() === 0) {
-    t.skip("root can write to any directory");
-    return;
-  }
+test("GET /api/health returns 503 when the data directory isn't writable", {
+  skip: skipAsRoot("root can write to any directory"),
+}, async () => {
   // afterEach removes the directory, which is empty, so the mode can stay.
   await chmod(dataDir, 0o500);
   const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });
@@ -243,11 +241,9 @@ test("GET /api/health returns 503 when the data directory isn't writable", async
   assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
 });
 
-test("GET /api/health returns 503 when the data directory can't be entered", async (t) => {
-  if (process.getuid?.() === 0) {
-    t.skip("root can enter any directory");
-    return;
-  }
+test("GET /api/health returns 503 when the data directory can't be entered", {
+  skip: skipAsRoot("root can enter any directory"),
+}, async () => {
   // afterEach removes the directory, which is empty, so the mode can stay.
   await chmod(dataDir, 0o600);
   const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });

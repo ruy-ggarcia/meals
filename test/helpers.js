@@ -38,3 +38,11 @@ export async function within(promise, message, ms = 2000) {
     clearTimeout(timer);
   }
 }
+
+/**
+ * The `skip` option of a test that relies on file permissions: REASON as
+ * root, who has every permission, and false otherwise.
+ */
+export function skipAsRoot(reason) {
+  return process.getuid?.() === 0 ? reason : false;
+}

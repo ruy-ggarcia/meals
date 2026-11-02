@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { chmod, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
 import net from "node:net";
 import os from "node:os";
@@ -83,22 +83,20 @@ test("start() listens only on the host that it gets", async (t) => {
 });
 
 test("start() rejects when it can't create the data directory", async (t) => {
-  if (process.getuid?.() === 0) {
-    t.skip("root can write to any directory");
-    return;
-  }
-  // afterEach removes the directory, which is empty, so the mode can stay.
-  await chmod(dataDir, 0o500);
+  // A directory can't live under a regular file, whoever runs the test.
+  const file = path.join(dataDir, "file");
+  await writeFile(file, "");
 
-  await assert.rejects(
-    start({
-      dataDir: path.join(dataDir, "data"),
-      logger: silentLogger,
-      port: 0,
-      version: "1.2.3",
-    }),
-    { code: "EACCES" },
-  );
+  const started = start({
+    dataDir: path.join(file, "data"),
+    logger: silentLogger,
+    port: 0,
+    version: "1.2.3",
+  });
+  // A server that starts anyway must not keep the test process alive.
+  started.then((server) => t.after(() => server.stop())).catch(() => {});
+
+  await assert.rejects(started, { code: "ENOTDIR" });
 });
 
 test("stop() waits for a request in progress, and then closes its keep-alive connection", async (t) => {
