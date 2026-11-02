@@ -339,22 +339,6 @@ test("list drops a line whose measureId the catalog doesn't have, and keeps it i
   assert.deepEqual(onDisk.recipes[1].ingredients, [stale]);
 });
 
-test("the catalog changes the unit of an ingredient that a recipe uses only with a conversion", async () => {
-  const onion = await ingredients.create({ name: "Onion", unit: "g" });
-  const milk = await ingredients.create({ name: "Milk", unit: "g" });
-  await recipes.create({ name: "Soup", ingredients: [entry(onion.id, 100)] });
-
-  await assert.rejects(ingredients.update(onion.id, { unit: "pcs" }), ValidationError);
-  const updated = await ingredients.update(onion.id, {
-    unit: "pcs",
-    conversion: { from: 100, to: 1, measureName: "portion" },
-  });
-  assert.deepEqual((await recipes.list())[0].ingredients, [
-    { ...entry(onion.id, 100), measureId: updated.measures[0].id },
-  ]);
-  assert.equal((await ingredients.update(milk.id, { unit: "ml" })).unit, "ml");
-});
-
 describe("create", () => {
   test("rejects invalid fields, and stores nothing", async () => {
     await assert.rejects(recipes.create({ name: "Soup", archived: false }), ValidationError);

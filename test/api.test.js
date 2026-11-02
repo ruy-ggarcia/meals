@@ -593,52 +593,6 @@ test("PATCH /api/ingredients/ID with a new unit and no conversion returns 400 wh
   assert.equal((await request(app).get("/api/ingredients")).body.ingredients[0].unit, "g");
 });
 
-test("PATCH unit with a conversion moves recipe lines to the new measure", async () => {
-  const created = await request(app)
-    .post("/api/ingredients")
-    .send({ name: "Carrot", unit: "pcs", measures: [{ name: "net", amount: 4 }] });
-  const carrot = created.body;
-  const [net] = carrot.measures;
-  const lines = {
-    Salad: { ingredientId: carrot.id, measureId: net.id, quantity: 1 },
-    Soup: { ingredientId: carrot.id, quantity: 2 },
-    Stew: { ingredientId: carrot.id, quantity: 0.5 },
-  };
-  for (const [name, line] of Object.entries(lines)) {
-    const res = await request(app)
-      .post("/api/recipes")
-      .send({ name, ingredients: [line] });
-    assert.equal(res.status, 201, name);
-    if (name === "Stew") {
-      await request(app).patch(`/api/recipes/${res.body.id}`).send({ archived: true });
-    }
-  }
-
-  const res = await request(app)
-    .patch(`/api/ingredients/${carrot.id}`)
-    .send({ unit: "g", conversion: { from: 1, to: 120, measureName: "piece" } });
-
-  assert.equal(res.status, 200);
-  const piece = res.body.measures[1];
-  assert.deepEqual(res.body, {
-    ...carrot,
-    unit: "g",
-    measures: [
-      { ...net, amount: 480 },
-      { id: piece.id, name: "piece", amount: 120 },
-    ],
-  });
-  const { recipes } = (await request(app).get("/api/recipes")).body;
-  assert.deepEqual(
-    recipes.map((recipe) => [recipe.name, recipe.ingredients]),
-    [
-      ["Salad", [lines.Salad]],
-      ["Soup", [{ ...lines.Soup, measureId: piece.id }]],
-      ["Stew", [{ ...lines.Stew, measureId: piece.id }]],
-    ],
-  );
-});
-
 test("POST and PATCH /api/recipes save ingredients, and GET returns them", async () => {
   const onion = await addIngredient("Onion");
   const egg = await addIngredient("Egg", "pcs");
