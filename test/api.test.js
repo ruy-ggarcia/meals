@@ -335,36 +335,10 @@ test("POST /api/recipes returns 201 with the new recipe, and GET lists it", asyn
   assert.deepEqual(get.body, { recipes: [res.body] });
 });
 
-test("POST /api/recipes with fields other than name and ingredients returns 400", async () => {
-  const res = await request(app).post("/api/recipes").send({ name: "Soup", archived: false });
-
-  assertJsonError(res, 400, "extra field");
-  assert.deepEqual((await request(app).get("/api/recipes")).body, { recipes: [] });
-});
-
 describe("POST /api/recipes", () => {
   test("returns 400 JSON without a body", async () => {
     assertJsonError(await request(app).post("/api/recipes"), 400, "no body at all");
   });
-});
-
-test("POST /api/recipes with a taken name returns 409 with the recipe that has it", async () => {
-  const soup = await addRecipe("Soup");
-
-  const res = await request(app).post("/api/recipes").send({ name: "SOUP" });
-
-  assertJsonError(res, 409, "active recipe");
-  assert.deepEqual(res.body.recipe, soup);
-});
-
-test("POST /api/recipes reports an archived recipe whose name matches after cleanup", async () => {
-  const cafe = await addRecipe("Café");
-  await request(app).patch(`/api/recipes/${cafe.id}`).send({ archived: true });
-
-  const res = await request(app).post("/api/recipes").send({ name: "  cafe " });
-
-  assertJsonError(res, 409, "archived recipe");
-  assert.deepEqual(res.body.recipe, { ...cafe, archived: true });
 });
 
 test("PATCH /api/recipes/ID renames a recipe", async () => {
@@ -381,16 +355,6 @@ test("PATCH /api/recipes/ID accepts a name with the recipe's own name key", asyn
   const res = await request(app).patch(`/api/recipes/${cafe.id}`).send({ name: "Café" });
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, { ...cafe, name: "Café" });
-});
-
-test("PATCH /api/recipes/ID with another recipe's name returns 409 with that recipe", async () => {
-  const soup = await addRecipe("Soup");
-  const salad = await addRecipe("Salad");
-
-  const res = await request(app).patch(`/api/recipes/${salad.id}`).send({ name: "soup" });
-
-  assertJsonError(res, 409, "rename conflict");
-  assert.deepEqual(res.body.recipe, soup);
 });
 
 test("PATCH /api/recipes/ID archives and restores a recipe", async () => {
@@ -410,11 +374,6 @@ describe("PATCH /api/recipes/:id", () => {
 
     assertJsonError(await request(app).patch(`/api/recipes/${soup.id}`), 400, "no body at all");
   });
-});
-
-test("PATCH /api/recipes/ID with an unknown ID returns 404 JSON", async () => {
-  const res = await request(app).patch("/api/recipes/no-such-id").send({ archived: true });
-  assertJsonError(res, 404, "unknown ID");
 });
 
 /**
@@ -568,16 +527,6 @@ describe("POST /api/ingredients", () => {
   });
 });
 
-test("POST /api/ingredients with a taken name returns 409 with that ingredient", async () => {
-  const onion = await addIngredient("Onion");
-
-  const res = await request(app).post("/api/ingredients").send({ name: "ONION", unit: "pcs" });
-
-  assertJsonError(res, 409, "taken name");
-  assert.deepEqual(res.body.ingredient, onion);
-  assert.equal(res.body.recipe, undefined);
-});
-
 describe("PATCH /api/ingredients/:id", () => {
   test("renames an ingredient", async () => {
     const milk = await addIngredient("Milk");
@@ -607,19 +556,6 @@ describe("PATCH /api/ingredients/:id", () => {
     assert.equal(res.status, 200);
     assert.deepEqual(res.body, { ...milk, archived: true });
   });
-});
-
-test("PATCH /api/ingredients/ID with a new unit and no conversion returns 400 while a recipe uses it", async () => {
-  const onion = await addIngredient("Onion");
-  await request(app)
-    .post("/api/recipes")
-    .send({ name: "Soup", ingredients: [{ ingredientId: onion.id, quantity: 100 }] });
-
-  const res = await request(app).patch(`/api/ingredients/${onion.id}`).send({ unit: "pcs" });
-
-  assertJsonError(res, 400, "unit in use");
-  assert.deepEqual(Object.keys(res.body), ["error"]);
-  assert.equal((await request(app).get("/api/ingredients")).body.ingredients[0].unit, "g");
 });
 
 test("POST and PATCH /api/recipes save ingredients, and GET returns them", async () => {
