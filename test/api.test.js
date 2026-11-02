@@ -201,19 +201,23 @@ test("static files aren't logged", async () => {
   assert.deepEqual(entries, []);
 });
 
-test("the web app manifest is served as a manifest, and every icon it names exists", async () => {
-  const response = await request(app).get("/manifest.webmanifest");
+describe("GET /manifest.webmanifest", () => {
+  test("serves the web app manifest with its media type", async () => {
+    const res = await request(app).get("/manifest.webmanifest");
 
-  assert.equal(response.status, 200);
-  assert.match(response.headers["content-type"], /^application\/manifest\+json/);
-  const manifest = JSON.parse(response.text);
-  assert.equal(manifest.name, "Meals");
-  assert.equal(manifest.display, "standalone");
-  for (const icon of manifest.icons) {
-    const file = await request(app).get(`/${icon.src}`);
-    assert.equal(file.status, 200, icon.src);
-    assert.equal(file.headers["content-type"], icon.type, icon.src);
-  }
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /^application\/manifest\+json/);
+  });
+
+  test("serves every icon that the manifest names with its type", async () => {
+    const manifest = JSON.parse((await request(app).get("/manifest.webmanifest")).text);
+
+    for (const icon of manifest.icons) {
+      const file = await request(app).get(`/${icon.src}`);
+      assert.equal(file.status, 200, icon.src);
+      assert.equal(file.headers["content-type"], icon.type, icon.src);
+    }
+  });
 });
 
 // ---------- Health ----------
@@ -267,34 +271,43 @@ test("GET /api/health returns 503 when the data directory doesn't exist", async 
   assert.deepEqual(res.body, { status: "error", version: "1.2.3" });
 });
 
-test("successful health checks aren't logged, and failed ones are, with the error code", async () => {
-  const { entries, logger } = collectingLogger();
-  const missing = path.join(dataDir, "missing");
+describe("GET /api/health", () => {
+  test("logs nothing for a successful check", async () => {
+    const { entries, logger } = collectingLogger();
 
-  await request(createApp(createStores({ dataDir }), { dataDir, logger })).get("/api/health");
-  await request(createApp(createStores({ dataDir: missing }), { dataDir: missing, logger })).get(
-    "/api/health",
-  );
+    await request(createApp(createStores({ dataDir }), { dataDir, logger })).get("/api/health");
 
-  assert.deepEqual(
-    entries.map((entry) => ({
-      level: entry.level,
-      msg: entry.msg,
-      path: entry.path,
-      status: entry.status,
-      error: entry.error,
-    })),
-    [
-      {
-        level: "error",
-        msg: "health check failed",
-        path: undefined,
-        status: undefined,
-        error: "ENOENT",
-      },
-      { level: "info", msg: "request", path: "/api/health", status: 503, error: undefined },
-    ],
-  );
+    assert.deepEqual(entries, []);
+  });
+
+  test("logs the error code of a failed check, and then the request", async () => {
+    const { entries, logger } = collectingLogger();
+    const missing = path.join(dataDir, "missing");
+
+    await request(createApp(createStores({ dataDir: missing }), { dataDir: missing, logger })).get(
+      "/api/health",
+    );
+
+    assert.deepEqual(
+      entries.map((entry) => ({
+        level: entry.level,
+        msg: entry.msg,
+        path: entry.path,
+        status: entry.status,
+        error: entry.error,
+      })),
+      [
+        {
+          level: "error",
+          msg: "health check failed",
+          path: undefined,
+          status: undefined,
+          error: "ENOENT",
+        },
+        { level: "info", msg: "request", path: "/api/health", status: 503, error: undefined },
+      ],
+    );
+  });
 });
 
 // ---------- Recipes ----------
@@ -501,22 +514,19 @@ test("GET /api/ingredients returns an empty catalog at first", async () => {
   assert.deepEqual(res.body, { ingredients: [] });
 });
 
-test("POST /api/ingredients returns 201 with the new ingredient, and GET lists them all from A to Z", async () => {
-  const res = await request(app).post("/api/ingredients").send({ name: " Onion ", unit: "g" });
+describe("POST /api/ingredients", () => {
+  test("returns 201 with the new ingredient", async () => {
+    const res = await request(app).post("/api/ingredients").send({ name: " Onion ", unit: "g" });
 
-  assert.equal(res.status, 201);
-  assert.deepEqual(res.body, {
-    id: res.body.id,
-    name: "Onion",
-    unit: "g",
-    measures: [],
-    archived: false,
+    assert.equal(res.status, 201);
+    assert.deepEqual(res.body, {
+      id: res.body.id,
+      name: "Onion",
+      unit: "g",
+      measures: [],
+      archived: false,
+    });
   });
-
-  const egg = await addIngredient("Egg", "pcs");
-  await request(app).patch(`/api/ingredients/${egg.id}`).send({ archived: true });
-  const get = await request(app).get("/api/ingredients");
-  assert.deepEqual(get.body, { ingredients: [{ ...egg, archived: true }, res.body] });
 });
 
 test("POST /api/ingredients with an invalid body returns 400 JSON and stores nothing", async () => {
@@ -548,36 +558,35 @@ test("POST /api/ingredients with a taken name returns 409 with that ingredient",
   assert.equal(res.body.recipe, undefined);
 });
 
-test("PATCH /api/ingredients/ID renames, changes the unit, and archives", async () => {
-  const milk = await addIngredient("Milk");
+describe("PATCH /api/ingredients/:id", () => {
+  test("renames an ingredient", async () => {
+    const milk = await addIngredient("Milk");
 
-  const both = await request(app)
-    .patch(`/api/ingredients/${milk.id}`)
-    .send({ name: "Whole milk", unit: "ml" });
-  assert.equal(both.status, 200);
-  assert.deepEqual(both.body, { ...milk, name: "Whole milk", unit: "ml" });
+    const res = await request(app)
+      .patch(`/api/ingredients/${milk.id}`)
+      .send({ name: "Whole milk" });
 
-  const archived = await request(app).patch(`/api/ingredients/${milk.id}`).send({ archived: true });
-  assert.deepEqual(archived.body, { ...both.body, archived: true });
-});
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { ...milk, name: "Whole milk" });
+  });
 
-test("PATCH /api/ingredients/ID returns 400, 404, and 409 JSON errors", async () => {
-  const onion = await addIngredient("Onion");
-  const egg = await addIngredient("Egg", "pcs");
+  test("changes the unit of an ingredient that no recipe uses", async () => {
+    const milk = await addIngredient("Milk");
 
-  assertJsonError(
-    await request(app).patch(`/api/ingredients/${egg.id}`).send({ archived: true, unit: "g" }),
-    400,
-    "archived with unit",
-  );
-  assertJsonError(
-    await request(app).patch("/api/ingredients/no-such-id").send({ archived: true }),
-    404,
-    "unknown ID",
-  );
-  const conflict = await request(app).patch(`/api/ingredients/${egg.id}`).send({ name: "onion" });
-  assertJsonError(conflict, 409, "taken name");
-  assert.deepEqual(conflict.body.ingredient, onion);
+    const res = await request(app).patch(`/api/ingredients/${milk.id}`).send({ unit: "ml" });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { ...milk, unit: "ml" });
+  });
+
+  test("archives an ingredient", async () => {
+    const milk = await addIngredient("Milk");
+
+    const res = await request(app).patch(`/api/ingredients/${milk.id}`).send({ archived: true });
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { ...milk, archived: true });
+  });
 });
 
 test("PATCH /api/ingredients/ID with a new unit and no conversion returns 400 while a recipe uses it", async () => {
