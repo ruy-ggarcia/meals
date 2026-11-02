@@ -38,12 +38,12 @@ test("weekIdOf maps every day of a week to its Monday", () => {
   for (let day = 21; day <= 27; day++) {
     assert.equal(weekIdOf(new Date(2026, 8, day, 12)), "2026-09-21", `September ${day}`);
   }
-  assert.equal(weekIdOf(new Date(2026, 8, 27, 23, 59)), "2026-09-21");
-  assert.equal(weekIdOf(new Date(2026, 8, 28, 0, 0)), "2026-09-28");
+  assert.equal(weekIdOf(new Date(2026, 8, 27, 23, 59)), "2026-09-21", "Sunday at 23:59");
+  assert.equal(weekIdOf(new Date(2026, 8, 28, 0, 0)), "2026-09-28", "Monday at 00:00");
   // A Sunday late at night on the day daylight saving time ends.
-  assert.equal(weekIdOf(new Date(2026, 9, 25, 23, 30)), "2026-10-19");
+  assert.equal(weekIdOf(new Date(2026, 9, 25, 23, 30)), "2026-10-19", "the end of DST");
   // A week that spans two years.
-  assert.equal(weekIdOf(new Date(2027, 0, 3)), "2026-12-28");
+  assert.equal(weekIdOf(new Date(2027, 0, 3)), "2026-12-28", "a week of two years");
 });
 
 test("addDays counts calendar days across the end of daylight saving time", () => {

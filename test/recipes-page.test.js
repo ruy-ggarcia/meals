@@ -34,10 +34,15 @@ async function openRecipesPage(t, recipes = [], ingredients = [ONION]) {
   await tick();
 }
 
+function requestUrls() {
+  return server.requests.map((request) => request.url).join(", ");
+}
+
 // Waits for the reload that New and Edit send before the editor opens.
 async function reloadRequests() {
   await waitFor(
     () => server.requests.filter((request) => request.url === "/api/recipes").length === 2,
+    { message: () => `the page sent ${requestUrls()}, not a load and a reload of the recipes` },
   );
   return {
     recipes: server.requestFor("GET", "/api/recipes"),
@@ -292,8 +297,8 @@ test("the editor checks the name against the recipes of the reload as you type",
 test("archived recipes have Edit and Restore", async (t) => {
   await openRecipesPage(t, [recipe("1", "Café", true)]);
 
-  assert.ok(buttonLabeled("Edit Café"));
-  assert.ok(buttonLabeled("Restore Café"));
+  assert.notEqual(buttonLabeled("Edit Café"), null, "the Edit Café button");
+  assert.notEqual(buttonLabeled("Restore Café"), null, "the Restore Café button");
   assert.equal(buttonLabeled("Archive Café"), null);
 });
 
@@ -302,7 +307,11 @@ test("each row shows the recipe's ingredients, or a warning when it has none", a
 
   const detail = (id) => rowById(id).querySelector(".entry-detail");
   assert.equal(detail("1").textContent.trim(), "No ingredients · not in shopping list");
-  assert.ok(detail("1").querySelector(".warning-icon"));
+  assert.notEqual(
+    detail("1").querySelector(".warning-icon"),
+    null,
+    "the warning icon of the recipe without ingredients",
+  );
   assert.equal(detail("2").textContent, "Onion");
   assert.equal(detail("2").querySelector(".warning-icon"), null);
   // A screen reader reads the detail after the row's name.
@@ -517,24 +526,31 @@ test("a failed reload shows the load error, focuses Retry, and doesn't open the 
   quiet.expect(2);
   await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
-  for (const button of [buttonLabeled("Edit Soup"), document.getElementById("new-recipe")]) {
+  for (const [name, button] of [
+    ["Edit", buttonLabeled("Edit Soup")],
+    ["New recipe", document.getElementById("new-recipe")],
+  ]) {
     const count = server.requests.length;
     button.click();
-    await waitFor(() => server.requests.length === count + 2);
+    await waitFor(() => server.requests.length === count + 2, {
+      message: () => `${name} sent two requests (the reload), but the page has ${requestUrls()}`,
+    });
     server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
     server.requestFor("GET", "/api/ingredients").fail();
     await tick();
 
-    assert.equal(editorDialog().open, false);
-    assert.equal(document.getElementById("load-error").hidden, false);
-    assertFocus(document, document.getElementById("retry-load"));
+    assert.equal(editorDialog().open, false, `${name} doesn't open the editor`);
+    assert.equal(document.getElementById("load-error").hidden, false, `${name} shows the error`);
+    assertFocus(document, document.getElementById("retry-load"), `${name} focuses Retry`);
 
     document.getElementById("retry-load").click();
-    await waitFor(() => server.requests.length === count + 4);
+    await waitFor(() => server.requests.length === count + 4, {
+      message: () => `Retry sent two more requests, but the page has ${requestUrls()}`,
+    });
     server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
     server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: served.ingredients });
     await tick();
-    assert.equal(document.getElementById("load-error").hidden, true);
+    assert.equal(document.getElementById("load-error").hidden, true, `${name} then Retry`);
   }
 });
 
@@ -561,6 +577,10 @@ test("a second click while the reload runs sends no second reload", async (t) =>
   reload.ingredients.respond(200, { ingredients: served.ingredients });
   await tick();
 
-  assert.equal(server.requests.length, 4);
+  assert.deepEqual(
+    server.requests.map((request) => request.url),
+    ["/api/recipes", "/api/ingredients", "/api/recipes", "/api/ingredients"],
+    "the first load and one reload, each of the recipes and the ingredients",
+  );
   assert.equal(editorDialog().querySelector(".dialog-title").textContent, "Edit recipe");
 });

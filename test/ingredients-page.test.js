@@ -44,11 +44,18 @@ async function openIngredientsPage(t, ingredients = [], recipes = []) {
   await tick();
 }
 
+function requestUrls() {
+  return server.requests.map((request) => request.url).join(", ");
+}
+
 // Waits for the reload that New ingredient and Edit send before the editor
 // opens.
 async function reloadRequests() {
   await waitFor(
     () => server.requests.filter((request) => request.url === "/api/ingredients").length === 2,
+    {
+      message: () => `the page sent ${requestUrls()}, not a load and a reload of the ingredients`,
+    },
   );
   return {
     ingredients: server.requestFor("GET", "/api/ingredients"),
@@ -445,24 +452,31 @@ test("a failed reload shows the load error, focuses Retry, and doesn't open the 
   quiet.expect(2);
   await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
-  for (const button of [buttonLabeled("Edit Onion"), newButton()]) {
+  for (const [name, button] of [
+    ["Edit", buttonLabeled("Edit Onion")],
+    ["New ingredient", newButton()],
+  ]) {
     const count = server.requests.length;
     button.click();
-    await waitFor(() => server.requests.length === count + 2);
+    await waitFor(() => server.requests.length === count + 2, {
+      message: () => `${name} sent two requests (the reload), but the page has ${requestUrls()}`,
+    });
     server.requestFor("GET", "/api/ingredients").fail();
     server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
     await tick();
 
-    assert.equal(editorDialog().open, false);
-    assert.equal(document.getElementById("load-error").hidden, false);
-    assertFocus(document, document.getElementById("retry-load"));
+    assert.equal(editorDialog().open, false, `${name} doesn't open the editor`);
+    assert.equal(document.getElementById("load-error").hidden, false, `${name} shows the error`);
+    assertFocus(document, document.getElementById("retry-load"), `${name} focuses Retry`);
 
     document.getElementById("retry-load").click();
-    await waitFor(() => server.requests.length === count + 4);
+    await waitFor(() => server.requests.length === count + 4, {
+      message: () => `Retry sent two more requests, but the page has ${requestUrls()}`,
+    });
     server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: served.ingredients });
     server.requestFor("GET", "/api/recipes").respond(200, { recipes: served.recipes });
     await tick();
-    assert.equal(document.getElementById("load-error").hidden, true);
+    assert.equal(document.getElementById("load-error").hidden, true, `${name} then Retry`);
   }
 });
 
@@ -489,7 +503,11 @@ test("a second click while the reload runs sends no second reload", async (t) =>
   reload.recipes.respond(200, { recipes: served.recipes });
   await tick();
 
-  assert.equal(server.requests.length, 4);
+  assert.deepEqual(
+    server.requests.map((request) => request.url),
+    ["/api/ingredients", "/api/recipes", "/api/ingredients", "/api/recipes"],
+    "the first load and one reload, each of the ingredients and the recipes",
+  );
   assert.equal(editorDialog().querySelector(".dialog-title").textContent, "Edit ingredient");
 });
 

@@ -123,12 +123,15 @@ test("totals stay exact where floating point would round up too far", () => {
 
   const { lines } = shoppingList(slots, recipes, CATALOG);
 
+  // Floating point gives 3.0000000000000004, 7.000000000000001, and
+  // 55.00000000000001, which round up to 4, 8, and 56. See the test of the
+  // arithmetic in quantities.test.js.
   assert.deepEqual(
     lines.map((line) => [line.name, line.total]),
     [
-      ["Egg", 3],
-      ["Milk", 7],
-      ["Rice", 55],
+      ["Egg", 3], // 0.1 + 2.7 + 0.2
+      ["Milk", 7], // 0.56 × 12.5
+      ["Rice", 55], // 4.4 × 12.5
     ],
   );
 });
@@ -294,6 +297,8 @@ test("half servings give measure quantities with decimals", () => {
 
   const { lines } = shoppingList([slot("mon", "lunch", ["soup", 0.5])], recipes, [SIZED_ONION]);
 
+  // 0.25 × 0.5 servings = 0.125 medium, which shows as 0.13, and
+  // 0.125 × 150 g = 18.75 g, which rounds up to 19 g.
   assert.deepEqual(lines[0].breakdown, [{ measureId: "medium", name: "medium", quantity: 0.13 }]);
   assert.equal(lines[0].total, 19);
 });
@@ -375,6 +380,7 @@ test("a decimal measure amount sums exactly", () => {
 
   const { lines } = shoppingList([slot("mon", "lunch", ["soup", 12.5])], recipes, [decimal]);
 
+  // 12.5 pinches × 4.4 g = 55 g, where floating point gives 55.00000000000001.
   assert.equal(lines[0].total, 55);
   assert.deepEqual(lines[0].breakdown, [{ measureId: "pinch", name: "pinch", quantity: 12.5 }]);
 });
@@ -424,6 +430,7 @@ test("lineAmount shows the total and the breakdown in parentheses", () => {
       ],
     }),
     "1.2 kg (300 g, 3 medium, 1.5 large)",
+    "a breakdown of the unit and two measures",
   );
   assert.equal(
     lineAmount({
@@ -436,8 +443,9 @@ test("lineAmount shows the total and the breakdown in parentheses", () => {
       ],
     }),
     "57 ml (15 ml, 2 dash, 20 g)",
+    "a breakdown in ml with a measure in g",
   );
-  assert.equal(lineAmount({ unit: "g", total: 1400, breakdown: [] }), "1.4 kg");
+  assert.equal(lineAmount({ unit: "g", total: 1400, breakdown: [] }), "1.4 kg", "no breakdown");
   assert.equal(
     lineAmount({
       unit: "g",
@@ -445,5 +453,6 @@ test("lineAmount shows the total and the breakdown in parentheses", () => {
       breakdown: [{ measureId: null, name: "g", quantity: 1320 }],
     }),
     "1.4 kg (1.4 kg)",
+    "a breakdown that repeats the total",
   );
 });

@@ -691,7 +691,7 @@ test("beforeunload calls preventDefault() only while the editor has changes", as
   const search = page.document.querySelector(".option-search");
   search.value = "soup";
   search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector("#slot-editor .option")?.click();
+  page.document.querySelector("#slot-editor .option").click();
 
   assert.equal(dispatchBeforeUnload().defaultPrevented, true); // has changes, still open
 
@@ -743,11 +743,15 @@ test("a click with a modifier key or another button on a page link keeps the bro
   await openWeekWithUnsavedLunch(t);
   const alert = page.document.getElementById("leave-alert");
 
-  assert.equal(clickRecipesLink({ ctrlKey: true }).defaultPrevented, false);
-  assert.equal(clickRecipesLink({ metaKey: true }).defaultPrevented, false);
-  assert.equal(clickRecipesLink({ shiftKey: true }).defaultPrevented, false);
-  assert.equal(clickRecipesLink({ altKey: true }).defaultPrevented, false);
-  assert.equal(clickRecipesLink({ button: 1 }).defaultPrevented, false);
+  for (const [click, init] of [
+    ["Ctrl-click", { ctrlKey: true }],
+    ["Meta-click", { metaKey: true }],
+    ["Shift-click", { shiftKey: true }],
+    ["Alt-click", { altKey: true }],
+    ["middle click", { button: 1 }],
+  ]) {
+    assert.equal(clickRecipesLink(init).defaultPrevented, false, `${click} keeps the default`);
+  }
   await tick();
   assert.equal(alert.open, false);
 });

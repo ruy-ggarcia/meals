@@ -251,7 +251,11 @@ test("recipes without ingredients are listed as not included, with their slots",
     block.querySelector(".not-included-title").textContent,
     "Not included: these recipes have no ingredients.",
   );
-  assert.ok(block.querySelector(".not-included-title .warning-icon"));
+  assert.notEqual(
+    block.querySelector(".not-included-title .warning-icon"),
+    null,
+    "the warning icon in the title of the block",
+  );
   assert.deepEqual(
     [...block.querySelectorAll("li")].map((item) => item.textContent),
     ["Burrito · Mon dinner, Thu morning snack"],
@@ -303,6 +307,10 @@ test("Shopping list is disabled while no week is shown, and enabled when a week 
   page.document.getElementById("retry-load").click();
   await waitFor(
     () => server.requests.filter((request) => request.url === `/api/weeks/${WEEK}`).length === 2,
+    {
+      message: () =>
+        `Retry sent a second load of the week, but the page has ${server.requests.map((request) => request.url).join(", ")}`,
+    },
   );
   server.requestFor("GET", `/api/weeks/${WEEK}`).respond(200, blankWeek(DAYS, MEALS));
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });

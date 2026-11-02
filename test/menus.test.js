@@ -26,16 +26,24 @@ test("copyMenu returns a copy that shares nothing with the original", () => {
 });
 
 test("sameMenu compares recipes, servings, and order", () => {
-  assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1])), true);
-  assert.equal(sameMenu(menu(), menu()), true);
-  assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1.5])), false);
-  assert.equal(sameMenu(menu(["soup", 1], ["bread", 1]), menu(["bread", 1], ["soup", 1])), false);
-  assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1], ["bread", 1])), false);
+  assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1])), true, "the same item");
+  assert.equal(sameMenu(menu(), menu()), true, "two empty menus");
+  assert.equal(sameMenu(menu(["soup", 1]), menu(["soup", 1.5])), false, "other servings");
+  assert.equal(
+    sameMenu(menu(["soup", 1], ["bread", 1]), menu(["bread", 1], ["soup", 1])),
+    false,
+    "other order",
+  );
+  assert.equal(
+    sameMenu(menu(["soup", 1]), menu(["soup", 1], ["bread", 1])),
+    false,
+    "an extra item",
+  );
 });
 
 test("hasRecipe tells whether a recipe is in the menu", () => {
-  assert.equal(hasRecipe(menu(["soup", 1]), "soup"), true);
-  assert.equal(hasRecipe(menu(["soup", 1]), "bread"), false);
+  assert.equal(hasRecipe(menu(["soup", 1]), "soup"), true, "a recipe in the menu");
+  assert.equal(hasRecipe(menu(["soup", 1]), "bread"), false, "a recipe not in the menu");
 });
 
 test("addItem appends the recipe at 1 serving without changing the original", () => {

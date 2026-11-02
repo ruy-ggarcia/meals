@@ -66,7 +66,9 @@ test("scaledAmount counts hundredths of a quantity times half servings times hun
   assert.equal(scaledAmount(1, 1), 20000);
   assert.equal(scaledAmount(0.01, 0.5), 100);
   assert.equal(scaledAmount(0.25, 1), 5000);
+  // 4.4 × 12.5 = 55, and 55 × 20000 = 1100000
   assert.equal(scaledAmount(4.4, 12.5), 1100000);
+  // 0.3 × 99 = 29.7, and 29.7 × 20000 = 594000
   assert.equal(scaledAmount(0.3, 99), 594000);
   assert.equal(scaledAmount(3, 1, 150), 300 * 2 * 15000);
   assert.equal(scaledAmount(1.5, 2, 0.5), 150 * 4 * 50);
