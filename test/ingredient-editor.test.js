@@ -602,6 +602,7 @@ test("a valid Done clears a message that a fix in another row made stale", async
 
   assert.equal(measureRows()[1].querySelector(".row-message")?.textContent, undefined);
   assert.deepEqual((await sentBody()).measures[0], { id: "m1", name: "small", amount: 150 });
+  await respondToPatch(200, MILK);
 });
 
 test("Enter in a valid measure field keeps the rows, so focus stays in the field", async () => {
@@ -615,6 +616,7 @@ test("Enter in a valid measure field keeps the rows, so focus stays in the field
   await sentBody();
   assert.equal(amount.isConnected, true);
   assertFocus(document, amount);
+  await respondToPatch(200, MILK);
 });
 
 test('Done with two names that share a name key shows "medium" is already a measure.', () => {
@@ -645,6 +647,7 @@ test("an amount typed as 1,09 is sent as 1.09", async () => {
       { id: "m2", name: "large", amount: 250 },
     ],
   });
+  await respondToPatch(200, MILK);
 });
 
 test("renaming a measure sends its id with the new name", async () => {
@@ -657,6 +660,7 @@ test("renaming a measure sends its id with the new name", async () => {
     unit: "g",
     measures: [{ id: "m1", name: "mediana", amount: 150 }],
   });
+  await respondToPatch(200, MILK);
 });
 
 describe("ingredient editor", () => {
@@ -719,6 +723,7 @@ test("a new ingredient sends its measures with the POST", async () => {
     unit: "g",
     measures: [{ name: "medium", amount: 150 }],
   });
+  await respondToPost(201, { ...MILK, name: "Onion" });
 });
 
 test("Enter in a measure field confirms, the same as Done", async () => {
@@ -729,6 +734,7 @@ test("Enter in a measure field confirms, the same as Done", async () => {
 
   assert.equal(event.defaultPrevented, true);
   assert.deepEqual((await sentBody()).measures[0], { id: "m1", name: "medium", amount: 160 });
+  await respondToPatch(200, MILK);
 });
 
 test("a measure in use (409 without an ingredient) shows the server's message", async () => {
@@ -890,6 +896,7 @@ test("Done sends unit and conversion, without measures", async () => {
     unit: "ml",
     conversion: { from: 1, to: 120, measureName: "piece" },
   });
+  await respondToPatch(200, MILK);
 });
 
 test("Done sends no measureName when recipes don't use the unit", async () => {
@@ -900,6 +907,7 @@ test("Done sends no measureName when recipes don't use the unit", async () => {
   query(".done").click();
 
   assert.deepEqual(await sentBody(), { unit: "ml", conversion: { from: 1, to: 2 } });
+  await respondToPatch(200, MILK);
 });
 
 test("a conversion typed as 1,5 is sent as 1.5", async () => {
@@ -910,6 +918,7 @@ test("a conversion typed as 1,5 is sent as 1.5", async () => {
   query(".done").click();
 
   assert.deepEqual((await sentBody()).conversion, { from: 1.5, to: 120.25 });
+  await respondToPatch(200, MILK);
 });
 
 describe("ingredient editor", () => {

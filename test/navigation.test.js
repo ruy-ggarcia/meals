@@ -5,7 +5,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, test } from "node:test";
 import { Window } from "happy-dom";
-import { fakeFetch, loadPage } from "./dom-helpers.js";
+import { fakeFetch, loadPage, tick } from "./dom-helpers.js";
+import { blankWeek } from "./helpers.js";
+import { DAYS, MEALS } from "./meal-plan-helpers.js";
 
 const PAGES = [
   ["index.html", "app.js", "/"],
@@ -21,6 +23,22 @@ async function loadMarkup(html) {
 }
 
 let page;
+
+/** `loadPage` with the answers of an empty meal plan, recipe book, and catalog. */
+async function loadAnswered(options) {
+  const server = fakeFetch();
+  const loaded = await loadPage({ ...options, fetch: server.fetch });
+  for (const request of server.requests) {
+    request.respond(
+      200,
+      request.url.startsWith("/api/weeks/")
+        ? blankWeek(DAYS, MEALS)
+        : { recipes: [], ingredients: [] },
+    );
+  }
+  await tick();
+  return loaded;
+}
 
 afterEach(async () => {
   await page?.cleanup();
@@ -72,7 +90,7 @@ test("each page links the app icon, the Home Screen icon, and the web app manife
 describe("sidebar", () => {
   test("switches with Hide sidebar and Show sidebar on every page", async () => {
     for (const [html, script] of PAGES) {
-      page = await loadPage({ html, script, fetch: fakeFetch().fetch });
+      page = await loadAnswered({ html, script });
       const { document } = page;
       const root = document.documentElement;
       // No choice yet: the width of the screen decides.
@@ -90,7 +108,7 @@ describe("sidebar", () => {
 
   test("stores the choice in localStorage on every page", async () => {
     for (const [html, script] of PAGES) {
-      page = await loadPage({ html, script, fetch: fakeFetch().fetch });
+      page = await loadAnswered({ html, script });
       const { document, window } = page;
 
       document.querySelector(".hide-sidebar").click();
@@ -106,10 +124,9 @@ describe("sidebar", () => {
 
 test("a page opens with the sidebar choice that another page remembered", async () => {
   for (const [html, script] of PAGES) {
-    page = await loadPage({
+    page = await loadAnswered({
       html,
       script,
-      fetch: fakeFetch().fetch,
       beforeScript: (window) => window.localStorage.setItem("meals.sidebar", "hidden"),
     });
 
@@ -120,10 +137,9 @@ test("a page opens with the sidebar choice that another page remembered", async 
 });
 
 test("a page without storage still opens, and the sidebar still switches", async () => {
-  page = await loadPage({
+  page = await loadAnswered({
     html: "recipes.html",
     script: "recipes.js",
-    fetch: fakeFetch().fetch,
     beforeScript: (window) => {
       Object.defineProperty(window, "localStorage", {
         get() {

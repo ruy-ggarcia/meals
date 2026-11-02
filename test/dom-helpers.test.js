@@ -52,6 +52,16 @@ describe("loadDialog", () => {
   });
 });
 
+async function openRecipesPage() {
+  const server = fakeFetch();
+  const page = await loadPage({
+    html: "recipes.html",
+    script: "recipes.js",
+    fetch: server.fetch,
+  });
+  return { page, server };
+}
+
 describe("cleanup", () => {
   test("leaves the globals that a later page installed after a second call", async (t) => {
     const first = await loadDialog({
@@ -74,18 +84,47 @@ describe("cleanup", () => {
       "the first cleanup replaced the later page",
     );
   });
-});
 
-test("openPage cleans the page up when the test ends", async (t) => {
-  const before = snapshotOfGlobals();
+  test("fails with the requests that are still pending", async () => {
+    const before = snapshotOfGlobals();
+    const { page, server } = await openRecipesPage();
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
 
-  await t.test("opens a page", async (inner) => {
-    const { fetch } = fakeFetch(); // never answers, so the page stays loading
-    const page = await openPage(inner, { html: "recipes.html", script: "recipes.js", fetch });
-    assert.ok(/** @type {any} */ (globalThis).window === page.window, "the page is installed");
+    await assert.rejects(page.cleanup(), {
+      message:
+        "1 fake request(s) still pending when the page was cleaned up: GET /api/ingredients. " +
+        "Answer or abort each request in the test.",
+    });
+
+    assertGlobalsRestored(before);
   });
 
-  assertGlobalsRestored(before);
+  test("passes when every request got an answer or was aborted", async () => {
+    const { page, server } = await openRecipesPage();
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
+    server.requestFor("GET", "/api/ingredients").fail();
+
+    await page.cleanup();
+  });
+});
+
+describe("openPage", () => {
+  test("cleans the page up when the test ends", async (t) => {
+    const before = snapshotOfGlobals();
+
+    await t.test("opens a page", async (inner) => {
+      const server = fakeFetch();
+      const page = await openPage(inner, {
+        html: "recipes.html",
+        script: "recipes.js",
+        fetch: server.fetch,
+      });
+      assert.ok(/** @type {any} */ (globalThis).window === page.window, "the page is installed");
+      for (const request of server.requests) request.respond(200, { recipes: [], ingredients: [] });
+    });
+
+    assertGlobalsRestored(before);
+  });
 });
 
 describe("assertLoggedErrors", () => {

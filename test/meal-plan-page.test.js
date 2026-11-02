@@ -8,7 +8,7 @@ import { addWeeks } from "../public/dates.js";
 import { unsavedMessage, unsavedTitle } from "../public/messages.js";
 import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
-import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
+import { answerWeekLoad, DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
 
 const quiet = useQuietConsole();
 
@@ -302,6 +302,7 @@ describe("meal plan", () => {
       .map((request) => request.url)
       .filter((url) => url.startsWith("/api/weeks/") && url !== `/api/weeks/${WEEK}`);
     assert.deepEqual(weekUrls, ["/api/weeks/2026-09-28"]);
+    await answerWeekLoad(server, "2026-09-28");
   });
 
   test("marks the week range and the save announcement as polite live regions", async (t) => {

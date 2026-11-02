@@ -157,6 +157,16 @@ function installGlobals(window, fetch) {
       if (value === undefined) delete globalThis[key];
       else globalThis[key] = value;
     }
+    // A request that nobody answers times out in the app after 5 seconds, and
+    // logs an error in whichever test runs then.
+    const pending = fetch?.pending?.() ?? [];
+    if (pending.length > 0) {
+      const names = pending.map((request) => `${request.method} ${request.url}`).join(", ");
+      throw new Error(
+        `${pending.length} fake request(s) still pending when the page was cleaned up: ${names}. ` +
+          "Answer or abort each request in the test.",
+      );
+    }
   };
 }
 
@@ -201,7 +211,7 @@ export async function loadPage({
     beforeScript(window);
     await import(`../public/${script}?instance=${nextInstanceId++}`);
   } catch (error) {
-    await cleanup(); // the caller never gets `cleanup`, so nothing else restores the globals
+    await cleanup().catch(() => {}); // the caller never gets `cleanup`, so nothing else restores the globals
     throw error;
   }
 
@@ -246,7 +256,7 @@ export async function loadDialog({ html, id, script, fetch }) {
   try {
     module = await import(`../public/${script}?instance=${nextInstanceId++}`);
   } catch (error) {
-    await cleanup(); // the caller never gets `cleanup`, so nothing else restores the globals
+    await cleanup().catch(() => {}); // the caller never gets `cleanup`, so nothing else restores the globals
     throw error;
   }
 
@@ -269,7 +279,9 @@ export async function loadSlotEditorDialog() {
 /**
  * A controllable fake fetch, modeled on test/saves.test.js's fakeServer():
  * each call is recorded and left pending until the test resolves it with
- * `request.respond(status, body)` or rejects it with `request.fail()`.
+ * `request.respond(status, body)` or rejects it with `request.fail()`, or the
+ * app aborts it. The cleanup of a page fails the test when a request is still
+ * pending (`fetch.pending()` lists them).
  */
 export function fakeFetch() {
   const requests = [];
@@ -280,15 +292,21 @@ export function fakeFetch() {
         url,
         method: options.method ?? "GET",
         body: options.body === undefined ? undefined : JSON.parse(options.body),
+        settled: false,
         respond(status, body = {}) {
+          request.settled = true;
           resolve({ ok: status >= 200 && status < 300, status, json: async () => body });
         },
         fail() {
+          request.settled = true;
           reject(new TypeError("Network error"));
         },
       };
       requests.push(request);
-      options.signal?.addEventListener("abort", () => reject(options.signal.reason));
+      options.signal?.addEventListener("abort", () => {
+        request.settled = true;
+        reject(options.signal.reason);
+      });
     });
   }
 
@@ -302,6 +320,9 @@ export function fakeFetch() {
           (typeof url === "function" ? url(request.url) : request.url === url),
       );
   }
+
+  /** The requests that nobody has answered, failed, or aborted. */
+  fetch.pending = () => requests.filter((request) => !request.settled);
 
   return { fetch, requests, requestFor };
 }

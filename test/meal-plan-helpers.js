@@ -33,9 +33,21 @@ export async function openMealPlan(
     url: `http://localhost/#${week}`,
   });
   await tick();
+  await answerWeekLoad(server, week, { weekData, recipes, ingredients });
+  return { page, server };
+}
+
+/**
+ * Answers the three requests that a week load sends: the week, the recipes,
+ * and the ingredients.
+ */
+export async function answerWeekLoad(
+  server,
+  week,
+  { weekData = blankWeek(DAYS, MEALS), recipes = [], ingredients = [] } = {},
+) {
   server.requestFor("GET", `/api/weeks/${week}`).respond(200, weekData);
   server.requestFor("GET", "/api/recipes").respond(200, { recipes });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients });
   await tick();
-  return { page, server };
 }
