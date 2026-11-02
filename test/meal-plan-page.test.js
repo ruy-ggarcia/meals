@@ -493,6 +493,8 @@ test("Stay keeps the week and its unsaved menu", async (t) => {
     ["Soup", "×1"],
     ["Salad", "×1"],
   ]);
+  const status = slotButton("mon", "lunch").closest(".slot").querySelector(".status");
+  assert.equal(status.dataset.state, "error", "the slot still offers Retry");
   // Stay must stop goToWeek before it ever asks the server for the next
   // week, not just leave the request unanswered.
   assert.equal(
