@@ -1,15 +1,33 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { readFile } from "node:fs/promises";
+import { describe, test } from "node:test";
 import { cleanName, filterByName, nameKey, sortByName } from "../public/name-search.js";
-import { cleanName as serverCleanName, nameKey as serverNameKey } from "../server/names.js";
+
+// public/name-search.js and server/names.js implement the same rules on
+// purpose, because the browser never imports from server/. Both sides' tests
+// read the cases of test/fixtures/names.json, so the two can't drift apart.
+const shared = JSON.parse(
+  await readFile(new URL("./fixtures/names.json", import.meta.url), "utf8"),
+);
 
 function entry(name, archived = false) {
   return { id: `id-${name}`, name, archived };
 }
 
-test("nameKey ignores case and accents, like the server", () => {
-  assert.equal(nameKey("Café"), "cafe");
-  assert.equal(nameKey("ÑOQUIS"), "noquis");
+describe("nameKey", () => {
+  test("returns the key of each shared case", () => {
+    for (const { name, key } of shared.nameKeys) {
+      assert.equal(nameKey(name), key, JSON.stringify(name));
+    }
+  });
+});
+
+describe("cleanName", () => {
+  test("cleans the name of each shared case", () => {
+    for (const { name, clean } of shared.cleanNames) {
+      assert.equal(cleanName(name), clean, JSON.stringify(name));
+    }
+  });
 });
 
 test("sortByName returns a new array from A to Z by name key", () => {
@@ -42,21 +60,4 @@ test("filterByName with a blank query matches every entry", () => {
   const entries = [entry("Tea"), entry("Soup")];
   assert.deepEqual(filterByName(entries, ""), entries);
   assert.deepEqual(filterByName(entries, "   "), entries);
-});
-
-// The browser never imports from server/, so server/names.js#nameKey and
-// public/name-search.js#nameKey are separate implementations of the same
-// rule on purpose. This pins them to each other.
-test("nameKey equals the server's nameKey for accented, cased, and emoji names", () => {
-  for (const name of ["Café", "ÑOQUIS", "  Crème  brûlée ", "Ǆ", "🍲"]) {
-    assert.equal(nameKey(name), serverNameKey(name), name);
-  }
-});
-
-// The same for cleanName: the editors send names that the server would store
-// unchanged.
-test("cleanName equals the server's cleanName", () => {
-  for (const name of ["Tea", "  Crème   brûlée  \t", "a\n\nb", "   "]) {
-    assert.equal(cleanName(name), serverCleanName(name), JSON.stringify(name));
-  }
 });

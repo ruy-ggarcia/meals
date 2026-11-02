@@ -1,15 +1,38 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { byNameKey, cleanName, holderOf, nameKey, validName } from "../server/names.js";
 
-test("cleanName trims the name and collapses runs of whitespace", () => {
-  assert.equal(cleanName("  Green \t salad\n "), "Green salad");
+// server/names.js and public/name-search.js implement the same rules on
+// purpose, because the browser never imports from server/. Both sides' tests
+// read the cases of test/fixtures/names.json, so the two can't drift apart.
+const shared = JSON.parse(
+  await readFile(new URL("./fixtures/names.json", import.meta.url), "utf8"),
+);
+
+describe("cleanName", () => {
+  test("trims the name and collapses runs of whitespace", () => {
+    assert.equal(cleanName("  Green \t salad\n "), "Green salad");
+  });
+
+  test("cleans the name of each shared case", () => {
+    for (const { name, clean } of shared.cleanNames) {
+      assert.equal(cleanName(name), clean, JSON.stringify(name));
+    }
+  });
 });
 
-test("nameKey ignores case and accents", () => {
-  assert.equal(nameKey("Café"), nameKey("CAFE"));
-  assert.equal(nameKey("Ñoquis"), "noquis");
-  assert.notEqual(nameKey("Cafe"), nameKey("Cafes"));
+describe("nameKey", () => {
+  test("ignores case and accents", () => {
+    assert.equal(nameKey("Café"), nameKey("CAFE"));
+    assert.notEqual(nameKey("Cafe"), nameKey("Cafes"));
+  });
+
+  test("returns the key of each shared case", () => {
+    for (const { name, key } of shared.nameKeys) {
+      assert.equal(nameKey(name), key, JSON.stringify(name));
+    }
+  });
 });
 
 test("byNameKey sorts entries from A to Z by name key", () => {
