@@ -29,7 +29,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { afterEach, beforeEach, mock } from "node:test";
 import { fileURLToPath } from "node:url";
+import { inspect } from "node:util";
 import { Window } from "happy-dom";
 
 const PUBLIC_DIR = path.join(fileURLToPath(new URL(".", import.meta.url)), "..", "public");
@@ -294,4 +296,64 @@ export function fakeFetch() {
   }
 
   return { fetch, requests, requestFor };
+}
+
+/**
+ * Asserts that the calls to `console.error` in `calls` (each an array of the
+ * logged arguments) are as many as `expected`, and fails with the logged
+ * arguments, so an error that nobody expected is easy to find.
+ *
+ * @param {unknown[][]} calls
+ * @param {number} expected
+ */
+export function assertLoggedErrors(calls, expected) {
+  if (calls.length === expected) return;
+  const describe = (/** @type {unknown} */ arg) =>
+    typeof arg === "string" ? arg : arg instanceof Error ? String(arg) : inspect(arg);
+  const logged = calls.map((args) => `  ${args.map(describe).join(" ")}`).join("\n");
+  assert.fail(
+    `Expected ${expected} console.error call(s), got ${calls.length}${logged ? `:\n${logged}` : ""}`,
+  );
+}
+
+/**
+ * Silences `console.error` in every test of the file (or of the enclosing
+ * `describe`), and fails the test that logs an error nobody expected, like
+ * the browser tests do. A test that makes the app log on purpose, for
+ * example by failing a request, calls `expect(count)` with the number of
+ * errors it provokes. Call `useQuietConsole()` once at the top of a test
+ * file.
+ *
+ * @returns {{ expect: (count: number) => void, calls: () => unknown[][] }}
+ */
+export function useQuietConsole() {
+  /** @type {unknown[][]} */
+  let calls = [];
+  let expected = 0;
+  /** @type {any} */
+  let spy;
+
+  beforeEach(() => {
+    calls = [];
+    expected = 0;
+    spy = mock.method(console, "error", (/** @type {unknown[]} */ ...args) => {
+      // Node reports an experimental feature, such as the mock timers, through
+      // console.error, unless the run disables the warning. That's not the page.
+      const [first] = args;
+      if (typeof first === "string" && /^\(node:\d+\) ExperimentalWarning/.test(first)) return;
+      calls.push(args);
+    });
+  });
+
+  afterEach(() => {
+    spy.mock.restore();
+    assertLoggedErrors(calls, expected);
+  });
+
+  return {
+    expect(count) {
+      expected = count;
+    },
+    calls: () => calls,
+  };
 }

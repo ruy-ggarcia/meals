@@ -4,11 +4,13 @@
 // library choice, and test/shopping-list.test.js for the list's arithmetic.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
+import { test } from "node:test";
 import { formatWeekRange } from "../public/dates.js";
-import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
+
+const quiet = useQuietConsole();
 
 let page;
 let server;
@@ -21,14 +23,6 @@ async function openWeek(t, options) {
 function slotButton(day, meal) {
   return page.document.querySelector(`.slot[data-day="${day}"][data-meal="${meal}"] .slot-menu`);
 }
-
-beforeEach(() => {
-  mock.method(console, "error", () => {}); // some tests simulate a failed load or save on purpose
-});
-
-afterEach(() => {
-  mock.restoreAll();
-});
 
 const EGG = { id: "egg", name: "Egg", unit: "pcs", measures: [], archived: false };
 const ONION = { id: "onion", name: "Onion", unit: "g", measures: [], archived: false };
@@ -230,6 +224,7 @@ test("a backdrop click closes the shopping list", async (t) => {
 });
 
 test("Shopping list is disabled while no week is shown, and enabled when a week loads", async (t) => {
+  quiet.expect(1);
   server = fakeFetch();
   page = await openPage(t, {
     html: "index.html",

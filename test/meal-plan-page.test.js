@@ -3,11 +3,13 @@
 // DOM library choice.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, mock, test } from "node:test";
+import { afterEach, describe, mock, test } from "node:test";
 import { addWeeks } from "../public/dates.js";
-import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
+
+const quiet = useQuietConsole();
 
 let page;
 let server;
@@ -52,10 +54,6 @@ function saveSummaries() {
 function announcement() {
   return page.document.getElementById("save-announcement").textContent;
 }
-
-beforeEach(() => {
-  mock.method(console, "error", () => {}); // some tests simulate a failed load or save on purpose
-});
 
 afterEach(() => {
   mock.restoreAll();
@@ -183,6 +181,7 @@ test("the toolbar says while the week saves, and then that all changes are saved
 });
 
 test("a failed save shows Retry on the slot and in the toolbar, and Retry saves again", async (t) => {
+  quiet.expect(1);
   await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
   const save = await addWithEditor("mon", "lunch", "soup");
   save.fail();
@@ -370,6 +369,7 @@ async function leaveForNextWeek() {
 }
 
 test("leaving a week with an unsaved slot asks first, and names the meal", async (t) => {
+  quiet.expect(1);
   await openWeekWithUnsavedLunch(t);
 
   const alert = await leaveForNextWeek();
@@ -386,6 +386,7 @@ test("leaving a week with an unsaved slot asks first, and names the meal", async
 });
 
 test("Stay keeps the week and its unsaved menu", async (t) => {
+  quiet.expect(1);
   await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
@@ -407,6 +408,7 @@ test("Stay keeps the week and its unsaved menu", async (t) => {
 });
 
 test("Escape in the alert stays in the week", async (t) => {
+  quiet.expect(1);
   await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
@@ -421,6 +423,7 @@ test("Escape in the alert stays in the week", async (t) => {
 });
 
 test("a hash change while the alert asks is undone", async (t) => {
+  quiet.expect(1);
   await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
@@ -434,6 +437,7 @@ test("a hash change while the alert asks is undone", async (t) => {
 });
 
 test("Leave Without Saving shows the last saved menu, then the next week", async (t) => {
+  quiet.expect(1);
   await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
@@ -503,6 +507,7 @@ test("beforeunload calls preventDefault() only while the editor has changes", as
 });
 
 test("beforeunload calls preventDefault() while a slot's menu isn't confirmed", async (t) => {
+  quiet.expect(1);
   await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
 
   function dispatchBeforeUnload() {
@@ -541,6 +546,7 @@ function clickRecipesLink(init = {}) {
 }
 
 test("opening another page with an unsaved slot asks first, and Stay keeps the page", async (t) => {
+  quiet.expect(1);
   await openWeekWithUnsavedLunch(t);
   const alert = page.document.getElementById("leave-alert");
 
@@ -562,6 +568,7 @@ test("opening another page with an unsaved slot asks first, and Stay keeps the p
 });
 
 test("a click with a modifier key or another button on a page link keeps the browser's default and asks nothing", async (t) => {
+  quiet.expect(1);
   await openWeekWithUnsavedLunch(t);
   const alert = page.document.getElementById("leave-alert");
 
@@ -610,6 +617,7 @@ test("the saved badge's timer is scheduled on the page's window, so closing the 
 });
 
 test("a load failure shows the error, and Retry reloads", async (t) => {
+  quiet.expect(1);
   server = fakeFetch();
   page = await openPage(t, {
     html: "index.html",

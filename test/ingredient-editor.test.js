@@ -3,8 +3,17 @@
 // test/dom-helpers.js for the harness and the DOM library choice.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
-import { assertFocus, fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
+import { afterEach, beforeEach, test } from "node:test";
+import {
+  assertFocus,
+  fakeFetch,
+  loadDialog,
+  tick,
+  useQuietConsole,
+  waitFor,
+} from "./dom-helpers.js";
+
+const quiet = useQuietConsole();
 
 const MILK = { id: "milk", name: "Milk", unit: "g", archived: false };
 
@@ -16,7 +25,6 @@ let editor;
 let cleanup;
 
 beforeEach(async () => {
-  mock.method(console, "error", () => {}); // some tests simulate a failed save on purpose
   server = fakeFetch();
   let module;
   ({ dialog, document, window, module, cleanup } = await loadDialog({
@@ -30,7 +38,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await cleanup();
-  mock.restoreAll();
 });
 
 /** @param {{ ingredient?: object, usage?: object, others?: object[] }} [options] */
@@ -209,6 +216,7 @@ test("a rejected save (400) shows the server's message", async () => {
 });
 
 test("a network error keeps the editor open with the changes", async () => {
+  quiet.expect(1);
   openEditor();
   setName("Oat milk");
 
@@ -466,6 +474,7 @@ test("Remove is disabled on a measure that recipes use, with Used in 2 recipes."
 });
 
 test("Remove stays disabled after a failed save", async () => {
+  quiet.expect(1);
   openEditor({
     ingredient: SIZED_MILK,
     usage: { ...noUsage(), measures: new Map([["m1", 1]]) },
@@ -964,6 +973,7 @@ test("a 400 from the server shows its message", async () => {
 });
 
 test("Unit is disabled while the save is pending, and the conversion row stays after a failed save", async () => {
+  quiet.expect(1);
   openEditor({ ingredient: SIZED_MILK });
   setUnit("ml");
   setConversion("1", "2");
@@ -1012,6 +1022,7 @@ test("Archive with changes asks first, and Archive Without Saving sends only arc
 });
 
 test("a failed archive keeps the editor open and says so", async () => {
+  quiet.expect(1);
   openEditor();
 
   query(".archive").click();

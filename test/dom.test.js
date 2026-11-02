@@ -2,22 +2,20 @@
 // elements that it gets, so plain objects stand in for them.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
+import { beforeEach, test } from "node:test";
 import { withLoadState } from "../public/dom.js";
+import { useQuietConsole } from "./dom-helpers.js";
+
+const quiet = useQuietConsole();
 
 let loadError;
 let retryButton;
 let content;
 
 beforeEach(() => {
-  mock.method(console, "error", () => {}); // a test fails the load on purpose
   loadError = { hidden: false };
   retryButton = { disabled: false };
   content = [{ hidden: true }];
-});
-
-afterEach(() => {
-  mock.restoreAll();
 });
 
 function load(run) {
@@ -33,6 +31,7 @@ test("withLoadState resolves to true and shows the content when the load succeed
 });
 
 test("withLoadState resolves to false and shows the load error when the load fails", async () => {
+  quiet.expect(1);
   const error = new Error("offline");
 
   assert.equal(
@@ -45,8 +44,5 @@ test("withLoadState resolves to false and shows the load error when the load fai
   assert.equal(content[0].hidden, true);
   assert.equal(loadError.hidden, false);
   assert.equal(retryButton.disabled, false);
-  assert.deepEqual(/** @type {any} */ (console.error).mock.calls[0].arguments, [
-    "Couldn't load:",
-    error,
-  ]);
+  assert.deepEqual(quiet.calls(), [["Couldn't load:", error]]);
 });

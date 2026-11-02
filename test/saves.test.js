@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
+import { test } from "node:test";
 import { sameMenu } from "../public/menus.js";
 import { createSaves } from "../public/saves.js";
+import { useQuietConsole } from "./dom-helpers.js";
 import { within } from "./helpers.js";
+
+const quiet = useQuietConsole();
 
 function menu(...recipeIds) {
   return { items: recipeIds.map((recipeId) => ({ recipeId, servings: 1 })) };
@@ -60,14 +63,6 @@ function setup({ timeoutMs = 1000 } = {}) {
 }
 
 const KEY = "mon/lunch";
-
-beforeEach(() => {
-  mock.method(console, "error", () => {}); // failed saves log on purpose
-});
-
-afterEach(() => {
-  mock.restoreAll();
-});
 
 test("loaded marks every slot as idle", () => {
   const { statuses } = setup();
@@ -163,6 +158,7 @@ test("changing a menu object after its save doesn't change what counts as saved"
 });
 
 test("a failed save marks the slot as an error, and a retry saves it", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
 
@@ -181,6 +177,7 @@ test("a failed save marks the slot as an error, and a retry saves it", async () 
 });
 
 test("a save gives up after the timeout", async () => {
+  quiet.expect(1);
   const { saves, menus, statuses } = setup({ timeoutMs: 20 });
   menus.set(KEY, SOUP);
   const done = saves.queueSave(KEY); // the fake server never answers
@@ -189,6 +186,7 @@ test("a save gives up after the timeout", async () => {
 });
 
 test("a retry with the menu the server already has clears the error", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
   const first = saves.queueSave(KEY);
@@ -310,6 +308,7 @@ test("flush sends the menu that a slot shows now while an older save is running"
 });
 
 test("after a failed flush, the next queueSave retries the menu", async () => {
+  quiet.expect(1);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
@@ -324,6 +323,7 @@ test("after a failed flush, the next queueSave retries the menu", async () => {
 });
 
 test("a successful flush clears an earlier error of the slot", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
   const first = saves.queueSave(KEY);
@@ -361,6 +361,7 @@ test("settle waits for queued saves and page-hide saves", async () => {
 });
 
 test("settle also waits for page-hide saves that start while it waits", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   saves.loaded([["tue/lunch", EMPTY]]);
   menus.set(KEY, SOUP);
@@ -384,6 +385,7 @@ test("settle also waits for page-hide saves that start while it waits", async ()
 });
 
 test("a failed page-hide save marks the slot as an error and leaves it unsaved", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
@@ -394,6 +396,7 @@ test("a failed page-hide save marks the slot as an error and leaves it unsaved",
 });
 
 test("a page-hide save gives up after the timeout", async () => {
+  quiet.expect(1);
   const { saves, menus, statuses } = setup({ timeoutMs: 20 });
   menus.set(KEY, SOUP);
   saves.flush([KEY]); // the fake server never answers
@@ -402,6 +405,7 @@ test("a page-hide save gives up after the timeout", async () => {
 });
 
 test("a failed page-hide save doesn't mark the slot when a newer save replaced its menu", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
@@ -418,6 +422,7 @@ test("a failed page-hide save doesn't mark the slot when a newer save replaced i
 });
 
 test("a failed page-hide save doesn't mark the slot while a newer save runs", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
@@ -451,6 +456,7 @@ test("unsaved skips a loaded slot whose readMenu now returns undefined", () => {
 // A slot is unconfirmed until the server confirmed the menu that it shows.
 
 test("unconfirmed lists a slot whose save failed", async () => {
+  quiet.expect(1);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   const failed = saves.queueSave(KEY);
@@ -511,6 +517,7 @@ test("unconfirmed skips a slot whose readMenu now returns undefined", () => {
 });
 
 test("unconfirmed skips a slot after discard", async () => {
+  quiet.expect(1);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   const failed = saves.queueSave(KEY);
@@ -523,6 +530,7 @@ test("unconfirmed skips a slot after discard", async () => {
 });
 
 test("discard returns a copy, so mutating it afterward doesn't change the saved state", async () => {
+  quiet.expect(1);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   const failed = saves.queueSave(KEY);
@@ -545,6 +553,7 @@ test("discard returns a copy, so mutating it afterward doesn't change the saved 
 });
 
 test("discard returns the saved menu and clears the error, so no later save sends the discarded menu", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
   const failed = saves.queueSave(KEY);
@@ -563,6 +572,7 @@ test("discard returns the saved menu and clears the error, so no later save send
 });
 
 test("a late successful page-hide save keeps the error of a newer menu that failed", async () => {
+  quiet.expect(1);
   const { saves, server, menus, statuses } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]); // the page is hidden; this save is slow
@@ -579,6 +589,7 @@ test("a late successful page-hide save keeps the error of a newer menu that fail
 });
 
 test("when two page-hide saves of a slot fail, a later save sends the menu again", async () => {
+  quiet.expect(2);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
@@ -596,6 +607,7 @@ test("when two page-hide saves of a slot fail, a later save sends the menu again
 });
 
 test("when two page-hide saves of a slot fail, discard returns the menu the server has", async () => {
+  quiet.expect(2);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
@@ -609,6 +621,7 @@ test("when two page-hide saves of a slot fail, discard returns the menu the serv
 });
 
 test("a page-hide save confirmed after a newer save doesn't replace the newer menu", async () => {
+  quiet.expect(1);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]); // sent first, answered last
@@ -629,6 +642,7 @@ test("a page-hide save confirmed after a newer save doesn't replace the newer me
 });
 
 test("after a successful page-hide save, discard returns its menu", async () => {
+  quiet.expect(1);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
@@ -644,6 +658,7 @@ test("after a successful page-hide save, discard returns its menu", async () => 
 });
 
 test("when an older page-hide save succeeds after a newer one failed, discard returns the older menu", async () => {
+  quiet.expect(1);
   const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);

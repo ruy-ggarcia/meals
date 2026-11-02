@@ -4,8 +4,10 @@
 // tests in test/recipe-editor.test.js.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
-import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
+import { test } from "node:test";
+import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
+
+const quiet = useQuietConsole();
 
 const ONION = { id: "onion", name: "Onion", unit: "g", archived: false };
 const WITH_ONION = [{ ingredientId: "onion", quantity: 100 }];
@@ -99,14 +101,6 @@ async function respondTo(method, url, status, body) {
   server.requestFor(method, url).respond(status, body);
   await tick();
 }
-
-beforeEach(() => {
-  mock.method(console, "error", () => {}); // some tests simulate a failed request on purpose
-});
-
-afterEach(() => {
-  mock.restoreAll();
-});
 
 test("New recipe opens the editor, and the saved recipe appears in its sorted place with focus on Edit", async (t) => {
   await openRecipesPage(t, [recipe("1", "Green salad", false, WITH_ONION)]);
@@ -296,6 +290,7 @@ test("Restore moves a recipe back to the active list, and focus to the row in it
 });
 
 test("a failed restore shows its message and leaves the recipe in Archived", async (t) => {
+  quiet.expect(1);
   await openRecipesPage(t, [recipe("1", "Omelette", true)]);
 
   buttonLabeled("Restore Omelette").click();
@@ -385,6 +380,7 @@ test("a search that doesn't match an archived recipe leaves the Archived count u
 });
 
 test("a failed load of the ingredient catalog shows the error, and Retry loads both again", async (t) => {
+  quiet.expect(1);
   server = fakeFetch();
   page = await openPage(t, { html: "recipes.html", script: "recipes.js", fetch: server.fetch });
   ({ document, window } = page);
@@ -460,6 +456,7 @@ test("New recipe offers the catalog from a reload", async (t) => {
 });
 
 test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async (t) => {
+  quiet.expect(2);
   await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   for (const button of [buttonLabeled("Edit Soup"), document.getElementById("new-recipe")]) {

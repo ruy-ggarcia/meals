@@ -113,7 +113,8 @@ Integration tests check modules together with a real dependency, also in
   process.
 - On the frontend, the pages and the editors run on
   [happy-dom](https://github.com/capricorn86/happy-dom) with a fake server, so
-  a test can click, type, and read the page.
+  a test can click, type, and read the page. A test fails on a
+  `console.error` call that it didn't declare, as the browser tests do.
 - For the deployment, `npm run test:image` builds the image and runs it
   through `deploy/compose.yaml` as the host does, and `npm run test:host`
   runs the `meals-*` scripts against real Docker in a temporary root.

@@ -3,8 +3,17 @@
 // test/dom-helpers.js for the harness and the DOM library choice.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
-import { assertFocus, fakeFetch, loadDialog, tick, waitFor } from "./dom-helpers.js";
+import { afterEach, beforeEach, test } from "node:test";
+import {
+  assertFocus,
+  fakeFetch,
+  loadDialog,
+  tick,
+  useQuietConsole,
+  waitFor,
+} from "./dom-helpers.js";
+
+const quiet = useQuietConsole();
 
 const QUANTITY_MESSAGE = "Enter a quantity from 0.01 to 10000, with up to two decimals.";
 const EGG = { id: "egg", name: "Egg", unit: "pcs", measures: [], archived: false };
@@ -40,7 +49,6 @@ let editor;
 let cleanup;
 
 beforeEach(async () => {
-  mock.method(console, "error", () => {}); // some tests simulate a failed save on purpose
   server = fakeFetch();
   let module;
   ({ dialog, document, window, module, cleanup } = await loadDialog({
@@ -54,7 +62,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await cleanup();
-  mock.restoreAll();
 });
 
 /** @param {{ recipe?: object, ingredients?: object[], others?: object[] }} [options] */
@@ -461,6 +468,7 @@ test("a rejected save (400) shows the server's message", async () => {
 });
 
 test("a network error keeps the editor open with the changes", async () => {
+  quiet.expect(1);
   openEditor({ recipe: SOUP });
   setValue(nameField(), "Stew");
 
@@ -812,6 +820,7 @@ test("Archive Without Saving archives the recipe without the changes", async () 
 });
 
 test("a failed archive keeps the editor open and says so", async () => {
+  quiet.expect(1);
   openEditor({ recipe: SOUP });
 
   query(".archive").click();

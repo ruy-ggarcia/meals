@@ -4,8 +4,10 @@
 // recipe book is also covered by test/recipes-page.test.js.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
-import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
+import { test } from "node:test";
+import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
+
+const quiet = useQuietConsole();
 
 function ingredient(id, name, unit = "g", archived = false, measures = []) {
   return { id, name, unit, archived, measures };
@@ -110,14 +112,6 @@ async function respondTo(method, url, status, body) {
   server.requestFor(method, url).respond(status, body);
   await tick();
 }
-
-beforeEach(() => {
-  mock.method(console, "error", () => {}); // some tests simulate a failed request on purpose
-});
-
-afterEach(() => {
-  mock.restoreAll();
-});
 
 test("rows show each ingredient's name and unit from A to Z, and archived ones under Archived", async (t) => {
   await openIngredientsPage(t, [
@@ -282,6 +276,7 @@ test("the empty catalog and a search with no matches show their messages", async
 });
 
 test("a load failure shows the error, and Retry loads again", async (t) => {
+  quiet.expect(1);
   server = fakeFetch();
   page = await openPage(t, {
     html: "ingredients.html",
@@ -358,6 +353,7 @@ test("New ingredient refreshes the list from a reload before it opens", async (t
 });
 
 test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async (t) => {
+  quiet.expect(2);
   await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   for (const button of [buttonLabeled("Edit Onion"), newButton()]) {

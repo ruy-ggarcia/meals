@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { fakeFetch, loadDialog, loadPage, openPage } from "./dom-helpers.js";
+import { assertLoggedErrors, fakeFetch, loadDialog, loadPage, openPage } from "./dom-helpers.js";
 
 const GLOBALS = ["document", "fetch", "history", "location", "window"];
 
@@ -79,4 +79,23 @@ test("openPage cleans the page up when the test ends", async (t) => {
   });
 
   assertGlobalsRestored(before);
+});
+
+describe("assertLoggedErrors", () => {
+  test("passes when the errors are as many as expected", () => {
+    assertLoggedErrors([], 0);
+    assertLoggedErrors([["Couldn't save:", new Error("offline")]], 1);
+  });
+
+  test("fails with the logged arguments when an error is unexpected", () => {
+    assert.throws(() => assertLoggedErrors([["Couldn't save:", new Error("offline")]], 0), {
+      message: "Expected 0 console.error call(s), got 1:\n  Couldn't save: Error: offline",
+    });
+  });
+
+  test("fails when an expected error isn't logged", () => {
+    assert.throws(() => assertLoggedErrors([], 1), {
+      message: "Expected 1 console.error call(s), got 0",
+    });
+  });
 });
