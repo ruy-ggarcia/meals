@@ -35,13 +35,15 @@ describe("nameKey", () => {
   });
 });
 
-test("byNameKey sorts entries from A to Z by name key", () => {
-  const entries = [{ name: "omelette" }, { name: "Ñoquis" }, { name: "Café" }];
+describe("byNameKey", () => {
+  test("sorts entries from A to Z by name key", () => {
+    const entries = [{ name: "omelette" }, { name: "Ñoquis" }, { name: "Café" }];
 
-  assert.deepEqual(
-    entries.sort(byNameKey).map((entry) => entry.name),
-    ["Café", "Ñoquis", "omelette"],
-  );
+    assert.deepEqual(
+      entries.sort(byNameKey).map((entry) => entry.name),
+      ["Café", "Ñoquis", "omelette"],
+    );
+  });
 });
 
 describe("validName", () => {
@@ -97,13 +99,15 @@ describe("validName", () => {
   });
 });
 
-test("holderOf finds the entry with the same name key, except the given ID", () => {
-  const all = [
-    { id: "1", name: "Café" },
-    { id: "2", name: "Tea" },
-  ];
+describe("holderOf", () => {
+  test("finds the entry with the same name key, except the given ID", () => {
+    const all = [
+      { id: "1", name: "Café" },
+      { id: "2", name: "Tea" },
+    ];
 
-  assert.equal(holderOf(all, "  CAFE "), all[0]);
-  assert.equal(holderOf(all, "cafe", "1"), undefined);
-  assert.equal(holderOf(all, "Soup"), undefined);
+    assert.equal(holderOf(all, "  CAFE "), all[0]);
+    assert.equal(holderOf(all, "cafe", "1"), undefined);
+    assert.equal(holderOf(all, "Soup"), undefined);
+  });
 });

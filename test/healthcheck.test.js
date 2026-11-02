@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { once } from "node:events";
 import { rm } from "node:fs/promises";
 import net from "node:net";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { startTestServer, useDataDir } from "./backend-helpers.js";
 
@@ -21,30 +21,32 @@ function healthcheck(port) {
   });
 }
 
-test("healthcheck.js exits with 0 when the server is healthy", async (t) => {
-  const server = await startTestServer(t, dataDir());
+describe("server/healthcheck.js", () => {
+  test("exits with 0 when the server is healthy", async (t) => {
+    const server = await startTestServer(t, dataDir());
 
-  assert.deepEqual(await healthcheck(server.port), { code: 0, stderr: "" });
-});
+    assert.deepEqual(await healthcheck(server.port), { code: 0, stderr: "" });
+  });
 
-test("healthcheck.js exits with 1 when the health check returns 503", async (t) => {
-  const server = await startTestServer(t, dataDir());
-  // The server is running, and its data directory is gone.
-  await rm(dataDir(), { recursive: true });
+  test("exits with 1 when the health check returns 503", async (t) => {
+    const server = await startTestServer(t, dataDir());
+    // The server is running, and its data directory is gone.
+    await rm(dataDir(), { recursive: true });
 
-  // An empty stderr shows a failed check, and not a crash that also exits with 1.
-  assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });
-});
+    // An empty stderr shows a failed check, and not a crash that also exits with 1.
+    assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });
+  });
 
-test("healthcheck.js exits with 1 when the connection closes without an answer", async (t) => {
-  const closer = net.createServer((socket) => socket.destroy());
-  closer.listen(0, "127.0.0.1");
-  await once(closer, "listening");
-  t.after(() => closer.close());
+  test("exits with 1 when the connection closes without an answer", async (t) => {
+    const closer = net.createServer((socket) => socket.destroy());
+    closer.listen(0, "127.0.0.1");
+    await once(closer, "listening");
+    t.after(() => closer.close());
 
-  // An empty stderr shows a failed check, and not a crash that also exits with 1.
-  assert.deepEqual(await healthcheck(/** @type {net.AddressInfo} */ (closer.address()).port), {
-    code: 1,
-    stderr: "",
+    // An empty stderr shows a failed check, and not a crash that also exits with 1.
+    assert.deepEqual(await healthcheck(/** @type {net.AddressInfo} */ (closer.address()).port), {
+      code: 1,
+      stderr: "",
+    });
   });
 });

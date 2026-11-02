@@ -29,66 +29,70 @@ async function savedIngredients() {
   return JSON.parse(text).ingredients.map((ingredient) => ingredient.name);
 }
 
-test("idle() resolves after every write queued before it", async () => {
-  const stores = createStores({ dataDir: dataDir() });
-  const adding = stores.ingredients.create({ name: "Onion", unit: "g" });
+describe("idle", () => {
+  test("resolves after every write queued before it", async () => {
+    const stores = createStores({ dataDir: dataDir() });
+    const adding = stores.ingredients.create({ name: "Onion", unit: "g" });
 
-  await stores.idle();
+    await stores.idle();
 
-  assert.deepEqual(await savedIngredients(), ["Onion"]);
-  await adding;
-});
-
-test("start() creates a data directory that doesn't exist yet, so the health check passes", async (t) => {
-  const newDir = path.join(dataDir(), "not", "yet", "created");
-  const server = await startTestServer(t, newDir);
-
-  const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
-
-  assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { status: "ok", version: "1.2.3" });
-});
-
-test("start() listens on every interface unless it gets a host", async (t) => {
-  const server = await start({
-    dataDir: dataDir(),
-    logger: silentLogger,
-    port: 0,
-    version: "1.2.3",
+    assert.deepEqual(await savedIngredients(), ["Onion"]);
+    await adding;
   });
-  t.after(() => server.stop());
-
-  assert.equal(server.address, "0.0.0.0");
 });
 
-test("start() listens only on the host that it gets", async (t) => {
-  const server = await start({
-    dataDir: dataDir(),
-    host: "127.0.0.1",
-    logger: silentLogger,
-    port: 0,
-    version: "1.2.3",
+describe("start", () => {
+  test("creates a missing data directory, so the health check passes", async (t) => {
+    const newDir = path.join(dataDir(), "not", "yet", "created");
+    const server = await startTestServer(t, newDir);
+
+    const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
+
+    assert.equal(health.status, 200);
+    assert.deepEqual(await health.json(), { status: "ok", version: "1.2.3" });
   });
-  t.after(() => server.stop());
 
-  assert.equal(server.address, "127.0.0.1");
-});
+  test("listens on every interface unless it gets a host", async (t) => {
+    const server = await start({
+      dataDir: dataDir(),
+      logger: silentLogger,
+      port: 0,
+      version: "1.2.3",
+    });
+    t.after(() => server.stop());
 
-test("start() rejects when it can't create the data directory", async (t) => {
-  // A directory can't live under a regular file, whoever runs the test.
-  const file = path.join(dataDir(), "file");
-  await writeFile(file, "");
-
-  const started = start({
-    dataDir: path.join(file, "data"),
-    logger: silentLogger,
-    port: 0,
-    version: "1.2.3",
+    assert.equal(server.address, "0.0.0.0");
   });
-  // A server that starts anyway must not keep the test process alive.
-  started.then((server) => t.after(() => server.stop())).catch(() => {});
 
-  await assert.rejects(started, { code: "ENOTDIR" });
+  test("listens only on the host that it gets", async (t) => {
+    const server = await start({
+      dataDir: dataDir(),
+      host: "127.0.0.1",
+      logger: silentLogger,
+      port: 0,
+      version: "1.2.3",
+    });
+    t.after(() => server.stop());
+
+    assert.equal(server.address, "127.0.0.1");
+  });
+
+  test("rejects when it can't create the data directory", async (t) => {
+    // A directory can't live under a regular file, whoever runs the test.
+    const file = path.join(dataDir(), "file");
+    await writeFile(file, "");
+
+    const started = start({
+      dataDir: path.join(file, "data"),
+      logger: silentLogger,
+      port: 0,
+      version: "1.2.3",
+    });
+    // A server that starts anyway must not keep the test process alive.
+    started.then((server) => t.after(() => server.stop())).catch(() => {});
+
+    await assert.rejects(started, { code: "ENOTDIR" });
+  });
 });
 
 /**
@@ -188,20 +192,20 @@ describe("stop", () => {
     await within(stopping, "stop() didn't resolve after the request finished");
     await within(post.socketClosed, "The server didn't close the keep-alive connection");
   });
-});
 
-test("stop() rejects with the error of the server when it can't close", async () => {
-  const server = await start({
-    dataDir: dataDir(),
-    host: "127.0.0.1",
-    logger: silentLogger,
-    port: 0,
-    version: "1.2.3",
+  test("rejects with the error of the server when it can't close", async () => {
+    const server = await start({
+      dataDir: dataDir(),
+      host: "127.0.0.1",
+      logger: silentLogger,
+      port: 0,
+      version: "1.2.3",
+    });
+    await server.stop();
+
+    // The server is already closed, so closing it again fails.
+    await assert.rejects(server.stop(), { code: "ERR_SERVER_NOT_RUNNING" });
   });
-  await server.stop();
-
-  // The server is already closed, so closing it again fails.
-  await assert.rejects(server.stop(), { code: "ERR_SERVER_NOT_RUNNING" });
 });
 
 /**
@@ -287,7 +291,7 @@ describe("server/index.js", () => {
     assert.equal(await exited, 1);
   });
 
-  test("logs one error line, and nothing else, when the port is in use", async (t) => {
+  test("logs only one error line when the port is in use", async (t) => {
     const server = runIndex(t, { PORT: String(await takenPort(t)) });
 
     await server.exited;
