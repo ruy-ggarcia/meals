@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { afterEach, describe, test } from "node:test";
 import { sameMenu } from "../public/menus.js";
 import { createSaves } from "../public/saves.js";
-import { useQuietConsole } from "./dom-helpers.js";
-import { within } from "./helpers.js";
+import { tick, useQuietConsole, within } from "./dom-helpers.js";
 
 const quiet = useQuietConsole();
 
@@ -18,33 +17,71 @@ const SOUP_BREAD_AND_FRUIT = menu("soup", "bread", "fruit");
 const RICE = menu("rice");
 const FISH = menu("fish");
 
+// The fake servers of the test that runs.
+let servers = [];
+
 // A fake server: each PUT waits until the test answers it.
 function fakeServer() {
   const requests = [];
   function fetch(url, options) {
     return new Promise((resolve, reject) => {
-      requests.push({
+      const request = {
         url,
         method: options.method,
         body: JSON.parse(options.body),
         keepalive: options.keepalive === true,
-        ok: () => resolve({ ok: true, status: 200 }),
-        fail: () => reject(new TypeError("Network error")),
+        settled: false,
+        ok: () => {
+          request.settled = true;
+          resolve({ ok: true, status: 200 });
+        },
+        fail: () => {
+          request.settled = true;
+          reject(new TypeError("Network error"));
+        },
+      };
+      requests.push(request);
+      options.signal?.addEventListener("abort", () => {
+        request.settled = true;
+        reject(options.signal.reason);
       });
-      options.signal?.addEventListener("abort", () => reject(options.signal.reason));
     });
   }
   // The request that carries `expected`.
   function requestWith(expected) {
     return requests.find((request) => sameMenu(request.body, expected));
   }
-  return { fetch, requests, requestWith };
+  // Answers each request that is still pending, until none is left.
+  async function drain() {
+    for (let pending = requests.filter((request) => !request.settled); pending.length > 0; ) {
+      for (const request of pending) request.ok();
+      await tick();
+      pending = requests.filter((request) => !request.settled);
+    }
+  }
+  const server = { fetch, requests, requestWith, drain };
+  servers.push(server);
+  return server;
 }
 
-// Lets pending promise callbacks run.
-function tick() {
-  return new Promise((resolve) => setImmediate(resolve));
-}
+// A test fails when a request is still pending at its end: the save would
+// wait for its timer, and log an error in whichever test runs then. A test
+// that failed already stops before it answers its requests, so the check
+// leaves it alone: its own failure is the one to read.
+afterEach((t) => {
+  // The types of node:test don't have `passed` yet.
+  const { passed } = /** @type {{ passed: boolean }} */ (/** @type {unknown} */ (t));
+  const pending = servers
+    .flatMap((server) => server.requests)
+    .filter((request) => !request.settled);
+  servers = [];
+  if (!passed || pending.length === 0) return;
+  const names = pending.map((request) => `${request.method} ${request.url}`).join(", ");
+  throw new Error(
+    `${pending.length} fake request(s) still pending when the test ended: ${names}. ` +
+      "Answer or abort each request in the test.",
+  );
+});
 
 function setup({ timeoutMs = 1000 } = {}) {
   const server = fakeServer();
@@ -98,6 +135,7 @@ describe("queueSave", () => {
     assert.equal(server.requests[0].url, "/api/mon/lunch");
     assert.equal(server.requests[0].method, "PUT");
     assert.deepEqual(server.requests[0].body, SOUP);
+    await server.drain();
   });
 
   test("reports saving while the PUT runs, and saved when it succeeds", async () => {
@@ -122,6 +160,7 @@ test("the PUT body holds exactly the menu items, nothing else the menu carries",
   await tick();
 
   assert.deepEqual(server.requests[0].body, { items: [{ recipeId: "soup", servings: 1.5 }] });
+  await server.drain();
 });
 
 test("queueSave sends nothing when the menu is unchanged", async () => {
@@ -166,6 +205,7 @@ test("changing a menu object after its save doesn't change what counts as saved"
 
   assert.equal(server.requests.length, 2);
   assert.deepEqual(server.requests[1].body, SOUP_AND_BREAD);
+  await server.drain();
 });
 
 describe("queueSave after a failed save", () => {
@@ -261,6 +301,7 @@ describe("flush", () => {
 
     assert.deepEqual(server.requests[0].body, SOUP);
     assert.equal(server.requests[0].keepalive, true);
+    await server.drain();
   });
 
   test("skips an unchanged slot", async () => {
@@ -270,6 +311,7 @@ describe("flush", () => {
       server.requests.map((request) => request.url),
       ["/api/mon/lunch"],
     );
+    await server.drain();
   });
 });
 
@@ -314,6 +356,7 @@ test("flush skips a loaded slot whose readMenu now returns undefined, and still 
 
   assert.equal(server.requests.length, 1);
   assert.deepEqual(server.requests[0].body, RICE);
+  await server.drain();
 });
 
 test("a second flush and a later queueSave don't resend the flushed menu", async () => {
@@ -323,6 +366,7 @@ test("a second flush and a later queueSave don't resend the flushed menu", async
   saves.flush([KEY]);
   await saves.queueSave(KEY);
   assert.equal(server.requests.length, 1);
+  await server.drain();
 });
 
 test("flush skips a slot whose running save carries the same menu", async () => {
@@ -334,6 +378,7 @@ test("flush skips a slot whose running save carries the same menu", async () => 
   await tick();
   assert.equal(server.requests.length, 1);
   assert.equal(server.requests[0].keepalive, false);
+  await server.drain();
 });
 
 test("flush sends the menu that a slot shows now while an older save is running", async () => {
@@ -347,6 +392,7 @@ test("flush sends the menu that a slot shows now while an older save is running"
   assert.equal(server.requests.length, 2);
   assert.deepEqual(server.requests[1].body, SOUP_AND_BREAD);
   assert.equal(server.requests[1].keepalive, true);
+  await server.drain();
 });
 
 test("after a failed flush, the next queueSave retries the menu", async () => {
@@ -362,6 +408,7 @@ test("after a failed flush, the next queueSave retries the menu", async () => {
   await tick();
   assert.equal(server.requests.length, 2);
   assert.deepEqual(server.requests[1].body, SOUP);
+  await server.drain();
 });
 
 test("a successful flush clears an earlier error of the slot", async () => {
@@ -507,11 +554,12 @@ test("unconfirmed lists a slot whose save failed", async () => {
 });
 
 test("unconfirmed lists a slot whose save is running", async () => {
-  const { saves, menus } = setup();
+  const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.queueSave(KEY);
   await tick();
   assert.deepEqual(saves.unconfirmed([KEY]), [KEY]);
+  await server.drain();
 });
 
 test("unconfirmed lists a slot whose newer menu is still saving after the server confirmed an older one", async () => {
@@ -525,13 +573,15 @@ test("unconfirmed lists a slot whose newer menu is still saving after the server
   server.requests[0].ok();
   await tick();
   assert.deepEqual(saves.unconfirmed([KEY]), [KEY]);
+  await server.drain();
 });
 
 test("unconfirmed lists a slot whose page-hide save is running", async () => {
-  const { saves, menus } = setup();
+  const { saves, server, menus } = setup();
   menus.set(KEY, SOUP);
   saves.flush([KEY]);
   assert.deepEqual(saves.unconfirmed([KEY]), [KEY]);
+  await server.drain();
 });
 
 test("unconfirmed skips a slot that the server confirmed", async () => {
@@ -664,6 +714,7 @@ test("when two page-hide saves of a slot fail, a later save sends the menu again
   await tick();
   assert.equal(server.requests.length, 3);
   assert.deepEqual(server.requests[2].body, SOUP);
+  await server.drain();
 });
 
 test("when two page-hide saves of a slot fail, discard returns the menu the server has", async () => {
