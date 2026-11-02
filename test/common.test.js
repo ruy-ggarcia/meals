@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { chmod, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createHost, skipAsRoot, withMode } from "./host-helpers.js";
 
@@ -62,6 +62,17 @@ test("validate_data fails when it can't read a directory under the data", {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Permission denied/);
   assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
+});
+
+describe("validate_data", () => {
+  test("fails with its message when find fails before it lists a file", () => {
+    // The scripts run with set -e, which ends the subshell of find before it
+    // prints the status of find.
+    const result = runWithCommon('set -e\nfind() { return 1; }\nvalidate_data "$MEALS_ROOT/data"');
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
+  });
 });
 
 test("validate_data says so when jq isn't installed", () => {
