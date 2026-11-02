@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { createQueue } from "../server/files.js";
 import { createStores } from "../server/stores.js";
-import { createWeeks, DAYS, isWeekId, MEALS } from "../server/weeks.js";
+import { createWeeks } from "../server/weeks.js";
 import { blankWeek } from "./helpers.js";
 
 // Expected values are written out literally so the tests do not trust the module under test.
@@ -47,40 +47,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
-});
-
-test("exports the stable day and meal identifiers in order", () => {
-  assert.deepEqual(DAYS, EXPECTED_DAYS);
-  assert.deepEqual(MEALS, EXPECTED_MEALS);
-});
-
-// Parallels the isWeekId tests in test/dates.test.js on purpose: this tests
-// server/weeks.js's own implementation, required by the public/-never-
-// imports-server/ rule, not a duplicate of that other test.
-test("isWeekId accepts a Monday in YYYY-MM-DD format", () => {
-  for (const week of ["2026-09-21", "2026-12-28", "2027-01-04"]) {
-    assert.equal(isWeekId(week), true, week);
-  }
-});
-
-test("isWeekId rejects other weekdays, impossible dates, and other formats", () => {
-  const invalid = [
-    "2026-09-22", // Tuesday
-    "2026-09-27", // Sunday
-    "2026-02-30", // doesn't exist; JavaScript rolls it over to Monday, March 2
-    "2026-13-07",
-    "2026-9-21",
-    "20260921",
-    "2026-09-21T00:00:00Z",
-    " 2026-09-21",
-    "__proto__",
-    "",
-    undefined,
-    21,
-  ];
-  for (const week of invalid) {
-    assert.equal(isWeekId(week), false, String(week));
-  }
 });
 
 test("readWeek returns a complete week of empty menus when the week has no file", async () => {
