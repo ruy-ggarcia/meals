@@ -341,41 +341,6 @@ test("150 g = 1 pcs converts with the factor to ÷ from", async () => {
   assert.deepEqual(moves, []);
 });
 
-test("the three steps keep every recipe's meaning when step 3 fails, and a retry needs no measureName", async () => {
-  const carrot = await inUse(
-    { name: "Carrot", unit: "pcs", measures: [{ name: "net", amount: 4 }] },
-    true,
-  );
-  failingMoves = 1;
-
-  await assert.rejects(
-    ingredients.update(carrot.id, {
-      unit: "g",
-      conversion: { from: 1, to: 120, measureName: "piece" },
-    }),
-    /can't be written/,
-  );
-
-  const { ingredients: stored } = JSON.parse(await readFile(ingredientsFile(), "utf8"));
-  const piece = stored[0].measures[1];
-  assert.deepEqual(stored, [
-    { ...carrot, measures: [...carrot.measures, { id: piece.id, name: "piece", amount: 1 }] },
-  ]);
-
-  usage.set(carrot.id, { inUnit: false, measureIds: new Set([piece.id]) });
-  const updated = await ingredients.update(carrot.id, {
-    unit: "g",
-    conversion: { from: 1, to: 120 },
-  });
-
-  assert.equal(updated.unit, "g");
-  assert.deepEqual(updated.measures, [
-    { ...carrot.measures[0], amount: 480 },
-    { ...piece, amount: 120 },
-  ]);
-  assert.deepEqual(moves, []);
-});
-
 test("a retry after a failed step 2 with the same measureName reuses the measure from step 1", async () => {
   const carrot = await inUse(
     { name: "Carrot", unit: "pcs", measures: [{ name: "net", amount: 4 }] },
@@ -417,6 +382,51 @@ describe("create", () => {
 });
 
 describe("update", () => {
+  /** A carrot in pcs that a recipe uses, whose change to g fails when it moves the recipe ingredients. */
+  async function carrotWithFailedMove() {
+    const carrot = await inUse(
+      { name: "Carrot", unit: "pcs", measures: [{ name: "net", amount: 4 }] },
+      true,
+    );
+    failingMoves = 1;
+    await assert.rejects(
+      ingredients.update(carrot.id, {
+        unit: "g",
+        conversion: { from: 1, to: 120, measureName: "piece" },
+      }),
+      /can't be written/,
+    );
+    return carrot;
+  }
+
+  test("keeps the unit and adds the measure when moving the ingredients fails", async () => {
+    const carrot = await carrotWithFailedMove();
+
+    const { ingredients: stored } = JSON.parse(await readFile(ingredientsFile(), "utf8"));
+    const piece = stored[0].measures[1];
+    assert.deepEqual(stored, [
+      { ...carrot, measures: [...carrot.measures, { id: piece.id, name: "piece", amount: 1 }] },
+    ]);
+  });
+
+  test("needs no measureName to retry after moving the ingredients failed", async () => {
+    const carrot = await carrotWithFailedMove();
+    const [, piece] = (await ingredients.list())[0].measures;
+    usage.set(carrot.id, { inUnit: false, measureIds: new Set([piece.id]) });
+
+    const updated = await ingredients.update(carrot.id, {
+      unit: "g",
+      conversion: { from: 1, to: 120 },
+    });
+
+    assert.equal(updated.unit, "g");
+    assert.deepEqual(updated.measures, [
+      { ...carrot.measures[0], amount: 480 },
+      { ...piece, amount: 120 },
+    ]);
+    assert.deepEqual(moves, []);
+  });
+
   test("rejects an invalid change, and leaves the ingredient unchanged", async () => {
     const onion = await ingredients.create({ name: "Onion", unit: "g" });
 
