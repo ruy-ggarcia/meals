@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import {
   ConflictError,
   NameConflictError,
@@ -177,38 +177,46 @@ test("update archives and restores an ingredient", async () => {
   assert.deepEqual(await ingredients.update(onion.id, { archived: false }), onion);
 });
 
-test("update rejects changes that aren't a valid shape", async () => {
-  const onion = await ingredients.create({ name: "Onion", unit: "g" });
-  const invalid = [
-    undefined,
-    null,
-    "Onion",
-    [],
-    {},
-    { archived: true, name: "Leek" },
-    { archived: true, unit: "g" },
-    { color: "red" },
-    { name: "Leek", color: "red" },
-    { archived: "yes" },
-    { unit: "kg" },
-    { name: "" },
-    { unit: "pcs", conversion: null },
-    { unit: "pcs", conversion: { from: 1 } },
-    { unit: "pcs", conversion: { from: 1, to: 120, color: "red" } },
-    { unit: "pcs", conversion: { from: 0, to: 120 } },
-    { unit: "pcs", conversion: { from: 1, to: 10000.01 } },
-    { unit: "pcs", conversion: { from: 1.234, to: 120 } },
-    { unit: "pcs", conversion: { from: "1", to: 120 } },
-  ];
+describe("ingredients", () => {
+  test("rejects an update that isn't a valid shape", async () => {
+    // The ingredient has no measures and no recipe, so the rule that "needs
+    // no conversion" would also reject the rows with a conversion.
+    const onion = await ingredients.create({ name: "Onion", unit: "g" });
+    const wrongKeys =
+      'Send "name", "unit", "measures", "conversion", or any combination, or "archived" alone.';
+    const wrongConversion = '"conversion" must have "from" and "to", and optionally "measureName".';
+    const wrongQuantity = "must be from 0.01 to 10000, with at most two decimals.";
+    const invalid = [
+      [undefined, wrongKeys],
+      [null, wrongKeys],
+      ["Onion", wrongKeys],
+      [[], wrongKeys],
+      [{}, wrongKeys],
+      [{ archived: true, name: "Leek" }, wrongKeys],
+      [{ archived: true, unit: "g" }, wrongKeys],
+      [{ color: "red" }, wrongKeys],
+      [{ name: "Leek", color: "red" }, wrongKeys],
+      [{ archived: "yes" }, '"archived" must be true or false.'],
+      [{ unit: "kg" }, '"unit" must be one of g, ml, pcs.'],
+      [{ name: "" }, "The name can't be empty."],
+      [{ unit: "pcs", conversion: null }, wrongConversion],
+      [{ unit: "pcs", conversion: { from: 1 } }, wrongConversion],
+      [{ unit: "pcs", conversion: { from: 1, to: 120, color: "red" } }, wrongConversion],
+      [{ unit: "pcs", conversion: { from: 0, to: 120 } }, `conversion.from ${wrongQuantity}`],
+      [{ unit: "pcs", conversion: { from: 1, to: 10000.01 } }, `conversion.to ${wrongQuantity}`],
+      [{ unit: "pcs", conversion: { from: 1.234, to: 120 } }, `conversion.from ${wrongQuantity}`],
+      [{ unit: "pcs", conversion: { from: "1", to: 120 } }, `conversion.from ${wrongQuantity}`],
+    ];
 
-  for (const changes of invalid) {
-    await assert.rejects(
-      ingredients.update(onion.id, changes),
-      ValidationError,
-      JSON.stringify(changes),
-    );
-  }
-  assert.deepEqual(await ingredients.list(), [onion]);
+    for (const [changes, message] of invalid) {
+      await assert.rejects(
+        ingredients.update(onion.id, changes),
+        { name: "ValidationError", message },
+        JSON.stringify(changes),
+      );
+    }
+    assert.deepEqual(await ingredients.list(), [onion]);
+  });
 });
 
 test("update rejects an unknown ID", async () => {

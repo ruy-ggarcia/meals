@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
-import { ValidationError } from "../server/errors.js";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { createQueue } from "../server/files.js";
 import { createStores } from "../server/stores.js";
 import { createWeeks, DAYS, isWeekId, MEALS } from "../server/weeks.js";
@@ -217,45 +216,56 @@ test("saveSlot rejects unknown week, day, or meal identifiers without writing", 
   assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
 });
 
-test("saveSlot rejects invalid items without writing", async () => {
-  const tooMany = Array.from({ length: 21 }, (_, index) => ({
-    recipeId: `r${index}`,
-    servings: 1,
-  }));
-  const invalid = [
-    undefined,
-    null,
-    "Soup",
-    {},
-    tooMany,
-    [null],
-    [soup.id],
-    [{ recipeId: soup.id }],
-    [{ servings: 1 }],
-    [{ recipeId: soup.id, servings: 1, note: "hot" }],
-    [{ recipeId: 42, servings: 1 }],
-    [{ recipeId: soup.id, servings: "1" }],
-    [{ recipeId: soup.id, servings: 0 }],
-    [{ recipeId: soup.id, servings: 0.25 }],
-    [{ recipeId: soup.id, servings: 1.2 }],
-    [{ recipeId: soup.id, servings: -1 }],
-    [{ recipeId: soup.id, servings: 99.5 }],
-    [{ recipeId: soup.id, servings: Number.NaN }],
-    [
-      { recipeId: soup.id, servings: 1 },
-      { recipeId: soup.id, servings: 2 },
-    ],
-    [{ recipeId: "no-such-recipe", servings: 1 }],
-  ];
+describe("saveSlot", () => {
+  test("rejects invalid items by the broken rule, and writes nothing", async () => {
+    // Each recipe exists, so only the rule in the message can reject the items.
+    const recipeIds = [];
+    for (let index = 0; index < 21; index++) {
+      recipeIds.push((await recipes.create({ name: `Recipe ${index}` })).id);
+    }
+    const tooMany = recipeIds.map((recipeId) => ({ recipeId, servings: 1 }));
+    const notAnArray = '"items" must be an array.';
+    const wrongShape = 'items[0] must have exactly "recipeId" and "servings".';
+    const wrongServings = "items[0].servings must be a multiple of 0.5 from 0.5 to 99.";
+    const invalid = [
+      [undefined, notAnArray],
+      [null, notAnArray],
+      ["Soup", notAnArray],
+      [{}, notAnArray],
+      [tooMany, "A menu holds at most 20 menu items."],
+      [[null], wrongShape],
+      [[soup.id], wrongShape],
+      [[{ recipeId: soup.id }], wrongShape],
+      [[{ servings: 1 }], wrongShape],
+      [[{ recipeId: soup.id, servings: 1, note: "hot" }], wrongShape],
+      [[{ recipeId: 42, servings: 1 }], "items[0].recipeId must be a string."],
+      [[{ recipeId: soup.id, servings: "1" }], wrongServings],
+      [[{ recipeId: soup.id, servings: 0 }], wrongServings],
+      [[{ recipeId: soup.id, servings: 0.25 }], wrongServings],
+      [[{ recipeId: soup.id, servings: 1.2 }], wrongServings],
+      [[{ recipeId: soup.id, servings: -1 }], wrongServings],
+      [[{ recipeId: soup.id, servings: 99.5 }], wrongServings],
+      [[{ recipeId: soup.id, servings: Number.NaN }], wrongServings],
+      [
+        [
+          { recipeId: soup.id, servings: 1 },
+          { recipeId: soup.id, servings: 2 },
+        ],
+        `items[1] repeats recipe ${soup.id}.`,
+      ],
+      [[{ recipeId: "no-such-recipe", servings: 1 }], "Unknown recipe: no-such-recipe"],
+    ];
+    const before = await readdir(path.join(dataDir, "v2"));
 
-  for (const items of invalid) {
-    await assert.rejects(
-      weeks.saveSlot(WEEK, "mon", "lunch", items),
-      ValidationError,
-      JSON.stringify(items)?.slice(0, 60),
-    );
-  }
-  assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
+    for (const [items, message] of invalid) {
+      await assert.rejects(
+        weeks.saveSlot(WEEK, "mon", "lunch", items),
+        { name: "ValidationError", message },
+        JSON.stringify(items)?.slice(0, 60),
+      );
+    }
+    assert.deepEqual(await readdir(path.join(dataDir, "v2")), before);
+  });
 });
 
 test("saveSlot accepts the limits: 0.5 and 99 servings, and 20 menu items", async () => {

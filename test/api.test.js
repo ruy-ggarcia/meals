@@ -4,7 +4,7 @@ import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import request from "supertest";
 import { createApp } from "../server/app.js";
@@ -848,36 +848,54 @@ test("PUT with an unknown week, day, or meal returns 404 JSON and saves nothing"
   assert.deepEqual(await readdir(dataDir), []);
 });
 
-test("PUT with an invalid menu returns 400 JSON and saves nothing", async () => {
-  const soup = await addRecipe("Soup");
-  const url = `/api/weeks/${WEEK}/mon/lunch`;
-  const bodies = [
-    {},
-    { text: "Soup" }, // the free-text API of earlier versions
-    { items: "Soup" },
-    { items: [{ recipeId: soup.id }] },
-    { items: [{ recipeId: soup.id, servings: 1, note: "hot" }] },
-    { items: [{ recipeId: soup.id, servings: 0.3 }] },
-    { items: [{ recipeId: soup.id, servings: 100 }] },
-    {
-      items: [
-        { recipeId: soup.id, servings: 1 },
-        { recipeId: soup.id, servings: 1 },
+describe("PUT /api/weeks/:week/:day/:meal", () => {
+  test("returns 400 JSON and saves nothing for an invalid menu", async () => {
+    const soup = await addRecipe("Soup");
+    // Each recipe exists, so only the rule in the message can reject the menu.
+    const recipeIds = [];
+    for (let index = 0; index < 21; index++) {
+      recipeIds.push((await addRecipe(`Recipe ${index}`)).id);
+    }
+    const url = `/api/weeks/${WEEK}/mon/lunch`;
+    const notAnArray = '"items" must be an array.';
+    const wrongShape = 'items[0] must have exactly "recipeId" and "servings".';
+    const wrongServings = "items[0].servings must be a multiple of 0.5 from 0.5 to 99.";
+    const bodies = [
+      [{}, notAnArray],
+      [{ text: "Soup" }, notAnArray], // the free-text API of earlier versions
+      [{ items: "Soup" }, notAnArray],
+      [{ items: [{ recipeId: soup.id }] }, wrongShape],
+      [{ items: [{ recipeId: soup.id, servings: 1, note: "hot" }] }, wrongShape],
+      [{ items: [{ recipeId: soup.id, servings: 0.3 }] }, wrongServings],
+      [{ items: [{ recipeId: soup.id, servings: 100 }] }, wrongServings],
+      [
+        {
+          items: [
+            { recipeId: soup.id, servings: 1 },
+            { recipeId: soup.id, servings: 1 },
+          ],
+        },
+        `items[1] repeats recipe ${soup.id}.`,
       ],
-    },
-    { items: [{ recipeId: "no-such-recipe", servings: 1 }] },
-    {
-      items: Array.from({ length: 21 }, (_, index) => ({ recipeId: `r${index}`, servings: 1 })),
-    },
-  ];
-  for (const body of bodies) {
-    const res = await request(app).put(url).send(body);
-    assertJsonError(res, 400, JSON.stringify(body).slice(0, 60));
-  }
-  assertJsonError(await request(app).put(url), 400, "no body at all");
+      [{ items: [{ recipeId: "no-such-recipe", servings: 1 }] }, "Unknown recipe: no-such-recipe"],
+      [
+        { items: recipeIds.map((recipeId) => ({ recipeId, servings: 1 })) },
+        "A menu holds at most 20 menu items.",
+      ],
+    ];
+    for (const [body, message] of bodies) {
+      const label = JSON.stringify(body).slice(0, 60);
+      const res = await request(app).put(url).send(body);
+      assertJsonError(res, 400, label);
+      assert.equal(res.body.error, message, label);
+    }
+    const noBody = await request(app).put(url);
+    assertJsonError(noBody, 400, "no body at all");
+    assert.equal(noBody.body.error, notAnArray, "no body at all");
 
-  const get = await request(app).get(`/api/weeks/${WEEK}`);
-  assert.deepEqual(get.body, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+    const get = await request(app).get(`/api/weeks/${WEEK}`);
+    assert.deepEqual(get.body, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+  });
 });
 
 test("PUT with a malformed JSON body returns 400 JSON", async () => {

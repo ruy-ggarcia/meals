@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { NameConflictError, NotFoundError, ValidationError } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
 
@@ -256,34 +256,62 @@ test("create rejects fields that aren't a name with optional ingredients", async
   assert.deepEqual(await recipes.list(), []);
 });
 
-test("create and update reject ingredients that break the rules", async () => {
-  const onion = await ingredients.create({ name: "Onion", unit: "g" });
-  const invalid = [
-    "Onion",
-    null,
-    {},
-    [entry(onion.id, 1), entry(onion.id, 2)],
-    [{ ingredientId: onion.id }],
-    [{ ...entry(onion.id, 1), note: "chopped" }],
-    [entry(42, 1)],
-    ...[0, 0.001, 0.005, 1.255, 10000.01, -1, "1", Number.NaN, Number.POSITIVE_INFINITY, null].map(
-      (quantity) => [entry(onion.id, quantity)],
-    ),
-    Array.from({ length: 51 }, (_, index) => entry(`id-${index}`, 1)),
-  ];
+describe("recipes", () => {
+  test("rejects ingredients that break the rules in create and update", async () => {
+    const onion = await ingredients.create({ name: "Onion", unit: "g" });
+    // Each ingredient exists, so only the rule in the message can reject the list.
+    const catalog = [];
+    for (let index = 0; index < 51; index++) {
+      catalog.push(await ingredients.create({ name: `Ingredient ${index}`, unit: "g" }));
+    }
+    const notAnArray = '"ingredients" must be an array.';
+    const wrongShape =
+      'ingredients[0] must have "ingredientId" and "quantity", and optionally "measureId".';
+    const wrongQuantity =
+      "ingredients[0].quantity must be from 0.01 to 10000, with at most two decimals.";
+    const invalid = [
+      ["Onion", notAnArray],
+      [null, notAnArray],
+      [{}, notAnArray],
+      [[entry(onion.id, 1), entry(onion.id, 2)], `ingredients[1] repeats ingredient ${onion.id}.`],
+      [[{ ingredientId: onion.id }], wrongShape],
+      [[{ ...entry(onion.id, 1), note: "chopped" }], wrongShape],
+      [[entry(42, 1)], "ingredients[0].ingredientId must be a string."],
+      ...[
+        0,
+        0.001,
+        0.005,
+        1.255,
+        10000.01,
+        -1,
+        "1",
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        null,
+      ].map((quantity) => [[entry(onion.id, quantity)], wrongQuantity]),
+      [
+        catalog.map((ingredient) => entry(ingredient.id, 1)),
+        "A recipe holds at most 50 ingredients.",
+      ],
+    ];
 
-  for (const list of invalid) {
-    await assert.rejects(
-      recipes.create({ name: "Soup", ingredients: list }),
-      ValidationError,
-      String(JSON.stringify(list)),
-    );
-  }
-  const soup = await recipes.create({ name: "Soup" });
-  for (const list of invalid) {
-    await assert.rejects(recipes.update(soup.id, { ingredients: list }), ValidationError);
-  }
-  assert.deepEqual(await recipes.list(), [soup]);
+    for (const [list, message] of invalid) {
+      await assert.rejects(
+        recipes.create({ name: "Soup", ingredients: list }),
+        { name: "ValidationError", message },
+        String(JSON.stringify(list)).slice(0, 60),
+      );
+    }
+    const soup = await recipes.create({ name: "Soup" });
+    for (const [list, message] of invalid) {
+      await assert.rejects(
+        recipes.update(soup.id, { ingredients: list }),
+        { name: "ValidationError", message },
+        String(JSON.stringify(list)).slice(0, 60),
+      );
+    }
+    assert.deepEqual(await recipes.list(), [soup]);
+  });
 });
 
 test("a quantity with three decimals names the quantity rule", async () => {
@@ -503,26 +531,31 @@ test("create and update store measureId, and keep lines without it in the unit",
   assert.deepEqual((await recipes.list())[0].ingredients, [inMeasure]);
 });
 
-test("a measureId that isn't a measure of its ingredient is rejected", async () => {
-  const onion = await ingredients.create({ name: "Onion", unit: "g" });
-  const egg = await ingredients.create({
-    name: "Egg",
-    unit: "pcs",
-    measures: [{ name: "large", amount: 1 }],
-  });
-  const line = (measureId) => ({ ingredientId: onion.id, measureId, quantity: 1 });
-  const soup = await recipes.create({ name: "Soup" });
+describe("recipes", () => {
+  test("rejects a measureId that isn't a measure of its ingredient", async () => {
+    const onion = await ingredients.create({ name: "Onion", unit: "g" });
+    const egg = await ingredients.create({
+      name: "Egg",
+      unit: "pcs",
+      measures: [{ name: "large", amount: 1 }],
+    });
+    const line = (measureId) => ({ ingredientId: onion.id, measureId, quantity: 1 });
+    const soup = await recipes.create({ name: "Soup" });
 
-  await assert.rejects(recipes.create({ name: "Stew", ingredients: [line("gone")] }), {
-    name: "ValidationError",
-    message: "Unknown measure: gone",
+    await assert.rejects(recipes.create({ name: "Stew", ingredients: [line("gone")] }), {
+      name: "ValidationError",
+      message: "Unknown measure: gone",
+    });
+    // A measure of another ingredient doesn't count.
+    await assert.rejects(recipes.update(soup.id, { ingredients: [line(egg.measures[0].id)] }), {
+      name: "ValidationError",
+      message: `Unknown measure: ${egg.measures[0].id}`,
+    });
+    await assert.rejects(recipes.update(soup.id, { ingredients: [line(5)] }), {
+      name: "ValidationError",
+      message: "ingredients[0].measureId must be a string.",
+    });
   });
-  // A measure of another ingredient doesn't count.
-  await assert.rejects(recipes.update(soup.id, { ingredients: [line(egg.measures[0].id)] }), {
-    name: "ValidationError",
-    message: `Unknown measure: ${egg.measures[0].id}`,
-  });
-  await assert.rejects(recipes.update(soup.id, { ingredients: [line(5)] }), ValidationError);
 });
 
 test("a recipe save that uses a measure and a removal of that measure never both succeed", async () => {
