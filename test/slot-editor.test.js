@@ -111,7 +111,7 @@ test("Add recipe offers every addable recipe before you type, with a hint to typ
   assert.equal(search().placeholder, "Type part of a name");
   assert.deepEqual(
     optionEls().map((option) => option.textContent),
-    ["Green salad", "Omelette"],
+    ["Green salad", "Omelette"], // Café is archived, Lentil soup is in the menu; A to Z
   );
 });
 
@@ -251,15 +251,6 @@ test("arrow keys move the highlight among the offered recipes", () => {
   assert.deepEqual(
     optionEls().map((option) => option.getAttribute("aria-selected")),
     ["false", "false", "true"],
-  );
-});
-
-test("the offered list excludes archived recipes and recipes already in the menu", () => {
-  openEditor({ menu: menu(["soup", 1]) }); // Lentil soup is already in the menu
-
-  assert.deepEqual(
-    optionEls().map((option) => option.textContent),
-    ["Green salad", "Omelette"], // Café is archived, Lentil soup is in the menu; A to Z
   );
 });
 
