@@ -6,9 +6,28 @@ import assert from "node:assert/strict";
 import { afterEach, describe, mock, test } from "node:test";
 import { addWeeks } from "../public/dates.js";
 import { unsavedMessage, unsavedTitle } from "../public/messages.js";
-import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
-import { blankWeek } from "./helpers.js";
-import { answerWeekLoad, DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
+import {
+  assertFocus,
+  dispatchBeforeUnload,
+  fakeFetch,
+  openPage,
+  plain,
+  tick,
+  typeInto,
+  useQuietConsole,
+  waitFor,
+} from "./dom-helpers.js";
+import {
+  addWithEditor,
+  answerWeekLoad,
+  blankWeek,
+  DAYS,
+  MEALS,
+  openMealPlan,
+  slotButton,
+  WEEK,
+  withSlot,
+} from "./meal-plan-helpers.js";
 
 const quiet = useQuietConsole();
 
@@ -20,30 +39,12 @@ async function openWeek(t, options) {
   return page;
 }
 
-function slotButton(day, meal) {
-  return page.document.querySelector(`.slot[data-day="${day}"][data-meal="${meal}"] .slot-menu`);
-}
-
 // The menu items that a slot shows, as [name, servings] pairs.
 function slotItems(day, meal) {
-  return [...slotButton(day, meal).querySelectorAll(".item")].map((item) => [
+  return [...slotButton(page, day, meal).querySelectorAll(".item")].map((item) => [
     item.querySelector(".item-name").textContent,
     item.querySelector(".item-servings").textContent,
   ]);
-}
-
-// Adds the first recipe that matches `query` to a slot with the slot editor,
-// and confirms with Done. Resolves to the save request that Done queues.
-async function addWithEditor(day, meal, query) {
-  slotButton(day, meal).click();
-  const search = page.document.querySelector("#slot-editor .option-search");
-  search.value = query;
-  search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector("#slot-editor .option").click();
-  page.document.querySelector("#slot-editor .done").click();
-  const url = `/api/weeks/${WEEK}/${day}/${meal}`;
-  await waitFor(() => server.requestFor("PUT", url) !== undefined);
-  return server.requestFor("PUT", url);
 }
 
 function saveSummaries() {
@@ -82,7 +83,6 @@ test("each day header shows the short name of the day and its day of the month",
 test("the toolbar shows the range of the week, and a short range for phones", async (t) => {
   await openWeek(t, { week: "2026-09-28" });
 
-  const plain = (text) => text.replace(/\s/g, " ");
   assert.equal(
     plain(page.document.getElementById("week-range").textContent),
     "Sep 28 – Oct 4, 2026",
@@ -122,7 +122,7 @@ test("the grid names today's column only in the week that contains today", async
 
   page.document.getElementById("next-week").click();
   await waitFor(() => server.requestFor("GET", "/api/weeks/2026-09-28") !== undefined);
-  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek(DAYS, MEALS));
+  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek());
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
   await tick();
@@ -132,15 +132,13 @@ test("the grid names today's column only in the week that contains today", async
 });
 
 test("the day bar marks the days with menu items, also after an edit", async (t) => {
-  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
-    { recipeId: "soup", servings: 1 },
-  ]);
+  const weekData = withSlot(blankWeek(), "mon", "lunch", [{ recipeId: "soup", servings: 1 }]);
   await openWeek(t, { weekData, recipes: [{ id: "soup", name: "Soup", archived: false }] });
   const dayButton = (day) => page.document.querySelector(`#day-bar button[data-day="${day}"]`);
   assert.equal(dayButton("mon").hasAttribute("data-planned"), true);
   assert.equal(dayButton("tue").hasAttribute("data-planned"), false);
 
-  const save = await addWithEditor("tue", "dinner", "soup");
+  const save = await addWithEditor(page, server, "tue", "dinner", "soup");
 
   assert.equal(dayButton("tue").hasAttribute("data-planned"), true);
   // Answer the save: a request that stays open times out in 5 seconds, and
@@ -169,9 +167,7 @@ test("the sidebar counts the active recipes and the active ingredients", async (
 });
 
 test("a menu item whose recipe isn't in the recipe book falls back to Unknown recipe", async (t) => {
-  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
-    { recipeId: "gone", servings: 2 },
-  ]);
+  const weekData = withSlot(blankWeek(), "mon", "lunch", [{ recipeId: "gone", servings: 2 }]);
   await openWeek(t, { weekData, recipes: [] });
 
   assert.deepEqual(slotItems("mon", "lunch"), [["Unknown recipe", "×2"]]);
@@ -185,7 +181,7 @@ test("the shown week stays in sync with the hash", async (t) => {
   const nextWeek = "2026-09-28";
   page.window.location.hash = `#${nextWeek}`; // a real hash edit, as in the address bar
   await waitFor(() => server.requestFor("GET", `/api/weeks/${nextWeek}`) !== undefined);
-  server.requestFor("GET", `/api/weeks/${nextWeek}`).respond(200, blankWeek(DAYS, MEALS));
+  server.requestFor("GET", `/api/weeks/${nextWeek}`).respond(200, blankWeek());
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
   await tick();
@@ -211,7 +207,7 @@ const ANSWER_ORDERS = [
 ];
 
 function menuOf(week) {
-  const blank = blankWeek(DAYS, MEALS);
+  const blank = blankWeek();
   return week === MENU_WEEK
     ? withSlot(blank, "mon", "lunch", [{ recipeId: "soup", servings: 1 }])
     : blank;
@@ -251,7 +247,7 @@ async function tapNextWeekFiveTimes() {
 
 // Opens a week whose Monday lunch holds Soup with 1 serving and Salad with 1.5.
 function openLoadedWeek(t) {
-  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
+  const weekData = withSlot(blankWeek(), "mon", "lunch", [
     { recipeId: "soup", servings: 1 },
     { recipeId: "salad", servings: 1.5 },
   ]);
@@ -268,7 +264,7 @@ function openLoadedWeek(t) {
 async function openWeekWithFailedSave(t) {
   quiet.expect(1);
   await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
-  const save = await addWithEditor("mon", "lunch", "soup");
+  const save = await addWithEditor(page, server, "mon", "lunch", "soup");
   save.fail();
   await tick();
 }
@@ -317,7 +313,7 @@ describe("meal plan", () => {
     quiet.expect(1);
     await openWeekWithUnsavedLunch(t);
 
-    slotButton("mon", "lunch").click();
+    slotButton(page, "mon", "lunch").click();
 
     const editor = page.document.getElementById("slot-editor");
     const names = () =>
@@ -357,7 +353,7 @@ describe("meal plan", () => {
             failures += 1;
             request.fail();
           } else {
-            request.respond(200, blankWeek(DAYS, MEALS));
+            request.respond(200, blankWeek());
           }
         }
       }
@@ -397,11 +393,11 @@ describe("meal plan", () => {
     await openLoadedWeek(t);
 
     assert.equal(
-      slotButton("mon", "lunch").getAttribute("aria-label"),
+      slotButton(page, "mon", "lunch").getAttribute("aria-label"),
       "Monday, Lunch: Soup × 1, Salad × 1.5",
     );
     assert.equal(
-      slotButton("mon", "breakfast").getAttribute("aria-label"),
+      slotButton(page, "mon", "breakfast").getAttribute("aria-label"),
       "Monday, Breakfast: empty",
     );
   });
@@ -410,8 +406,14 @@ describe("meal plan", () => {
     await openLoadedWeek(t);
 
     assert.deepEqual(slotItems("mon", "breakfast"), []);
-    assert.equal(slotButton("mon", "breakfast").closest(".slot").hasAttribute("data-empty"), true);
-    assert.equal(slotButton("mon", "lunch").closest(".slot").hasAttribute("data-empty"), false);
+    assert.equal(
+      slotButton(page, "mon", "breakfast").closest(".slot").hasAttribute("data-empty"),
+      true,
+    );
+    assert.equal(
+      slotButton(page, "mon", "lunch").closest(".slot").hasAttribute("data-empty"),
+      false,
+    );
   });
 
   test("shows Add in every slot", async (t) => {
@@ -420,7 +422,7 @@ describe("meal plan", () => {
     for (const day of DAYS) {
       for (const meal of MEALS) {
         assert.equal(
-          slotButton(day, meal).querySelector(".slot-add").textContent.trim(),
+          slotButton(page, day, meal).querySelector(".slot-add").textContent.trim(),
           "Add",
           `${day} ${meal}`,
         );
@@ -432,7 +434,7 @@ describe("meal plan", () => {
     await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
     assert.deepEqual(saveSummaries(), ["", ""]);
 
-    const save = await addWithEditor("mon", "lunch", "soup");
+    const save = await addWithEditor(page, server, "mon", "lunch", "soup");
     assert.deepEqual(saveSummaries(), ["Saving…", "Saving…"]);
 
     save.respond(200, { items: [{ recipeId: "soup", servings: 1 }] });
@@ -443,7 +445,7 @@ describe("meal plan", () => {
   test("announces a save while it runs and when it ends", async (t) => {
     await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
 
-    const save = await addWithEditor("mon", "lunch", "soup");
+    const save = await addWithEditor(page, server, "mon", "lunch", "soup");
     assert.equal(announcement(), "Saving Monday lunch");
 
     save.respond(200, { items: [{ recipeId: "soup", servings: 1 }] });
@@ -454,7 +456,7 @@ describe("meal plan", () => {
   test("shows Retry on the slot and in the toolbar after a failed save", async (t) => {
     await openWeekWithFailedSave(t);
 
-    const status = slotButton("mon", "lunch").closest(".slot").querySelector(".status");
+    const status = slotButton(page, "mon", "lunch").closest(".slot").querySelector(".status");
     assert.equal(status.dataset.state, "error");
     assert.equal(status.textContent.trim(), "Retry");
     assert.deepEqual(saveSummaries(), ["1 not saved · Retry", "1 not saved · Retry"]);
@@ -554,9 +556,7 @@ describe("meal plan", () => {
 // Opens a week whose Monday lunch holds Soup, adds Salad with the editor, and
 // makes that save fail, so the week has one slot that wasn't saved.
 async function openWeekWithUnsavedLunch(t) {
-  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
-    { recipeId: "soup", servings: 1 },
-  ]);
+  const weekData = withSlot(blankWeek(), "mon", "lunch", [{ recipeId: "soup", servings: 1 }]);
   await openWeek(t, {
     weekData,
     recipes: [
@@ -564,7 +564,7 @@ async function openWeekWithUnsavedLunch(t) {
       { id: "salad", name: "Salad", archived: false },
     ],
   });
-  const save = await addWithEditor("mon", "lunch", "salad"); // now Soup and Salad
+  const save = await addWithEditor(page, server, "mon", "lunch", "salad"); // now Soup and Salad
   save.fail(); // the save never reaches the server
   await tick();
 }
@@ -591,7 +591,7 @@ test("Stay keeps the week and its unsaved menu", async (t) => {
     ["Soup", "×1"],
     ["Salad", "×1"],
   ]);
-  const status = slotButton("mon", "lunch").closest(".slot").querySelector(".status");
+  const status = slotButton(page, "mon", "lunch").closest(".slot").querySelector(".status");
   assert.equal(status.dataset.state, "error", "the slot still offers Retry");
   // Stay must stop goToWeek before it ever asks the server for the next
   // week, not just leave the request unanswered.
@@ -644,7 +644,7 @@ test("Leave Without Saving shows the last saved menu, then the next week", async
   assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
   assert.deepEqual(slotItems("mon", "lunch"), [["Soup", "×1"]]);
 
-  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek(DAYS, MEALS));
+  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek());
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
   await tick();
@@ -654,7 +654,7 @@ test("Leave Without Saving shows the last saved menu, then the next week", async
 test("a slot opens the editor titled with its meal, under the day and date", async (t) => {
   await openWeek(t);
 
-  slotButton("wed", "snack_pm").click();
+  slotButton(page, "wed", "snack_pm").click();
 
   const editor = page.document.getElementById("slot-editor");
   assert.equal(editor.querySelector(".dialog-title").textContent, "Afternoon snack");
@@ -663,7 +663,7 @@ test("a slot opens the editor titled with its meal, under the day and date", asy
 
 test("a hash change while the editor is open is undone", async (t) => {
   await openWeek(t);
-  slotButton("mon", "lunch").click();
+  slotButton(page, "mon", "lunch").click();
   assert.equal(page.document.getElementById("slot-editor").open, true);
 
   page.window.location.hash = "#2026-09-28";
@@ -676,46 +676,32 @@ test("a hash change while the editor is open is undone", async (t) => {
 
 test("beforeunload calls preventDefault() only while the editor has changes", async (t) => {
   await openWeek(t, {
-    weekData: blankWeek(DAYS, MEALS),
+    weekData: blankWeek(),
     recipes: [{ id: "soup", name: "Soup", archived: false }],
   });
-  slotButton("mon", "lunch").click();
+  slotButton(page, "mon", "lunch").click();
 
-  function dispatchBeforeUnload() {
-    const event = new page.window.Event("beforeunload", { cancelable: true });
-    page.window.dispatchEvent(event);
-    return event;
-  }
+  assert.equal(dispatchBeforeUnload(page.window).defaultPrevented, false); // no changes yet
 
-  assert.equal(dispatchBeforeUnload().defaultPrevented, false); // no changes yet
-
-  const search = page.document.querySelector(".option-search");
-  search.value = "soup";
-  search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
+  typeInto(page.window, page.document.querySelector(".option-search"), "soup");
   page.document.querySelector("#slot-editor .option").click();
 
-  assert.equal(dispatchBeforeUnload().defaultPrevented, true); // has changes, still open
+  assert.equal(dispatchBeforeUnload(page.window).defaultPrevented, true); // has changes, still open
 
   page.document.querySelector(".cancel").click(); // discards and closes
-  assert.equal(dispatchBeforeUnload().defaultPrevented, false); // closed again
+  assert.equal(dispatchBeforeUnload(page.window).defaultPrevented, false); // closed again
 });
 
 test("beforeunload calls preventDefault() while a slot's menu isn't confirmed", async (t) => {
   quiet.expect(1);
   await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
 
-  function dispatchBeforeUnload() {
-    const event = new page.window.Event("beforeunload", { cancelable: true });
-    page.window.dispatchEvent(event);
-    return event;
-  }
-
-  const save = await addWithEditor("mon", "lunch", "soup");
-  assert.equal(dispatchBeforeUnload().defaultPrevented, true, "the save is running");
+  const save = await addWithEditor(page, server, "mon", "lunch", "soup");
+  assert.equal(dispatchBeforeUnload(page.window).defaultPrevented, true, "the save is running");
 
   save.fail();
   await tick();
-  assert.equal(dispatchBeforeUnload().defaultPrevented, true, "the save failed");
+  assert.equal(dispatchBeforeUnload(page.window).defaultPrevented, true, "the save failed");
 
   page.document.querySelector(".save-summary button").click(); // Retry
   await tick();
@@ -723,7 +709,11 @@ test("beforeunload calls preventDefault() while a slot's menu isn't confirmed", 
   assert.equal(puts.length, 2);
   puts[1].respond(200, {});
   await tick();
-  assert.equal(dispatchBeforeUnload().defaultPrevented, false, "the server confirmed the menu");
+  assert.equal(
+    dispatchBeforeUnload(page.window).defaultPrevented,
+    false,
+    "the server confirmed the menu",
+  );
 });
 
 // Selects Recipes in the sidebar, and returns the click event.
@@ -764,16 +754,9 @@ const SAVED_BADGE_MS = 3000;
 test("the saved badge's timer is scheduled on the page's window, so closing the page cancels it", async (t) => {
   await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
   const windowSetTimeout = mock.method(page.window, "setTimeout");
-  slotButton("mon", "lunch").click();
-  const search = page.document.querySelector("#slot-editor .option-search");
-  search.value = "soup";
-  search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector("#slot-editor .option").click();
-  page.document.querySelector("#slot-editor .done").click();
-  const saveUrl = `/api/weeks/${WEEK}/mon/lunch`;
-  await waitFor(() => server.requestFor("PUT", saveUrl) !== undefined);
+  const save = await addWithEditor(page, server, "mon", "lunch", "soup");
 
-  server.requestFor("PUT", saveUrl).respond(200, {
+  save.respond(200, {
     week: WEEK,
     day: "mon",
     meal: "lunch",
@@ -781,7 +764,7 @@ test("the saved badge's timer is scheduled on the page's window, so closing the 
   });
   await tick(); // the slot now shows "saved" and has scheduled the badge's timer
 
-  const status = slotButton("mon", "lunch").closest(".slot").querySelector(".status");
+  const status = slotButton(page, "mon", "lunch").closest(".slot").querySelector(".status");
   assert.equal(status.dataset.state, "saved");
   const delays = windowSetTimeout.mock.calls.map((call) => call.arguments[1]);
   assert.ok(
@@ -816,7 +799,7 @@ test("a load failure shows the error, and Retry reloads", async (t) => {
   );
   const weekRequests = server.requests.filter((request) => request.url === `/api/weeks/${WEEK}`);
   assert.equal(weekRequests.length, 2, "Retry sends a new request");
-  weekRequests[1].respond(200, blankWeek(DAYS, MEALS));
+  weekRequests[1].respond(200, blankWeek());
   server.requests
     .filter((request) => request.url === "/api/recipes")[1]
     .respond(200, {
@@ -839,7 +822,7 @@ test("the ingredient catalog loads again with every week", async (t) => {
     () => server.requests.filter((request) => request.url === "/api/ingredients").length === 2,
   );
 
-  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek(DAYS, MEALS));
+  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek());
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
   await tick();

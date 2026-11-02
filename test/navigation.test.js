@@ -6,8 +6,7 @@ import { readFile } from "node:fs/promises";
 import { afterEach, describe, test } from "node:test";
 import { Window } from "happy-dom";
 import { fakeFetch, loadPage, tick } from "./dom-helpers.js";
-import { blankWeek } from "./helpers.js";
-import { DAYS, MEALS } from "./meal-plan-helpers.js";
+import { blankWeek } from "./meal-plan-helpers.js";
 
 const PAGES = [
   ["index.html", "app.js", "/"],
@@ -31,9 +30,7 @@ async function loadAnswered(options) {
   for (const request of server.requests) {
     request.respond(
       200,
-      request.url.startsWith("/api/weeks/")
-        ? blankWeek(DAYS, MEALS)
-        : { recipes: [], ingredients: [] },
+      request.url.startsWith("/api/weeks/") ? blankWeek() : { recipes: [], ingredients: [] },
     );
   }
   await tick();

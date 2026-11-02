@@ -7,8 +7,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { formatWeekRange } from "../public/dates.js";
 import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
-import { blankWeek } from "./helpers.js";
-import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
+import { addWithEditor, blankWeek, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
 
 const quiet = useQuietConsole();
 
@@ -18,10 +17,6 @@ let server;
 async function openWeek(t, options) {
   ({ page, server } = await openMealPlan(t, options));
   return page;
-}
-
-function slotButton(day, meal) {
-  return page.document.querySelector(`.slot[data-day="${day}"][data-meal="${meal}"] .slot-menu`);
 }
 
 const EGG = { id: "egg", name: "Egg", unit: "pcs", measures: [], archived: false };
@@ -45,9 +40,7 @@ function lineTexts() {
 // Opens a week whose Monday lunch has Soup, which needs 300 g of onion, 3
 // medium onions of 150 g, and 1.5 large onions of 250 g: 1.2 kg in all.
 async function openWeekWithOnionSoup(t) {
-  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
-    { recipeId: "soup", servings: 1 },
-  ]);
+  const weekData = withSlot(blankWeek(), "mon", "lunch", [{ recipeId: "soup", servings: 1 }]);
   await openWeek(t, {
     weekData,
     recipes: [
@@ -77,9 +70,7 @@ async function openWeekWithOnionSoup(t) {
 // Opens a week with an omelette for 2 servings on Monday and an onion soup for
 // 1.5 servings on Tuesday, so the list has Egg and Onion.
 async function openWeekWithEggAndOnion(t) {
-  let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
-    { recipeId: "omelette", servings: 2 },
-  ]);
+  let weekData = withSlot(blankWeek(), "mon", "lunch", [{ recipeId: "omelette", servings: 2 }]);
   weekData = withSlot(weekData, "tue", "dinner", [{ recipeId: "soup", servings: 1.5 }]);
   await openWeek(t, {
     weekData,
@@ -215,28 +206,17 @@ test("the shopping list counts a slot whose save is still pending", async (t) =>
     ],
     ingredients: [EGG],
   });
-  slotButton("mon", "lunch").click();
-  const search = page.document.querySelector("#slot-editor .option-search");
-  search.value = "omel";
-  search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector("#slot-editor .option").click();
-  page.document.querySelector("#slot-editor .done").click();
-  const saveUrl = `/api/weeks/${WEEK}/mon/lunch`;
-  await waitFor(() => server.requestFor("PUT", saveUrl) !== undefined);
+  const save = await addWithEditor(page, server, "mon", "lunch", "omel");
 
   shoppingButton().click();
 
   assert.deepEqual(lineTexts(), [["Egg", "2 pcs"]]);
-  server
-    .requestFor("PUT", saveUrl)
-    .respond(200, { week: WEEK, day: "mon", meal: "lunch", items: [] });
+  save.respond(200, { week: WEEK, day: "mon", meal: "lunch", items: [] });
   await tick();
 });
 
 test("recipes without ingredients are listed as not included, with their slots", async (t) => {
-  let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "dinner", [
-    { recipeId: "burrito", servings: 2 },
-  ]);
+  let weekData = withSlot(blankWeek(), "mon", "dinner", [{ recipeId: "burrito", servings: 2 }]);
   weekData = withSlot(weekData, "thu", "snack_am", [{ recipeId: "burrito", servings: 1 }]);
   await openWeek(t, {
     weekData,
@@ -312,7 +292,7 @@ test("Shopping list is disabled while no week is shown, and enabled when a week 
         `Retry sent a second load of the week, but the page has ${server.requests.map((request) => request.url).join(", ")}`,
     },
   );
-  server.requestFor("GET", `/api/weeks/${WEEK}`).respond(200, blankWeek(DAYS, MEALS));
+  server.requestFor("GET", `/api/weeks/${WEEK}`).respond(200, blankWeek());
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
   await tick();
