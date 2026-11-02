@@ -3,7 +3,7 @@
 // test/dom-helpers.js for the harness and the DOM library choice.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import {
   assertFocus,
   fakeFetch,
@@ -140,24 +140,36 @@ test("a new recipe opens empty, titled New recipe, with focus in Name", () => {
   assert.deepEqual(rowNames(), []);
 });
 
-test("an existing recipe opens with its name and ingredients, and focus on the title", () => {
-  openEditor({ recipe: SOUP });
+describe("recipe editor", () => {
+  test("opens an existing recipe with its name and ingredients", () => {
+    openEditor({ recipe: SOUP });
 
-  assert.equal(query(".dialog-title").textContent, "Edit recipe");
-  assert.equal(nameField().value, "Onion soup");
-  assertFocus(document, query(".dialog-title"));
-  assert.equal(query(".no-ingredients").hidden, true);
-  assert.deepEqual(rowNames(), ["Onion", "Salt (archived)"]);
-  assert.deepEqual(
-    quantityFields().map((field) => field.value),
-    ["150", "0.5"],
-  );
-  assert.deepEqual(
-    [...document.querySelectorAll(".ingredient-row .unit")].map((unit) => unit.textContent),
-    ["g"],
-  );
-  assert.equal(quantityFields()[0].getAttribute("inputmode"), "decimal");
-  assert.equal(quantityFields()[0].getAttribute("aria-label"), "Quantity of Onion per serving");
+    assert.equal(query(".dialog-title").textContent, "Edit recipe");
+    assert.equal(nameField().value, "Onion soup");
+    assert.equal(query(".no-ingredients").hidden, true);
+    assert.deepEqual(rowNames(), ["Onion", "Salt (archived)"]);
+    assert.deepEqual(
+      quantityFields().map((field) => field.value),
+      ["150", "0.5"],
+    );
+    assert.deepEqual(
+      [...document.querySelectorAll(".ingredient-row .unit")].map((unit) => unit.textContent),
+      ["g"],
+    );
+  });
+
+  test("opens an existing recipe with focus on the title", () => {
+    openEditor({ recipe: SOUP });
+
+    assertFocus(document, query(".dialog-title"));
+  });
+
+  test("gives a quantity field a decimal input mode and an ingredient label", () => {
+    openEditor({ recipe: SOUP });
+
+    assert.equal(quantityFields()[0].getAttribute("inputmode"), "decimal");
+    assert.equal(quantityFields()[0].getAttribute("aria-label"), "Quantity of Onion per serving");
+  });
 });
 
 test("Add ingredient offers active ingredients not in the recipe, from A to Z, with their unit", () => {
@@ -224,19 +236,33 @@ test("Done with an invalid quantity shows a message under its row, focuses it, a
   assert.equal(server.requests.length, 0);
 });
 
-test("editing an invalid quantity clears its message and aria-invalid, and keeps focus in it", () => {
-  openEditor({ recipe: SOUP });
-  setValue(quantityFields()[0], "1.255");
-  setValue(quantityFields()[1], "0");
-  query(".done").click();
-  const [first, second] = [...document.querySelectorAll(".ingredient-row")];
+describe("recipe editor", () => {
+  // Marks both quantities invalid with Done, then fixes the first one.
+  function fixFirstQuantity() {
+    openEditor({ recipe: SOUP });
+    setValue(quantityFields()[0], "1.255");
+    setValue(quantityFields()[1], "0");
+    query(".done").click();
+    const rows = [...document.querySelectorAll(".ingredient-row")];
 
-  setValue(quantityFields()[0], "1.25");
-  assert.equal(first.querySelector(".row-message"), null);
-  assert.equal(quantityFields()[0].hasAttribute("aria-invalid"), false);
-  assertFocus(document, quantityFields()[0]);
-  assert.equal(second.querySelector(".row-message")?.textContent, QUANTITY_MESSAGE);
-  assert.equal(quantityFields()[1].getAttribute("aria-invalid"), "true");
+    setValue(quantityFields()[0], "1.25");
+    return rows;
+  }
+
+  test("clears the edited quantity's message and aria-invalid, and keeps focus", () => {
+    const [first] = fixFirstQuantity();
+
+    assert.equal(first.querySelector(".row-message")?.textContent, undefined);
+    assert.equal(quantityFields()[0].hasAttribute("aria-invalid"), false);
+    assertFocus(document, quantityFields()[0]);
+  });
+
+  test("leaves the message of another invalid quantity", () => {
+    const [, second] = fixFirstQuantity();
+
+    assert.equal(second.querySelector(".row-message")?.textContent, QUANTITY_MESSAGE);
+    assert.equal(quantityFields()[1].getAttribute("aria-invalid"), "true");
+  });
 });
 
 test("a quantity that isn't valid is marked as you type, and Done stays enabled", () => {
@@ -335,30 +361,52 @@ test("Done with an empty name shows a message under Name and sends nothing", () 
   assert.equal(server.requests.length, 0);
 });
 
-test("Done on a new recipe sends POST with the name and the quantities, then closes", async () => {
-  const { saved } = openEditor();
-  setValue(nameField(), "Omelette");
-  addIngredient("egg");
-  setValue(quantityFields()[0], " 0,25 ");
-
-  query(".done").click();
-
-  assert.equal(query(".done").disabled, true);
-  assert.equal(query(".cancel").disabled, true);
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  assert.deepEqual(server.requestFor("POST", "/api/recipes").body, {
-    name: "Omelette",
-    ingredients: [{ ingredientId: "egg", quantity: 0.25 }],
-  });
+describe("recipe editor", () => {
   const created = {
     id: "new",
     name: "Omelette",
     archived: false,
     ingredients: [{ ingredientId: "egg", quantity: 0.25 }],
   };
-  await respondTo("POST", "/api/recipes", 201, created);
-  assert.equal(dialog.open, false);
-  assert.deepEqual(saved, [created]);
+
+  // Names the recipe Omelette, adds 0.25 of Egg, and selects Done.
+  function doneOnOmelette() {
+    const opened = openEditor();
+    setValue(nameField(), "Omelette");
+    addIngredient("egg");
+    setValue(quantityFields()[0], " 0,25 ");
+    query(".done").click();
+    return opened;
+  }
+
+  test("sends POST with the name and the quantities of a new recipe", async () => {
+    doneOnOmelette();
+
+    await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
+
+    assert.deepEqual(server.requestFor("POST", "/api/recipes").body, {
+      name: "Omelette",
+      ingredients: [{ ingredientId: "egg", quantity: 0.25 }],
+    });
+    await respondTo("POST", "/api/recipes", 201, created);
+  });
+
+  test("disables Done and Cancel while a new recipe saves", async () => {
+    doneOnOmelette();
+
+    assert.equal(query(".done").disabled, true);
+    assert.equal(query(".cancel").disabled, true);
+    await respondTo("POST", "/api/recipes", 201, created);
+  });
+
+  test("closes and reports the recipe after a new recipe saves", async () => {
+    const { saved } = doneOnOmelette();
+
+    await respondTo("POST", "/api/recipes", 201, created);
+
+    assert.equal(dialog.open, false);
+    assert.deepEqual(saved, [created]);
+  });
 });
 
 test("a new recipe can be saved without ingredients", async () => {
@@ -538,22 +586,27 @@ test("a backdrop click closes the editor only when nothing changed", () => {
   assert.equal(editor.hasChanges(), true);
 });
 
-test("Enter in Name or in a quantity confirms, the same as Done", async () => {
-  openEditor({ recipe: SOUP });
-  setValue(nameField(), "Stew");
+describe("recipe editor", () => {
+  test("confirms with Enter in Name, the same as Done", async () => {
+    openEditor({ recipe: SOUP });
+    setValue(nameField(), "Stew");
 
-  const event = keydownOn(nameField(), "Enter");
+    const event = keydownOn(nameField(), "Enter");
 
-  assert.equal(event.defaultPrevented, true);
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  await respondTo("PATCH", "/api/recipes/soup", 200, { ...SOUP, name: "Stew" });
+    assert.equal(event.defaultPrevented, true);
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    await respondTo("PATCH", "/api/recipes/soup", 200, { ...SOUP, name: "Stew" });
+  });
 
-  openEditor({ recipe: SOUP });
-  setValue(quantityFields()[0], "300");
-  keydownOn(quantityFields()[0], "Enter");
-  await waitFor(() => server.requests.filter((request) => request.method === "PATCH").length === 2);
-  server.requests.filter((request) => request.method === "PATCH")[1].respond(200, SOUP);
-  await tick();
+  test("confirms with Enter in a quantity, the same as Done", async () => {
+    openEditor({ recipe: SOUP });
+    setValue(quantityFields()[0], "300");
+
+    keydownOn(quantityFields()[0], "Enter");
+
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    await respondTo("PATCH", "/api/recipes/soup", 200, SOUP);
+  });
 });
 
 test("at 50 ingredients, Add ingredient is disabled with the limit's placeholder", () => {
