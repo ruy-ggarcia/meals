@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
 
 const ONION = { id: "onion", name: "Onion", unit: "g", archived: false };
 const WITH_ONION = [{ ingredientId: "onion", quantity: 100 }];
@@ -21,9 +21,9 @@ let window;
 /** The recipes and the catalog that the page loaded with: { recipes, ingredients }. */
 let served;
 
-async function openRecipesPage(recipes = [], ingredients = [ONION]) {
+async function openRecipesPage(t, recipes = [], ingredients = [ONION]) {
   server = fakeFetch();
-  page = await loadPage({ html: "recipes.html", script: "recipes.js", fetch: server.fetch });
+  page = await openPage(t, { html: "recipes.html", script: "recipes.js", fetch: server.fetch });
   ({ document, window } = page);
   served = { recipes, ingredients };
   await tick();
@@ -104,13 +104,12 @@ beforeEach(() => {
   mock.method(console, "error", () => {}); // some tests simulate a failed request on purpose
 });
 
-afterEach(async () => {
-  await page.cleanup();
+afterEach(() => {
   mock.restoreAll();
 });
 
-test("New recipe opens the editor, and the saved recipe appears in its sorted place with focus on Edit", async () => {
-  await openRecipesPage([recipe("1", "Green salad", false, WITH_ONION)]);
+test("New recipe opens the editor, and the saved recipe appears in its sorted place with focus on Edit", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Green salad", false, WITH_ONION)]);
 
   await clickAndReload(document.getElementById("new-recipe"));
 
@@ -125,8 +124,8 @@ test("New recipe opens the editor, and the saved recipe appears in its sorted pl
   assertFocus(document, buttonLabeled("Edit Apple pie"));
 });
 
-test("Cancel in a new recipe returns focus to New recipe and sends nothing", async () => {
-  await openRecipesPage();
+test("Cancel in a new recipe returns focus to New recipe and sends nothing", async (t) => {
+  await openRecipesPage(t);
   const newRecipe = document.getElementById("new-recipe");
 
   await clickAndReload(newRecipe);
@@ -137,8 +136,8 @@ test("Cancel in a new recipe returns focus to New recipe and sends nothing", asy
   assert.equal(server.requestFor("POST", "/api/recipes"), undefined);
 });
 
-test("Edit opens the recipe with its ingredients, and a save updates its row", async () => {
-  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+test("Edit opens the recipe with its ingredients, and a save updates its row", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   await clickAndReload(buttonLabeled("Edit Soup"));
 
@@ -152,8 +151,8 @@ test("Edit opens the recipe with its ingredients, and a save updates its row", a
   assertFocus(document, buttonLabeled("Edit Onion soup"));
 });
 
-test("a save whose recipe the search hides focuses Search", async () => {
-  await openRecipesPage([recipe("1", "Green salad", false, WITH_ONION)]);
+test("a save whose recipe the search hides focuses Search", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Green salad", false, WITH_ONION)]);
   setValue(searchField(), "sal");
 
   await clickAndReload(buttonLabeled("Edit Green salad"));
@@ -165,8 +164,8 @@ test("a save whose recipe the search hides focuses Search", async () => {
   assertFocus(document, searchField());
 });
 
-test("Cancel after Edit returns focus to the recipe's Edit button", async () => {
-  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+test("Cancel after Edit returns focus to the recipe's Edit button", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   await clickAndReload(buttonLabeled("Edit Soup"));
   editorDialog().querySelector(".cancel").click();
@@ -175,8 +174,8 @@ test("Cancel after Edit returns focus to the recipe's Edit button", async () => 
   assertFocus(document, buttonLabeled("Edit Soup"));
 });
 
-test("Escape after Edit returns focus to the recipe's Edit button", async () => {
-  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+test("Escape after Edit returns focus to the recipe's Edit button", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   await clickAndReload(buttonLabeled("Edit Soup"));
   editorDialog().close(); // what Escape does to a modal dialog
@@ -184,8 +183,8 @@ test("Escape after Edit returns focus to the recipe's Edit button", async () => 
   assertFocus(document, buttonLabeled("Edit Soup"));
 });
 
-test("a backdrop click with no changes after Edit returns focus to the recipe's Edit button", async () => {
-  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+test("a backdrop click with no changes after Edit returns focus to the recipe's Edit button", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   await clickAndReload(buttonLabeled("Edit Soup"));
   pointerdownOn(editorDialog());
@@ -195,8 +194,8 @@ test("a backdrop click with no changes after Edit returns focus to the recipe's 
   assertFocus(document, buttonLabeled("Edit Soup"));
 });
 
-test("the editor checks the name against the recipes of the reload as you type", async () => {
-  await openRecipesPage([recipe("1", "Soup")]);
+test("the editor checks the name against the recipes of the reload as you type", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup")]);
 
   await clickAndReload(document.getElementById("new-recipe"), {
     recipes: [recipe("1", "Soup"), recipe("2", "Stew", true)],
@@ -210,16 +209,16 @@ test("the editor checks the name against the recipes of the reload as you type",
   );
 });
 
-test("archived recipes have Edit and Restore", async () => {
-  await openRecipesPage([recipe("1", "Café", true)]);
+test("archived recipes have Edit and Restore", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Café", true)]);
 
   assert.ok(buttonLabeled("Edit Café"));
   assert.ok(buttonLabeled("Restore Café"));
   assert.equal(buttonLabeled("Archive Café"), null);
 });
 
-test("each row shows the recipe's ingredients, or a warning when it has none", async () => {
-  await openRecipesPage([recipe("1", "Coffee"), recipe("2", "Soup", false, WITH_ONION)]);
+test("each row shows the recipe's ingredients, or a warning when it has none", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Coffee"), recipe("2", "Soup", false, WITH_ONION)]);
 
   const detail = (id) => rowById(id).querySelector(".entry-detail");
   assert.equal(detail("1").textContent.trim(), "No ingredients · not in shopping list");
@@ -230,8 +229,8 @@ test("each row shows the recipe's ingredients, or a warning when it has none", a
   assert.equal(buttonLabeled("Edit Coffee").getAttribute("aria-describedby"), detail("1").id);
 });
 
-test("saving ingredients for a recipe removes its warning icon", async () => {
-  await openRecipesPage([recipe("1", "Soup")]);
+test("saving ingredients for a recipe removes its warning icon", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup")]);
 
   await clickAndReload(buttonLabeled("Edit Soup"));
   const search = editorDialog().querySelector(".option-search");
@@ -244,8 +243,8 @@ test("saving ingredients for a recipe removes its warning icon", async () => {
   assert.equal(rowById("1").querySelector(".warning-icon"), null);
 });
 
-test("beforeunload prevents leaving only while the editor has changes", async () => {
-  await openRecipesPage();
+test("beforeunload prevents leaving only while the editor has changes", async (t) => {
+  await openRecipesPage(t);
   function dispatchBeforeUnload() {
     const event = new window.Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);
@@ -268,8 +267,8 @@ async function archiveWithEditor(id, name) {
   await respondTo("PATCH", `/api/recipes/${id}`, 200, recipe(id, name, true));
 }
 
-test("Archive in the editor moves a recipe to Archived, and focus to the row in its place", async () => {
-  await openRecipesPage([
+test("Archive in the editor moves a recipe to Archived, and focus to the row in its place", async (t) => {
+  await openRecipesPage(t, [
     recipe("1", "Omelette"),
     recipe("2", "Pancakes"),
     recipe("3", "Café", true),
@@ -284,8 +283,8 @@ test("Archive in the editor moves a recipe to Archived, and focus to the row in 
   assertFocus(document, buttonLabeled("Edit Pancakes"));
 });
 
-test("Restore moves a recipe back to the active list, and focus to the row in its place", async () => {
-  await openRecipesPage([recipe("1", "Omelette", true), recipe("2", "Café", true)]);
+test("Restore moves a recipe back to the active list, and focus to the row in its place", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Omelette", true), recipe("2", "Café", true)]);
 
   buttonLabeled("Restore Café").click();
   await respondTo("PATCH", "/api/recipes/2", 200, recipe("2", "Café", false));
@@ -296,8 +295,8 @@ test("Restore moves a recipe back to the active list, and focus to the row in it
   assertFocus(document, buttonLabeled("Restore Omelette"));
 });
 
-test("a failed restore shows its message and leaves the recipe in Archived", async () => {
-  await openRecipesPage([recipe("1", "Omelette", true)]);
+test("a failed restore shows its message and leaves the recipe in Archived", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Omelette", true)]);
 
   buttonLabeled("Restore Omelette").click();
   await waitFor(() => server.requestFor("PATCH", "/api/recipes/1") !== undefined);
@@ -311,8 +310,12 @@ test("a failed restore shows its message and leaves the recipe in Archived", asy
   assert.deepEqual(archivedNames(), ["Omelette"]);
 });
 
-test("the title and the sidebar count the active recipes, also after an archive", async () => {
-  await openRecipesPage([recipe("1", "Omelette"), recipe("2", "Soup"), recipe("3", "Café", true)]);
+test("the title and the sidebar count the active recipes, also after an archive", async (t) => {
+  await openRecipesPage(t, [
+    recipe("1", "Omelette"),
+    recipe("2", "Soup"),
+    recipe("3", "Café", true),
+  ]);
   const counts = () =>
     [...document.querySelectorAll('[data-count="recipes"]')].map((count) => count.textContent);
   assert.deepEqual(counts(), ["2", "2"]);
@@ -322,16 +325,16 @@ test("the title and the sidebar count the active recipes, also after an archive"
   assert.deepEqual(counts(), ["1", "1"]);
 });
 
-test("shows the empty-book message when there are no recipes", async () => {
-  await openRecipesPage([]);
+test("shows the empty-book message when there are no recipes", async (t) => {
+  await openRecipesPage(t, []);
 
   const empty = document.getElementById("empty-book");
   assert.equal(empty.hidden, false);
   assert.equal(empty.textContent, "No recipes yet. Add your first one with New recipe.");
 });
 
-test("search filters the active list to matches", async () => {
-  await openRecipesPage([recipe("1", "Green salad"), recipe("2", "Lentil soup")]);
+test("search filters the active list to matches", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Green salad"), recipe("2", "Lentil soup")]);
   assert.equal(document.getElementById("empty-book").hidden, true);
   assert.equal(document.getElementById("no-matches").hidden, true);
 
@@ -340,8 +343,8 @@ test("search filters the active list to matches", async () => {
   assert.deepEqual(activeNames(), ["Green salad"]);
 });
 
-test("search shows the no-match message when no active recipe matches", async () => {
-  await openRecipesPage([recipe("1", "Green salad"), recipe("2", "Lentil soup")]);
+test("search shows the no-match message when no active recipe matches", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Green salad"), recipe("2", "Lentil soup")]);
 
   setValue(searchField(), "zzz");
 
@@ -350,8 +353,8 @@ test("search shows the no-match message when no active recipe matches", async ()
   assert.equal(document.getElementById("no-matches").textContent, 'No recipes match "zzz".');
 });
 
-test("a search that matches only an archived recipe still shows the no-match message", async () => {
-  await openRecipesPage([recipe("1", "Omelette", true)]);
+test("a search that matches only an archived recipe still shows the no-match message", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Omelette", true)]);
 
   setValue(searchField(), "omel");
 
@@ -361,8 +364,8 @@ test("a search that matches only an archived recipe still shows the no-match mes
   assert.deepEqual(archivedNames(), ["Omelette"]); // stays in Archived
 });
 
-test("the Archived count reflects the archived recipes", async () => {
-  await openRecipesPage([recipe("1", "Omelette"), recipe("2", "Café", true)]);
+test("the Archived count reflects the archived recipes", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Omelette"), recipe("2", "Café", true)]);
 
   assert.equal(document.getElementById("archived").hidden, false);
   assert.equal(document.getElementById("archived-count").textContent, "1");
@@ -372,8 +375,8 @@ test("the Archived count reflects the archived recipes", async () => {
   assert.equal(document.getElementById("archived-count").textContent, "2");
 });
 
-test("a search that doesn't match an archived recipe leaves the Archived count unchanged", async () => {
-  await openRecipesPage([recipe("1", "Omelette"), recipe("2", "Café", true)]);
+test("a search that doesn't match an archived recipe leaves the Archived count unchanged", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Omelette"), recipe("2", "Café", true)]);
   assert.equal(document.getElementById("archived-count").textContent, "1");
 
   setValue(searchField(), "zzz");
@@ -381,9 +384,9 @@ test("a search that doesn't match an archived recipe leaves the Archived count u
   assert.equal(document.getElementById("archived-count").textContent, "1");
 });
 
-test("a failed load of the ingredient catalog shows the error, and Retry loads both again", async () => {
+test("a failed load of the ingredient catalog shows the error, and Retry loads both again", async (t) => {
   server = fakeFetch();
-  page = await loadPage({ html: "recipes.html", script: "recipes.js", fetch: server.fetch });
+  page = await openPage(t, { html: "recipes.html", script: "recipes.js", fetch: server.fetch });
   ({ document, window } = page);
   await tick();
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
@@ -416,8 +419,9 @@ const CARROT_G = {
   measures: [{ id: "piece", name: "pcs", amount: 120 }],
 };
 
-test("Edit opens the editor with the recipe and the catalog from a reload, not from the first load", async () => {
+test("Edit opens the editor with the recipe and the catalog from a reload, not from the first load", async (t) => {
   await openRecipesPage(
+    t,
     [recipe("1", "Soup", false, [{ ingredientId: "carrot", quantity: 2 }])],
     [CARROT_PCS],
   );
@@ -439,8 +443,8 @@ test("Edit opens the editor with the recipe and the catalog from a reload, not f
   assert.deepEqual(activeNames(), ["Soup", "Stew"]);
 });
 
-test("New recipe offers the catalog from a reload", async () => {
-  await openRecipesPage([], [ONION]);
+test("New recipe offers the catalog from a reload", async (t) => {
+  await openRecipesPage(t, [], [ONION]);
 
   await clickAndReload(document.getElementById("new-recipe"), {
     recipes: [],
@@ -455,8 +459,8 @@ test("New recipe offers the catalog from a reload", async () => {
   );
 });
 
-test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async () => {
-  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   for (const button of [buttonLabeled("Edit Soup"), document.getElementById("new-recipe")]) {
     const count = server.requests.length;
@@ -479,8 +483,8 @@ test("a failed reload shows the load error, focuses Retry, and doesn't open the 
   }
 });
 
-test("Edit on a recipe that the reload no longer has refreshes the list and doesn't open the editor", async () => {
-  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+test("Edit on a recipe that the reload no longer has refreshes the list and doesn't open the editor", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   await clickAndReload(buttonLabeled("Edit Soup"), {
     recipes: [recipe("2", "Stew", false, WITH_ONION)],
@@ -492,8 +496,8 @@ test("Edit on a recipe that the reload no longer has refreshes the list and does
   assertFocus(document, searchField());
 });
 
-test("a second click while the reload runs sends no second reload", async () => {
-  await openRecipesPage([recipe("1", "Soup", false, WITH_ONION)]);
+test("a second click while the reload runs sends no second reload", async (t) => {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   buttonLabeled("Edit Soup").click();
   document.getElementById("new-recipe").click();

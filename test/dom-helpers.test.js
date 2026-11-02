@@ -1,9 +1,10 @@
-// Tests for the harness in test/dom-helpers.js: a load that fails must leave
-// no global behind, or the next test would fail for the wrong reason.
+// Tests for the harness in test/dom-helpers.js: a page leaves no global
+// behind, whether its load fails or its test ends, or the next test would fail
+// for the wrong reason.
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { loadDialog, loadPage } from "./dom-helpers.js";
+import { fakeFetch, loadDialog, loadPage, openPage } from "./dom-helpers.js";
 
 const GLOBALS = ["document", "fetch", "history", "location", "window"];
 
@@ -66,4 +67,16 @@ describe("cleanup", () => {
       "the first cleanup replaced the later page",
     );
   });
+});
+
+test("openPage cleans the page up when the test ends", async (t) => {
+  const before = snapshotOfGlobals();
+
+  await t.test("opens a page", async (inner) => {
+    const { fetch } = fakeFetch(); // never answers, so the page stays loading
+    const page = await openPage(inner, { html: "recipes.html", script: "recipes.js", fetch });
+    assert.ok(/** @type {any} */ (globalThis).window === page.window, "the page is installed");
+  });
+
+  assertGlobalsRestored(before);
 });

@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
 
 function ingredient(id, name, unit = "g", archived = false, measures = []) {
   return { id, name, unit, archived, measures };
@@ -27,9 +27,9 @@ let window;
 /** The catalog and the recipes that the page loaded with: { ingredients, recipes }. */
 let served;
 
-async function openIngredientsPage(ingredients = [], recipes = []) {
+async function openIngredientsPage(t, ingredients = [], recipes = []) {
   server = fakeFetch();
-  page = await loadPage({
+  page = await openPage(t, {
     html: "ingredients.html",
     script: "ingredients.js",
     fetch: server.fetch,
@@ -115,13 +115,12 @@ beforeEach(() => {
   mock.method(console, "error", () => {}); // some tests simulate a failed request on purpose
 });
 
-afterEach(async () => {
-  await page.cleanup();
+afterEach(() => {
   mock.restoreAll();
 });
 
-test("rows show each ingredient's name and unit from A to Z, and archived ones under Archived", async () => {
-  await openIngredientsPage([
+test("rows show each ingredient's name and unit from A to Z, and archived ones under Archived", async (t) => {
+  await openIngredientsPage(t, [
     ingredient("1", "Onion"),
     ingredient("2", "Egg", "pcs"),
     ingredient("3", "Saffron", "g", true),
@@ -134,20 +133,21 @@ test("rows show each ingredient's name and unit from A to Z, and archived ones u
   assert.deepEqual(archivedNames(), ["Saffron"]);
 });
 
-test("a row shows the unit followed by the measure names", async () => {
+test("a row shows the unit followed by the measure names", async (t) => {
   const measures = [
     { id: "m1", name: "medium", amount: 150 },
     { id: "m2", name: "large", amount: 250 },
   ];
-  await openIngredientsPage([ingredient("1", "Onion", "g", false, measures)]);
+  await openIngredientsPage(t, [ingredient("1", "Onion", "g", false, measures)]);
 
   assert.deepEqual(activeRows(), [["Onion", "g · medium, large"]]);
 });
 
-test("a measure used by two recipes, one archived, has Remove disabled with Used in 2 recipes.", async () => {
+test("a measure used by two recipes, one archived, has Remove disabled with Used in 2 recipes.", async (t) => {
   const onion = ingredient("1", "Onion", "g", false, [{ id: "m1", name: "medium", amount: 150 }]);
   const line = { ingredientId: "1", quantity: 1, measureId: "m1" };
   await openIngredientsPage(
+    t,
     [onion],
     [
       { id: "r1", name: "Soup", archived: false, ingredients: [line] },
@@ -162,8 +162,8 @@ test("a measure used by two recipes, one archived, has Remove disabled with Used
   assert.equal(dialog.querySelector(".measure-row .row-hint").textContent, "Used in 2 recipes.");
 });
 
-test("New ingredient opens the editor, and a saved one appears in its sorted place with its Edit focused", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("New ingredient opens the editor, and a saved one appears in its sorted place with its Edit focused", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   await clickAndReload(newButton());
   const dialog = document.getElementById("ingredient-editor");
@@ -184,8 +184,8 @@ test("New ingredient opens the editor, and a saved one appears in its sorted pla
   assertFocus(document, buttonLabeled("Edit Milk"));
 });
 
-test("Cancel on a new ingredient returns focus to New ingredient", async () => {
-  await openIngredientsPage();
+test("Cancel on a new ingredient returns focus to New ingredient", async (t) => {
+  await openIngredientsPage(t);
 
   await clickAndReload(newButton());
   const dialog = document.getElementById("ingredient-editor");
@@ -195,8 +195,8 @@ test("Cancel on a new ingredient returns focus to New ingredient", async () => {
   assertFocus(document, newButton());
 });
 
-test("Edit opens the editor, and a saved name updates the row and focuses its Edit button", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("Edit opens the editor, and a saved name updates the row and focuses its Edit button", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   await clickAndReload(buttonLabeled("Edit Onion"));
   const dialog = document.getElementById("ingredient-editor");
@@ -210,8 +210,8 @@ test("Edit opens the editor, and a saved name updates the row and focuses its Ed
   assertFocus(document, buttonLabeled("Edit Red onion"));
 });
 
-test("Cancel after Edit returns focus to the ingredient's Edit button", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("Cancel after Edit returns focus to the ingredient's Edit button", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   await clickAndReload(buttonLabeled("Edit Onion"));
   const dialog = document.getElementById("ingredient-editor");
@@ -221,8 +221,8 @@ test("Cancel after Edit returns focus to the ingredient's Edit button", async ()
   assertFocus(document, buttonLabeled("Edit Onion"));
 });
 
-test("Escape after Edit returns focus to the ingredient's Edit button", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("Escape after Edit returns focus to the ingredient's Edit button", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   await clickAndReload(buttonLabeled("Edit Onion"));
   document.getElementById("ingredient-editor").close(); // what Escape does to a modal dialog
@@ -230,8 +230,8 @@ test("Escape after Edit returns focus to the ingredient's Edit button", async ()
   assertFocus(document, buttonLabeled("Edit Onion"));
 });
 
-test("a backdrop click with no changes after Edit returns focus to the ingredient's Edit button", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("a backdrop click with no changes after Edit returns focus to the ingredient's Edit button", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   await clickAndReload(buttonLabeled("Edit Onion"));
   const dialog = document.getElementById("ingredient-editor");
@@ -242,16 +242,16 @@ test("a backdrop click with no changes after Edit returns focus to the ingredien
   assertFocus(document, buttonLabeled("Edit Onion"));
 });
 
-test("Edit keeps Unit enabled for an ingredient that recipes use", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")], [recipe("r1", "Soup", ["1"])]);
+test("Edit keeps Unit enabled for an ingredient that recipes use", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")], [recipe("r1", "Soup", ["1"])]);
 
   await clickAndReload(buttonLabeled("Edit Onion"));
 
   assert.equal(document.getElementById("ingredient-unit").disabled, false);
 });
 
-test("Archive in the editor moves an ingredient to Archived, and updates the counts", async () => {
-  await openIngredientsPage([ingredient("1", "Onion"), ingredient("2", "Salt")]);
+test("Archive in the editor moves an ingredient to Archived, and updates the counts", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion"), ingredient("2", "Salt")]);
   const counts = () =>
     [...document.querySelectorAll('[data-count="ingredients"]')].map((count) => count.textContent);
   assert.deepEqual(counts(), ["2", "2"]);
@@ -267,8 +267,8 @@ test("Archive in the editor moves an ingredient to Archived, and updates the cou
   assertFocus(document, buttonLabeled("Edit Salt"));
 });
 
-test("the empty catalog and a search with no matches show their messages", async () => {
-  await openIngredientsPage();
+test("the empty catalog and a search with no matches show their messages", async (t) => {
+  await openIngredientsPage(t);
   assert.equal(
     document.getElementById("empty-catalog").textContent,
     "No ingredients yet. Add your first one with New ingredient.",
@@ -276,14 +276,14 @@ test("the empty catalog and a search with no matches show their messages", async
   assert.equal(document.getElementById("empty-catalog").hidden, false);
   await page.cleanup();
 
-  await openIngredientsPage([ingredient("1", "Onion")]);
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
   setValue(document.getElementById("search"), "zzz");
   assert.equal(document.getElementById("no-matches").textContent, 'No ingredients match "zzz".');
 });
 
-test("a load failure shows the error, and Retry loads again", async () => {
+test("a load failure shows the error, and Retry loads again", async (t) => {
   server = fakeFetch();
-  page = await loadPage({
+  page = await openPage(t, {
     html: "ingredients.html",
     script: "ingredients.js",
     fetch: server.fetch,
@@ -317,8 +317,9 @@ function editorDialog() {
   return document.getElementById("ingredient-editor");
 }
 
-test("Edit opens the editor with the ingredient and its usage from a reload, not from the first load", async () => {
+test("Edit opens the editor with the ingredient and its usage from a reload, not from the first load", async (t) => {
   await openIngredientsPage(
+    t,
     [ingredient("carrot", "Carrot", "pcs")],
     [recipe("r1", "Soup", ["carrot"])],
   );
@@ -343,8 +344,8 @@ test("Edit opens the editor with the ingredient and its usage from a reload, not
   assert.deepEqual(activeRows(), [["Carrot", "g · pcs"]]);
 });
 
-test("New ingredient refreshes the list from a reload before it opens", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("New ingredient refreshes the list from a reload before it opens", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   await clickAndReload(newButton(), {
     ingredients: [ingredient("1", "Onion"), ingredient("2", "Milk", "ml")],
@@ -356,8 +357,8 @@ test("New ingredient refreshes the list from a reload before it opens", async ()
   assert.deepEqual(activeNames(), ["Milk", "Onion"]);
 });
 
-test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("a failed reload shows the load error, focuses Retry, and doesn't open the editor", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   for (const button of [buttonLabeled("Edit Onion"), newButton()]) {
     const count = server.requests.length;
@@ -380,8 +381,8 @@ test("a failed reload shows the load error, focuses Retry, and doesn't open the 
   }
 });
 
-test("Edit on an ingredient that the reload no longer has refreshes the list and doesn't open the editor", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("Edit on an ingredient that the reload no longer has refreshes the list and doesn't open the editor", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   await clickAndReload(buttonLabeled("Edit Onion"), {
     ingredients: [ingredient("2", "Milk", "ml")],
@@ -393,8 +394,8 @@ test("Edit on an ingredient that the reload no longer has refreshes the list and
   assertFocus(document, document.getElementById("search"));
 });
 
-test("a second click while the reload runs sends no second reload", async () => {
-  await openIngredientsPage([ingredient("1", "Onion")]);
+test("a second click while the reload runs sends no second reload", async (t) => {
+  await openIngredientsPage(t, [ingredient("1", "Onion")]);
 
   buttonLabeled("Edit Onion").click();
   newButton().click();
@@ -407,8 +408,9 @@ test("a second click while the reload runs sends no second reload", async () => 
   assert.equal(editorDialog().querySelector(".dialog-title").textContent, "Edit ingredient");
 });
 
-test("a unit change on an ingredient that a recipe has in its unit saves that unit as a measure", async () => {
+test("a unit change on an ingredient that a recipe has in its unit saves that unit as a measure", async (t) => {
   await openIngredientsPage(
+    t,
     [ingredient("carrot", "Carrot", "pcs")],
     [recipe("r1", "Soup", ["carrot"])],
   );
@@ -440,10 +442,11 @@ test("a unit change on an ingredient that a recipe has in its unit saves that un
   assert.deepEqual(activeRows(), [["Carrot", "g · pcs"]]);
 });
 
-test("a unit change on an ingredient that recipes have only in a measure asks for no measure name", async () => {
+test("a unit change on an ingredient that recipes have only in a measure asks for no measure name", async (t) => {
   const medium = { id: "m1", name: "medium", amount: 150 };
   const line = { ingredientId: "onion", quantity: 1, measureId: "m1" };
   await openIngredientsPage(
+    t,
     [ingredient("onion", "Onion", "g", false, [medium])],
     [{ id: "r1", name: "Soup", archived: false, ingredients: [line] }],
   );

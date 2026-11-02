@@ -6,15 +6,15 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { formatWeekRange } from "../public/dates.js";
-import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
 
 let page;
 let server;
 
-async function openWeek(options) {
-  ({ page, server } = await openMealPlan(options));
+async function openWeek(t, options) {
+  ({ page, server } = await openMealPlan(t, options));
   return page;
 }
 
@@ -26,8 +26,7 @@ beforeEach(() => {
   mock.method(console, "error", () => {}); // some tests simulate a failed load or save on purpose
 });
 
-afterEach(async () => {
-  await page.cleanup();
+afterEach(() => {
   mock.restoreAll();
 });
 
@@ -49,11 +48,11 @@ function lineTexts() {
   ]);
 }
 
-test("the shopping list shows kilograms and a measure breakdown", async () => {
+test("the shopping list shows kilograms and a measure breakdown", async (t) => {
   const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "soup", servings: 1 },
   ]);
-  await openWeek({
+  await openWeek(t, {
     weekData,
     recipes: [
       {
@@ -90,12 +89,12 @@ test("the shopping list shows kilograms and a measure breakdown", async () => {
   );
 });
 
-test("Shopping list shows the week's totals per ingredient, from A to Z", async () => {
+test("Shopping list shows the week's totals per ingredient, from A to Z", async (t) => {
   let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "omelette", servings: 2 },
   ]);
   weekData = withSlot(weekData, "tue", "dinner", [{ recipeId: "soup", servings: 1.5 }]);
-  await openWeek({
+  await openWeek(t, {
     weekData,
     recipes: [
       {
@@ -137,8 +136,8 @@ test("Shopping list shows the week's totals per ingredient, from A to Z", async 
   assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
 });
 
-test("the shopping list counts a slot whose save is still pending", async () => {
-  await openWeek({
+test("the shopping list counts a slot whose save is still pending", async (t) => {
+  await openWeek(t, {
     recipes: [
       {
         id: "omelette",
@@ -167,12 +166,12 @@ test("the shopping list counts a slot whose save is still pending", async () => 
   await tick();
 });
 
-test("recipes without ingredients are listed as not included, with their slots", async () => {
+test("recipes without ingredients are listed as not included, with their slots", async (t) => {
   let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "dinner", [
     { recipeId: "burrito", servings: 2 },
   ]);
   weekData = withSlot(weekData, "thu", "snack_am", [{ recipeId: "burrito", servings: 1 }]);
-  await openWeek({
+  await openWeek(t, {
     weekData,
     recipes: [{ id: "burrito", name: "Burrito", archived: false, ingredients: [] }],
   });
@@ -194,8 +193,8 @@ test("recipes without ingredients are listed as not included, with their slots",
   assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
 });
 
-test("an empty week says there is nothing to buy", async () => {
-  await openWeek();
+test("an empty week says there is nothing to buy", async (t) => {
+  await openWeek(t);
 
   shoppingButton().click();
 
@@ -205,8 +204,8 @@ test("an empty week says there is nothing to buy", async () => {
   assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
 });
 
-test("a hash change while the shopping list is open is undone, and Close returns focus", async () => {
-  await openWeek();
+test("a hash change while the shopping list is open is undone, and Close returns focus", async (t) => {
+  await openWeek(t);
   shoppingButton().click();
 
   page.window.location.hash = "#2026-09-28";
@@ -219,8 +218,8 @@ test("a hash change while the shopping list is open is undone, and Close returns
   assertFocus(page.document, shoppingButton());
 });
 
-test("a backdrop click closes the shopping list", async () => {
-  await openWeek();
+test("a backdrop click closes the shopping list", async (t) => {
+  await openWeek(t);
   shoppingButton().click();
 
   shoppingDialog().dispatchEvent(new page.window.PointerEvent("pointerdown", { bubbles: true }));
@@ -230,9 +229,9 @@ test("a backdrop click closes the shopping list", async () => {
   assertFocus(page.document, shoppingButton());
 });
 
-test("Shopping list is disabled while no week is shown, and enabled when a week loads", async () => {
+test("Shopping list is disabled while no week is shown, and enabled when a week loads", async (t) => {
   server = fakeFetch();
-  page = await loadPage({
+  page = await openPage(t, {
     html: "index.html",
     script: "app.js",
     fetch: server.fetch,

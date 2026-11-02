@@ -5,15 +5,15 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { addWeeks, weekIdOf } from "../public/dates.js";
-import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
+import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
 
 let page;
 let server;
 
-async function openWeek(options) {
-  ({ page, server } = await openMealPlan(options));
+async function openWeek(t, options) {
+  ({ page, server } = await openMealPlan(t, options));
   return page;
 }
 
@@ -57,17 +57,16 @@ beforeEach(() => {
   mock.method(console, "error", () => {}); // some tests simulate a failed load or save on purpose
 });
 
-afterEach(async () => {
-  await page.cleanup();
+afterEach(() => {
   mock.restoreAll();
 });
 
-test("a loaded week shows each menu item with its servings, and Add in every slot", async () => {
+test("a loaded week shows each menu item with its servings, and Add in every slot", async (t) => {
   const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "soup", servings: 1 },
     { recipeId: "salad", servings: 1.5 },
   ]);
-  await openWeek({
+  await openWeek(t, {
     weekData,
     recipes: [
       { id: "soup", name: "Lentil soup", archived: false },
@@ -95,16 +94,16 @@ test("a loaded week shows each menu item with its servings, and Add in every slo
   assert.equal(slotButton("mon", "lunch").closest(".slot").hasAttribute("data-empty"), false);
 });
 
-test("each day header shows the short name of the day and its day of the month", async () => {
-  await openWeek();
+test("each day header shows the short name of the day and its day of the month", async (t) => {
+  await openWeek(t);
 
   const header = page.document.querySelector('.day-header[data-day="tue"]');
   assert.equal(header.querySelector(".day-name").textContent, "Tue");
   assert.equal(header.querySelector(".day-number").textContent, "22");
 });
 
-test("the toolbar shows the range of the week, and a short range for phones", async () => {
-  await openWeek({ week: "2026-09-28" });
+test("the toolbar shows the range of the week, and a short range for phones", async (t) => {
+  await openWeek(t, { week: "2026-09-28" });
 
   const plain = (text) => text.replace(/\s/g, " ");
   assert.equal(
@@ -114,8 +113,8 @@ test("the toolbar shows the range of the week, and a short range for phones", as
   assert.equal(page.document.getElementById("week-short").textContent, "Sep 28 – Oct 4");
 });
 
-test("the day heading names the selected day and its date", async () => {
-  await openWeek();
+test("the day heading names the selected day and its date", async (t) => {
+  await openWeek(t);
   page.document.querySelector('#day-bar button[data-day="wed"]').click();
 
   const heading = page.document.getElementById("day-heading");
@@ -124,8 +123,8 @@ test("the day heading names the selected day and its date", async () => {
   assert.equal(heading.querySelector(".today-mark").hidden, true);
 });
 
-test("the day heading marks today", async () => {
-  await openWeek({ week: weekIdOf(new Date()) });
+test("the day heading marks today", async (t) => {
+  await openWeek(t, { week: weekIdOf(new Date()) });
 
   const heading = page.document.getElementById("day-heading");
   const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
@@ -133,8 +132,8 @@ test("the day heading marks today", async () => {
   assert.equal(heading.querySelector(".today-mark").hidden, false);
 });
 
-test("the grid names today's column only in the week that contains today", async () => {
-  await openWeek({ week: weekIdOf(new Date()) });
+test("the grid names today's column only in the week that contains today", async (t) => {
+  await openWeek(t, { week: weekIdOf(new Date()) });
   const todayDay = DAYS[(new Date().getDay() + 6) % 7];
   const grid = page.document.getElementById("grid");
   assert.equal(grid.dataset.todayColumn, todayDay);
@@ -151,11 +150,11 @@ test("the grid names today's column only in the week that contains today", async
   assert.equal(grid.dataset.todayColumn, undefined);
 });
 
-test("the day bar marks the days with menu items, also after an edit", async () => {
+test("the day bar marks the days with menu items, also after an edit", async (t) => {
   const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "soup", servings: 1 },
   ]);
-  await openWeek({ weekData, recipes: [{ id: "soup", name: "Soup", archived: false }] });
+  await openWeek(t, { weekData, recipes: [{ id: "soup", name: "Soup", archived: false }] });
   const dayButton = (day) => page.document.querySelector(`#day-bar button[data-day="${day}"]`);
   assert.equal(dayButton("mon").hasAttribute("data-planned"), true);
   assert.equal(dayButton("tue").hasAttribute("data-planned"), false);
@@ -165,8 +164,8 @@ test("the day bar marks the days with menu items, also after an edit", async () 
   assert.equal(dayButton("tue").hasAttribute("data-planned"), true);
 });
 
-test("the toolbar says while the week saves, and then that all changes are saved", async () => {
-  await openWeek({ recipes: [{ id: "soup", name: "Soup", archived: false }] });
+test("the toolbar says while the week saves, and then that all changes are saved", async (t) => {
+  await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
   assert.deepEqual(saveSummaries(), ["", ""]);
 
   const save = await addWithEditor("mon", "lunch", "soup");
@@ -179,8 +178,8 @@ test("the toolbar says while the week saves, and then that all changes are saved
   assert.equal(announcement(), "Saved Monday lunch");
 });
 
-test("a failed save shows Retry on the slot and in the toolbar, and Retry saves again", async () => {
-  await openWeek({ recipes: [{ id: "soup", name: "Soup", archived: false }] });
+test("a failed save shows Retry on the slot and in the toolbar, and Retry saves again", async (t) => {
+  await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
   const save = await addWithEditor("mon", "lunch", "soup");
   save.fail();
   await tick();
@@ -208,8 +207,8 @@ test("a failed save shows Retry on the slot and in the toolbar, and Retry saves 
   assert.deepEqual(saveSummaries(), ["Saving…", "Saving…"]);
 });
 
-test("the sidebar counts the active recipes and the active ingredients", async () => {
-  await openWeek({
+test("the sidebar counts the active recipes and the active ingredients", async (t) => {
+  await openWeek(t, {
     recipes: [
       { id: "soup", name: "Lentil soup", archived: false },
       { id: "pie", name: "Apple pie", archived: true },
@@ -227,17 +226,17 @@ test("the sidebar counts the active recipes and the active ingredients", async (
   assert.equal(count("/ingredients.html"), "2");
 });
 
-test("a menu item whose recipe isn't in the recipe book falls back to Unknown recipe", async () => {
+test("a menu item whose recipe isn't in the recipe book falls back to Unknown recipe", async (t) => {
   const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "gone", servings: 2 },
   ]);
-  await openWeek({ weekData, recipes: [] });
+  await openWeek(t, { weekData, recipes: [] });
 
   assert.deepEqual(slotItems("mon", "lunch"), [["Unknown recipe", "×2"]]);
 });
 
-test("the shown week stays in sync with the hash", async () => {
-  await openWeek();
+test("the shown week stays in sync with the hash", async (t) => {
+  await openWeek(t);
   assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
   assert.equal(page.window.location.hash, `#${WEEK}`);
 
@@ -255,11 +254,11 @@ test("the shown week stays in sync with the hash", async () => {
 
 // Opens a week whose Monday lunch holds Soup, adds Salad with the editor, and
 // makes that save fail, so the week has one slot that wasn't saved.
-async function openWeekWithUnsavedLunch() {
+async function openWeekWithUnsavedLunch(t) {
   const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "soup", servings: 1 },
   ]);
-  await openWeek({
+  await openWeek(t, {
     weekData,
     recipes: [
       { id: "soup", name: "Soup", archived: false },
@@ -279,8 +278,8 @@ async function leaveForNextWeek() {
   return alert;
 }
 
-test("leaving a week with an unsaved slot asks first, and names the meal", async () => {
-  await openWeekWithUnsavedLunch();
+test("leaving a week with an unsaved slot asks first, and names the meal", async (t) => {
+  await openWeekWithUnsavedLunch(t);
 
   const alert = await leaveForNextWeek();
 
@@ -295,8 +294,8 @@ test("leaving a week with an unsaved slot asks first, and names the meal", async
   await tick();
 });
 
-test("Stay keeps the week and its unsaved menu", async () => {
-  await openWeekWithUnsavedLunch();
+test("Stay keeps the week and its unsaved menu", async (t) => {
+  await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
   alert.querySelector(".stay").click();
@@ -316,8 +315,8 @@ test("Stay keeps the week and its unsaved menu", async () => {
   );
 });
 
-test("Escape in the alert stays in the week", async () => {
-  await openWeekWithUnsavedLunch();
+test("Escape in the alert stays in the week", async (t) => {
+  await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
   alert.close(); // what Escape and Android's Back do to a modal dialog
@@ -330,8 +329,8 @@ test("Escape in the alert stays in the week", async () => {
   );
 });
 
-test("a hash change while the alert asks is undone", async () => {
-  await openWeekWithUnsavedLunch();
+test("a hash change while the alert asks is undone", async (t) => {
+  await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
   page.window.location.hash = "#2026-10-05";
@@ -343,8 +342,8 @@ test("a hash change while the alert asks is undone", async () => {
   assert.equal(page.window.location.hash, `#${WEEK}`);
 });
 
-test("Leave Without Saving shows the last saved menu, then the next week", async () => {
-  await openWeekWithUnsavedLunch();
+test("Leave Without Saving shows the last saved menu, then the next week", async (t) => {
+  await openWeekWithUnsavedLunch(t);
   const alert = await leaveForNextWeek();
 
   alert.querySelector(".leave").click();
@@ -363,8 +362,8 @@ test("Leave Without Saving shows the last saved menu, then the next week", async
   assert.equal(page.document.getElementById("grid").dataset.week, "2026-09-28");
 });
 
-test("a slot opens the editor titled with its meal, under the day and date", async () => {
-  await openWeek();
+test("a slot opens the editor titled with its meal, under the day and date", async (t) => {
+  await openWeek(t);
 
   slotButton("wed", "snack_pm").click();
 
@@ -373,8 +372,8 @@ test("a slot opens the editor titled with its meal, under the day and date", asy
   assert.equal(editor.querySelector(".sheet-subtitle").textContent, "Wednesday, Sep 23");
 });
 
-test("a hash change while the editor is open is undone", async () => {
-  await openWeek();
+test("a hash change while the editor is open is undone", async (t) => {
+  await openWeek(t);
   slotButton("mon", "lunch").click();
   assert.equal(page.document.getElementById("slot-editor").open, true);
 
@@ -386,8 +385,8 @@ test("a hash change while the editor is open is undone", async () => {
   assert.equal(page.document.getElementById("grid").dataset.week, WEEK); // week unchanged
 });
 
-test("beforeunload calls preventDefault() only while the editor has changes", async () => {
-  await openWeek({
+test("beforeunload calls preventDefault() only while the editor has changes", async (t) => {
+  await openWeek(t, {
     weekData: blankWeek(DAYS, MEALS),
     recipes: [{ id: "soup", name: "Soup", archived: false }],
   });
@@ -412,8 +411,8 @@ test("beforeunload calls preventDefault() only while the editor has changes", as
   assert.equal(dispatchBeforeUnload().defaultPrevented, false); // closed again
 });
 
-test("beforeunload calls preventDefault() while a slot's menu isn't confirmed", async () => {
-  await openWeek({ recipes: [{ id: "soup", name: "Soup", archived: false }] });
+test("beforeunload calls preventDefault() while a slot's menu isn't confirmed", async (t) => {
+  await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
 
   function dispatchBeforeUnload() {
     const event = new page.window.Event("beforeunload", { cancelable: true });
@@ -450,8 +449,8 @@ function clickRecipesLink(init = {}) {
   return event;
 }
 
-test("opening another page with an unsaved slot asks first, and Stay keeps the page", async () => {
-  await openWeekWithUnsavedLunch();
+test("opening another page with an unsaved slot asks first, and Stay keeps the page", async (t) => {
+  await openWeekWithUnsavedLunch(t);
   const alert = page.document.getElementById("leave-alert");
 
   const event = clickRecipesLink();
@@ -471,8 +470,8 @@ test("opening another page with an unsaved slot asks first, and Stay keeps the p
   ]);
 });
 
-test("a click with a modifier key or another button on a page link keeps the browser's default and asks nothing", async () => {
-  await openWeekWithUnsavedLunch();
+test("a click with a modifier key or another button on a page link keeps the browser's default and asks nothing", async (t) => {
+  await openWeekWithUnsavedLunch(t);
   const alert = page.document.getElementById("leave-alert");
 
   assert.equal(clickRecipesLink({ ctrlKey: true }).defaultPrevented, false);
@@ -488,8 +487,8 @@ test("a click with a modifier key or another button on a page link keeps the bro
 // Kept in sync with SAVED_BADGE_MS in public/app.js.
 const SAVED_BADGE_MS = 3000;
 
-test("the saved badge's timer is canceled by cleanup, so it never fires against a closed page", async () => {
-  await openWeek({ recipes: [{ id: "soup", name: "Soup", archived: false }] });
+test("the saved badge's timer is canceled by cleanup, so it never fires against a closed page", async (t) => {
+  await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
   slotButton("mon", "lunch").click();
   const search = page.document.querySelector("#slot-editor .option-search");
   search.value = "soup";
@@ -545,9 +544,9 @@ test("the saved badge's timer is canceled by cleanup, so it never fires against 
   );
 });
 
-test("a load failure shows the error, and Retry reloads", async () => {
+test("a load failure shows the error, and Retry reloads", async (t) => {
   server = fakeFetch();
-  page = await loadPage({
+  page = await openPage(t, {
     html: "index.html",
     script: "app.js",
     fetch: server.fetch,
@@ -583,8 +582,8 @@ test("a load failure shows the error, and Retry reloads", async () => {
   assert.equal(page.document.getElementById("grid").hidden, false);
 });
 
-test("the ingredient catalog loads again with every week", async () => {
-  await openWeek();
+test("the ingredient catalog loads again with every week", async (t) => {
+  await openWeek(t);
 
   page.document.getElementById("next-week").click();
   await waitFor(

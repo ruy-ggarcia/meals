@@ -199,6 +199,21 @@ export async function loadPage({
 }
 
 /**
+ * `loadPage` for a test: registers `page.cleanup()` with `t.after()`, so the
+ * page is cleaned up after the test, whether it passes or fails, and a page
+ * that a test opens never depends on a hook that another test's failure could
+ * skip. Takes the options of `loadPage`.
+ *
+ * @param {import("node:test").TestContext} t
+ * @param {Parameters<typeof loadPage>[0]} options
+ */
+export async function openPage(t, options) {
+  const page = await loadPage(options);
+  t.after(() => page.cleanup());
+  return page;
+}
+
+/**
  * Builds a document holding only the `<dialog id="ID">` markup from the real
  * public/HTML, installs the globals a dialog module needs, with `fetch` for
  * the network, and imports public/SCRIPT fresh.

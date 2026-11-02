@@ -2,7 +2,7 @@
 // tests of the week in test/meal-plan-page.test.js, and of the shopping
 // list in test/shopping-list-page.test.js.
 
-import { fakeFetch, loadPage, tick } from "./dom-helpers.js";
+import { fakeFetch, openPage, tick } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 
 export const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -17,16 +17,16 @@ export function withSlot(weekData, day, meal, items) {
 /**
  * Loads the meal plan page on `week`, and answers its first requests with
  * `weekData`, `recipes`, and `ingredients`. Resolves to `{ page, server }`.
- * Always call `page.cleanup()`.
+ * The test `t` cleans the page up when it ends.
+ *
+ * @param {import("node:test").TestContext} t
  */
-export async function openMealPlan({
-  week = WEEK,
-  weekData = blankWeek(DAYS, MEALS),
-  recipes = [],
-  ingredients = [],
-} = {}) {
+export async function openMealPlan(
+  t,
+  { week = WEEK, weekData = blankWeek(DAYS, MEALS), recipes = [], ingredients = [] } = {},
+) {
   const server = fakeFetch();
-  const page = await loadPage({
+  const page = await openPage(t, {
     html: "index.html",
     script: "app.js",
     fetch: server.fetch,
