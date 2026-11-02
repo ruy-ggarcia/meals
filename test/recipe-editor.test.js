@@ -112,18 +112,71 @@ function addIngredient(text) {
   pressKey(window, search(), "Enter");
 }
 
-test("a new recipe opens empty, titled New recipe, with focus in Name", () => {
-  openEditor();
+// Marks both quantities invalid with Done, then fixes the first one.
+function fixFirstQuantity() {
+  openEditor({ recipe: SOUP });
+  typeInto(window, quantityFields()[0], "1.255");
+  typeInto(window, quantityFields()[1], "0");
+  query(".done").click();
+  const rows = [...document.querySelectorAll(".ingredient-row")];
 
-  assert.equal(dialog.open, true);
-  assert.equal(query(".dialog-title").textContent, "New recipe");
-  assert.equal(nameField().value, "");
-  assertFocus(document, nameField());
-  assert.equal(query(".no-ingredients").hidden, false);
-  assert.deepEqual(rowNames(), []);
-});
+  typeInto(window, quantityFields()[0], "1.25");
+  return rows;
+}
+
+const OTHERS = [
+  { id: "gazpacho", name: "Gazpacho", archived: false },
+  { id: "old", name: "Old stew", archived: true },
+  { id: "soup", name: "Onion soup", archived: false }, // the recipe being edited
+];
+
+const CREATED_OMELETTE = {
+  id: "new",
+  name: "Omelette",
+  archived: false,
+  ingredients: [{ ingredientId: "egg", quantity: 0.25 }],
+};
+
+// Names the recipe Omelette, adds 0.25 of Egg, and selects Done.
+function doneOnOmelette() {
+  const opened = openEditor();
+  typeInto(window, nameField(), "Omelette");
+  addIngredient("egg");
+  typeInto(window, quantityFields()[0], " 0,25 ");
+  query(".done").click();
+  return opened;
+}
+
+function measureFields() {
+  return [...document.querySelectorAll("select.measure-field")];
+}
+
+// Changes the name, chooses Archive, and returns the alert that asks first.
+async function archiveWithChanges() {
+  openEditor({ recipe: SOUP });
+  typeInto(window, nameField(), "Changed, but not saved");
+  query(".archive").click();
+  await tick();
+  return document.querySelector('[role="alertdialog"]');
+}
 
 describe("recipe editor", () => {
+  test("opens a new recipe empty, with focus in Name", () => {
+    openEditor();
+
+    assert.equal(dialog.open, true);
+    assert.equal(nameField().value, "");
+    assertFocus(document, nameField());
+    assert.equal(query(".no-ingredients").hidden, false);
+    assert.deepEqual(rowNames(), []);
+  });
+
+  test("titles the editor New recipe for a new recipe", () => {
+    openEditor();
+
+    assert.equal(query(".dialog-title").textContent, "New recipe");
+  });
+
   test("opens an existing recipe with its name and ingredients", () => {
     openEditor({ recipe: SOUP });
 
@@ -153,94 +206,85 @@ describe("recipe editor", () => {
     assert.equal(quantityFields()[0].getAttribute("inputmode"), "decimal");
     assert.equal(quantityFields()[0].getAttribute("aria-label"), "Quantity of Onion per serving");
   });
-});
 
-test("Add ingredient offers active ingredients not in the recipe, from A to Z, with their unit", () => {
-  openEditor({ recipe: SOUP });
-
-  assert.deepEqual(optionTexts(), ["Egg (pcs)", "Milk (ml)"]);
-  typeInto(window, search(), "MI");
-  assert.deepEqual(optionTexts(), ["Milk (ml)"]);
-});
-
-test("Enter in Add ingredient adds the highlighted ingredient with an empty quantity, focused", () => {
-  openEditor();
-  typeInto(window, search(), "egg");
-
-  const event = pressKey(window, search(), "Enter");
-
-  assert.equal(event.defaultPrevented, true);
-  assert.equal(dialog.open, true);
-  assert.deepEqual(rowNames(), ["Egg"]);
-  assert.equal(quantityFields()[0].value, "");
-  assertFocus(document, quantityFields()[0]);
-  assert.equal(search().value, "");
-  assert.equal(query(".no-ingredients").hidden, true);
-});
-
-test("with no matches, Add ingredient points to the Ingredients page", () => {
-  openEditor();
-
-  typeInto(window, search(), "xyz");
-
-  assert.equal(query(".options").hidden, true);
-  assert.equal(query(".no-match").hidden, false);
-  assert.equal(
-    query(".no-match").textContent,
-    "No active ingredients match. Add them on the Ingredients page.",
-  );
-});
-
-test("a recipe without ingredients warns that the shopping list can't count it", () => {
-  openEditor();
-
-  assert.equal(
-    query(".no-ingredients").textContent.trim(),
-    "No ingredients yet. You can save it, but the shopping list can't count it.",
-  );
-  assert.equal(search().placeholder, "Type part of a name");
-});
-
-test("Done with an invalid quantity shows a message under its row, focuses it, and sends nothing", () => {
-  openEditor({ recipe: SOUP });
-  typeInto(window, quantityFields()[1], "1.255");
-
-  query(".done").click();
-
-  const rows = [...document.querySelectorAll(".ingredient-row")];
-  assert.equal(dialog.open, true);
-  assert.equal(
-    rows[0].querySelector(".row-message") === null,
-    true,
-    "the first row has no message",
-  );
-  assert.equal(
-    rows[1].querySelector(".row-message").textContent,
-    "Enter a quantity from 0.01 to 10000, with up to two decimals.",
-  );
-  assert.equal(quantityFields()[1].value, "1.255");
-  assertFocus(document, quantityFields()[1]);
-  assert.equal(server.requests.length, 0);
-});
-
-describe("recipe editor", () => {
-  // Marks both quantities invalid with Done, then fixes the first one.
-  function fixFirstQuantity() {
+  test("lists addable ingredients from A to Z, with their unit", () => {
     openEditor({ recipe: SOUP });
-    typeInto(window, quantityFields()[0], "1.255");
-    typeInto(window, quantityFields()[1], "0");
+
+    assert.deepEqual(optionTexts(), ["Egg (pcs)", "Milk (ml)"]);
+    typeInto(window, search(), "MI");
+    assert.deepEqual(optionTexts(), ["Milk (ml)"]);
+  });
+
+  test("adds the highlighted ingredient on Enter, focusing its empty quantity", () => {
+    openEditor();
+    typeInto(window, search(), "egg");
+
+    const event = pressKey(window, search(), "Enter");
+
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(dialog.open, true);
+    assert.deepEqual(rowNames(), ["Egg"]);
+    assert.equal(quantityFields()[0].value, "");
+    assertFocus(document, quantityFields()[0]);
+    assert.equal(search().value, "");
+    assert.equal(query(".no-ingredients").hidden, true);
+  });
+
+  test("points Add ingredient to the Ingredients page when nothing matches", () => {
+    openEditor();
+
+    typeInto(window, search(), "xyz");
+
+    assert.equal(query(".options").hidden, true);
+    assert.equal(query(".no-match").hidden, false);
+    assert.equal(
+      query(".no-match").textContent,
+      "No active ingredients match. Add them on the Ingredients page.",
+    );
+  });
+
+  test("warns that the shopping list can't count a recipe without ingredients", () => {
+    openEditor();
+
+    assert.equal(
+      query(".no-ingredients").textContent.trim(),
+      "No ingredients yet. You can save it, but the shopping list can't count it.",
+    );
+    assert.equal(search().placeholder, "Type part of a name");
+  });
+
+  test("rejects Done with an invalid quantity, with a message under its row", () => {
+    openEditor({ recipe: SOUP });
+    typeInto(window, quantityFields()[1], "1.255");
+
     query(".done").click();
+
     const rows = [...document.querySelectorAll(".ingredient-row")];
+    assert.equal(dialog.open, true);
+    assert.equal(
+      rows[0].querySelector(".row-message") === null,
+      true,
+      "the first row has no message",
+    );
+    assert.equal(
+      rows[1].querySelector(".row-message").textContent,
+      "Enter a quantity from 0.01 to 10000, with up to two decimals.",
+    );
+    assert.equal(quantityFields()[1].value, "1.255");
+    assertFocus(document, quantityFields()[1]);
+    assert.equal(server.requests.length, 0);
+  });
 
-    typeInto(window, quantityFields()[0], "1.25");
-    return rows;
-  }
-
-  test("clears the edited quantity's message and aria-invalid, and keeps focus", () => {
+  test("clears the message and aria-invalid of an edited quantity", () => {
     const [first] = fixFirstQuantity();
 
     assert.equal(first.querySelector(".row-message")?.textContent, undefined);
     assert.equal(quantityFields()[0].hasAttribute("aria-invalid"), false);
+  });
+
+  test("keeps focus in an edited quantity", () => {
+    fixFirstQuantity();
+
     assertFocus(document, quantityFields()[0]);
   });
 
@@ -250,125 +294,100 @@ describe("recipe editor", () => {
     assert.equal(second.querySelector(".row-message")?.textContent, QUANTITY_MESSAGE);
     assert.equal(quantityFields()[1].getAttribute("aria-invalid"), "true");
   });
-});
 
-test("a quantity that isn't valid is marked as you type, and Done stays enabled", () => {
-  openEditor({ recipe: SOUP });
-  const field = quantityFields()[0];
+  test("marks an invalid quantity as you type without disabling Done", () => {
+    openEditor({ recipe: SOUP });
+    const field = quantityFields()[0];
 
-  typeInto(window, field, "1.255");
-  assert.equal(field.getAttribute("aria-invalid"), "true");
-  assert.equal(
-    field.closest(".ingredient-row").querySelector(".row-message") === null,
-    true,
-    "the row of the field has no message",
-  );
-  assert.equal(query(".done").disabled, false);
+    typeInto(window, field, "1.255");
+    assert.equal(field.getAttribute("aria-invalid"), "true");
+    assert.equal(
+      field.closest(".ingredient-row").querySelector(".row-message") === null,
+      true,
+      "the row of the field has no message",
+    );
+    assert.equal(query(".done").disabled, false);
 
-  typeInto(window, field, "1,25");
-  assert.equal(field.hasAttribute("aria-invalid"), false);
+    typeInto(window, field, "1,25");
+    assert.equal(field.hasAttribute("aria-invalid"), false);
 
-  typeInto(window, field, "");
-  assert.equal(field.hasAttribute("aria-invalid"), false); // empty says nothing until Done
-});
+    typeInto(window, field, "");
+    assert.equal(field.hasAttribute("aria-invalid"), false); // empty says nothing until Done
+  });
 
-test("a quantity marked as you type stays marked when the rows render again", () => {
-  openEditor({ recipe: SOUP });
-  typeInto(window, quantityFields()[0], "abc");
+  test("keeps a quantity marked as you type when the rows render again", () => {
+    openEditor({ recipe: SOUP });
+    typeInto(window, quantityFields()[0], "abc");
 
-  addIngredient("egg");
-
-  assert.equal(quantityFields()[0].getAttribute("aria-invalid"), "true");
-});
-
-const OTHERS = [
-  { id: "gazpacho", name: "Gazpacho", archived: false },
-  { id: "old", name: "Old stew", archived: true },
-  { id: "soup", name: "Onion soup", archived: false }, // the recipe being edited
-];
-
-test("a name that another recipe has shows its message as you type, ignoring case and accents", () => {
-  openEditor({ recipe: SOUP, others: OTHERS });
-
-  typeInto(window, nameField(), "GAZPÁCHO");
-  assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
-
-  typeInto(window, nameField(), "old  stew");
-  assert.equal(
-    query(".name-message").textContent,
-    '"Old stew" is archived. To use it, restore it from Archived.',
-  );
-
-  typeInto(window, nameField(), "Gazpacho andaluz");
-  assert.equal(query(".name-message").textContent, "");
-
-  typeInto(window, nameField(), "Onion soup"); // its own name
-  assert.equal(query(".name-message").textContent, "");
-});
-
-test("Done with a name that another recipe has keeps the message and sends nothing", () => {
-  openEditor({ others: OTHERS });
-  typeInto(window, nameField(), "gazpacho");
-
-  query(".done").click();
-
-  assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
-  assertFocus(document, nameField());
-  assert.equal(server.requests.length, 0);
-});
-
-test("typing in Name clears the empty-name message", () => {
-  openEditor();
-  query(".done").click();
-  assert.equal(query(".name-message").textContent, "The name can't be empty.");
-
-  typeInto(window, nameField(), "P");
-
-  assert.equal(query(".name-message").textContent, "");
-});
-
-test("a valid Done doesn't re-render the rows, so focus stays in the field", async () => {
-  openEditor({ recipe: SOUP });
-  const field = quantityFields()[0];
-  field.focus();
-  typeInto(window, field, "160");
-
-  query(".done").click();
-
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  assert.equal(field.isConnected, true);
-  assertFocus(document, field);
-  await respondTo(server, "PATCH", "/api/recipes/soup", 200, SOUP);
-});
-
-test("Done with an empty name shows a message under Name and sends nothing", () => {
-  openEditor();
-  typeInto(window, nameField(), "   ");
-
-  query(".done").click();
-
-  assert.equal(query(".name-message").textContent, "The name can't be empty.");
-  assertFocus(document, nameField());
-  assert.equal(server.requests.length, 0);
-});
-
-describe("recipe editor", () => {
-  const created = {
-    id: "new",
-    name: "Omelette",
-    archived: false,
-    ingredients: [{ ingredientId: "egg", quantity: 0.25 }],
-  };
-
-  // Names the recipe Omelette, adds 0.25 of Egg, and selects Done.
-  function doneOnOmelette() {
-    const opened = openEditor();
-    typeInto(window, nameField(), "Omelette");
     addIngredient("egg");
-    typeInto(window, quantityFields()[0], " 0,25 ");
+
+    assert.equal(quantityFields()[0].getAttribute("aria-invalid"), "true");
+  });
+
+  test("reports a taken name as you type, ignoring case and accents", () => {
+    openEditor({ recipe: SOUP, others: OTHERS });
+
+    typeInto(window, nameField(), "GAZPÁCHO");
+    assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
+
+    typeInto(window, nameField(), "old  stew");
+    assert.equal(
+      query(".name-message").textContent,
+      '"Old stew" is archived. To use it, restore it from Archived.',
+    );
+
+    typeInto(window, nameField(), "Gazpacho andaluz");
+    assert.equal(query(".name-message").textContent, "");
+
+    typeInto(window, nameField(), "Onion soup"); // its own name
+    assert.equal(query(".name-message").textContent, "");
+  });
+
+  test("rejects Done with a taken name", () => {
+    openEditor({ others: OTHERS });
+    typeInto(window, nameField(), "gazpacho");
+
     query(".done").click();
-    return opened;
-  }
+
+    assert.equal(query(".name-message").textContent, '"Gazpacho" already exists.');
+    assertFocus(document, nameField());
+    assert.equal(server.requests.length, 0);
+  });
+
+  test("clears the empty-name message when you type in Name", () => {
+    openEditor();
+    query(".done").click();
+    assert.equal(query(".name-message").textContent, "The name can't be empty.");
+
+    typeInto(window, nameField(), "P");
+
+    assert.equal(query(".name-message").textContent, "");
+  });
+
+  test("keeps focus in the field on a valid Done", async () => {
+    openEditor({ recipe: SOUP });
+    const field = quantityFields()[0];
+    field.focus();
+    typeInto(window, field, "160");
+
+    query(".done").click();
+
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    assert.equal(field.isConnected, true);
+    assertFocus(document, field);
+    await respondTo(server, "PATCH", "/api/recipes/soup", 200, SOUP);
+  });
+
+  test("rejects Done with an empty name, with a message under Name", () => {
+    openEditor();
+    typeInto(window, nameField(), "   ");
+
+    query(".done").click();
+
+    assert.equal(query(".name-message").textContent, "The name can't be empty.");
+    assertFocus(document, nameField());
+    assert.equal(server.requests.length, 0);
+  });
 
   test("sends POST with the name and the quantities of a new recipe", async () => {
     doneOnOmelette();
@@ -379,7 +398,7 @@ describe("recipe editor", () => {
       name: "Omelette",
       ingredients: [{ ingredientId: "egg", quantity: 0.25 }],
     });
-    await respondTo(server, "POST", "/api/recipes", 201, created);
+    await respondTo(server, "POST", "/api/recipes", 201, CREATED_OMELETTE);
   });
 
   test("disables Done and Cancel while a new recipe saves", async () => {
@@ -387,200 +406,205 @@ describe("recipe editor", () => {
 
     assert.equal(query(".done").disabled, true);
     assert.equal(query(".cancel").disabled, true);
-    await respondTo(server, "POST", "/api/recipes", 201, created);
+    await respondTo(server, "POST", "/api/recipes", 201, CREATED_OMELETTE);
   });
 
-  test("closes and reports the recipe after a new recipe saves", async () => {
-    const { saved } = doneOnOmelette();
+  test("closes after a new recipe saves", async () => {
+    doneOnOmelette();
 
-    await respondTo(server, "POST", "/api/recipes", 201, created);
+    await respondTo(server, "POST", "/api/recipes", 201, CREATED_OMELETTE);
 
     assert.equal(dialog.open, false);
-    assert.deepEqual(saved, [created]);
-  });
-});
-
-test("a new recipe can be saved without ingredients", async () => {
-  openEditor();
-  typeInto(window, nameField(), "Coffee");
-
-  query(".done").click();
-
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  assert.deepEqual(server.requestFor("POST", "/api/recipes").body, {
-    name: "Coffee",
-    ingredients: [],
-  });
-  await respondTo(server, "POST", "/api/recipes", 201, {
-    id: "coffee",
-    name: "Coffee",
-    archived: false,
-    ingredients: [],
-  });
-});
-
-test("Done on an existing recipe sends only the name when only the name changed", async () => {
-  openEditor({ recipe: SOUP });
-  typeInto(window, nameField(), "French onion soup");
-
-  query(".done").click();
-
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, {
-    name: "French onion soup",
-  });
-  await respondTo(server, "PATCH", "/api/recipes/soup", 200, {
-    ...SOUP,
-    name: "French onion soup",
-  });
-});
-
-test("Done on an existing recipe sends only the ingredients when only a quantity changed", async () => {
-  openEditor({ recipe: SOUP });
-  typeInto(window, quantityFields()[0], "200");
-
-  query(".done").click();
-
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, {
-    ingredients: [
-      { ingredientId: "onion", quantity: 200 },
-      { ingredientId: "salt", quantity: 0.5 },
-    ],
-  });
-  await respondTo(server, "PATCH", "/api/recipes/soup", 200, SOUP);
-});
-
-test("Done with no changes closes without a request and returns focus to the opener", () => {
-  const { opener, saved } = openEditor({ recipe: SOUP });
-  typeInto(window, quantityFields()[0], "150.0"); // the same quantity
-
-  query(".done").click();
-
-  assert.equal(dialog.open, false);
-  assert.equal(server.requests.length, 0);
-  assert.deepEqual(saved, []);
-  assertFocus(document, opener);
-});
-
-test("a name conflict (409) shows the message under Name and keeps the editor open", async () => {
-  openEditor();
-  typeInto(window, nameField(), "soup");
-
-  query(".done").click();
-  await respondTo(server, "POST", "/api/recipes", 409, {
-    error: 'A recipe named "Soup" already exists.',
-    recipe: { id: "x", name: "Soup", archived: false, ingredients: [] },
   });
 
-  assert.equal(dialog.open, true);
-  assert.equal(query(".name-message").textContent, '"Soup" already exists.');
-  assert.equal(nameField().value, "soup");
-  assertFocus(document, nameField());
-  assert.equal(query(".done").disabled, false);
-});
+  test("reports the recipe after a new recipe saves", async () => {
+    const { saved } = doneOnOmelette();
 
-test("a conflict with an archived recipe says to restore it from Archived", async () => {
-  openEditor();
-  typeInto(window, nameField(), "Soup");
+    await respondTo(server, "POST", "/api/recipes", 201, CREATED_OMELETTE);
 
-  query(".done").click();
-  await respondTo(server, "POST", "/api/recipes", 409, {
-    error: 'A recipe named "Soup" already exists.',
-    recipe: { id: "x", name: "Soup", archived: true, ingredients: [] },
+    assert.deepEqual(saved, [CREATED_OMELETTE]);
   });
 
-  assert.equal(
-    query(".name-message").textContent,
-    '"Soup" is archived. To use it, restore it from Archived.',
-  );
-});
+  test("saves a new recipe without ingredients", async () => {
+    openEditor();
+    typeInto(window, nameField(), "Coffee");
 
-test("a rejected save (400) shows the server's message", async () => {
-  openEditor();
-  typeInto(window, nameField(), "Soup");
+    query(".done").click();
 
-  query(".done").click();
-  await respondTo(server, "POST", "/api/recipes", 400, {
-    error: "The name must be at most 100 characters.",
+    await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
+    assert.deepEqual(server.requestFor("POST", "/api/recipes").body, {
+      name: "Coffee",
+      ingredients: [],
+    });
+    await respondTo(server, "POST", "/api/recipes", 201, {
+      id: "coffee",
+      name: "Coffee",
+      archived: false,
+      ingredients: [],
+    });
   });
 
-  assert.equal(query(".save-message").textContent, "The name must be at most 100 characters.");
-  assert.equal(dialog.open, true);
-});
+  test("sends only the name on Done when only the name changed", async () => {
+    openEditor({ recipe: SOUP });
+    typeInto(window, nameField(), "French onion soup");
 
-test("a network error keeps the editor open with the changes", async () => {
-  quiet.expect(1);
-  openEditor({ recipe: SOUP });
-  typeInto(window, nameField(), "Stew");
+    query(".done").click();
 
-  query(".done").click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/soup").fail();
-  await tick();
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, {
+      name: "French onion soup",
+    });
+    await respondTo(server, "PATCH", "/api/recipes/soup", 200, {
+      ...SOUP,
+      name: "French onion soup",
+    });
+  });
 
-  assert.equal(dialog.open, true);
-  assert.equal(query(".save-message").textContent, "Couldn't save the recipe. Try again.");
-  assert.equal(nameField().value, "Stew");
-  assertFocus(document, query(".done"));
-});
+  test("sends only the ingredients on Done when only a quantity changed", async () => {
+    openEditor({ recipe: SOUP });
+    typeInto(window, quantityFields()[0], "200");
 
-test("Remove takes the row out and moves focus to the next Remove, then the title", () => {
-  openEditor({ recipe: SOUP });
+    query(".done").click();
 
-  query('[aria-label="Remove Onion"]').click();
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, {
+      ingredients: [
+        { ingredientId: "onion", quantity: 200 },
+        { ingredientId: "salt", quantity: 0.5 },
+      ],
+    });
+    await respondTo(server, "PATCH", "/api/recipes/soup", 200, SOUP);
+  });
 
-  assert.deepEqual(rowNames(), ["Salt (archived)"]);
-  assertFocus(document, query('[aria-label="Remove Salt"]'));
-  assert.deepEqual(optionTexts(), ["Egg (pcs)", "Milk (ml)", "Onion (g)"]);
+  test("closes without a request and returns focus on Done without changes", () => {
+    const { opener, saved } = openEditor({ recipe: SOUP });
+    typeInto(window, quantityFields()[0], "150.0"); // the same quantity
 
-  query('[aria-label="Remove Salt"]').click();
+    query(".done").click();
 
-  assertFocus(document, query(".dialog-title"));
-  assert.equal(query(".no-ingredients").hidden, false);
-});
+    assert.equal(dialog.open, false);
+    assert.equal(server.requests.length, 0);
+    assert.deepEqual(saved, []);
+    assertFocus(document, opener);
+  });
 
-test("Cancel discards the changes and returns focus to the opener", () => {
-  const { opener, saved } = openEditor({ recipe: SOUP });
-  typeInto(window, nameField(), "Stew");
+  test("shows the message under Name and stays open on a name conflict (409)", async () => {
+    openEditor();
+    typeInto(window, nameField(), "soup");
 
-  query(".cancel").click();
+    query(".done").click();
+    await respondTo(server, "POST", "/api/recipes", 409, {
+      error: 'A recipe named "Soup" already exists.',
+      recipe: { id: "x", name: "Soup", archived: false, ingredients: [] },
+    });
 
-  assert.equal(dialog.open, false);
-  assert.equal(editor.isOpen(), false);
-  assert.deepEqual(saved, []);
-  assertFocus(document, opener);
-  assert.equal(server.requests.length, 0);
-});
+    assert.equal(dialog.open, true);
+    assert.equal(query(".name-message").textContent, '"Soup" already exists.');
+    assert.equal(nameField().value, "soup");
+    assertFocus(document, nameField());
+    assert.equal(query(".done").disabled, false);
+  });
 
-test("Escape (the dialog's close event) discards the changes", () => {
-  const { opener } = openEditor({ recipe: SOUP });
-  typeInto(window, nameField(), "Stew");
+  test("points to Archived when the name conflicts with an archived recipe", async () => {
+    openEditor();
+    typeInto(window, nameField(), "Soup");
 
-  // The browser fires "close" for Escape and Android's Back; happy-dom
-  // doesn't drive that from a keypress, so the test closes the dialog itself.
-  dialog.close();
+    query(".done").click();
+    await respondTo(server, "POST", "/api/recipes", 409, {
+      error: 'A recipe named "Soup" already exists.',
+      recipe: { id: "x", name: "Soup", archived: true, ingredients: [] },
+    });
 
-  assert.equal(editor.isOpen(), false);
-  assertFocus(document, opener);
-  assert.equal(server.requests.length, 0);
-});
+    assert.equal(
+      query(".name-message").textContent,
+      '"Soup" is archived. To use it, restore it from Archived.',
+    );
+  });
 
-test("a backdrop click closes the editor only when nothing changed", () => {
-  openEditor({ recipe: SOUP });
-  pointerdown(window, dialog);
-  dialog.click();
-  assert.equal(dialog.open, false);
+  test("shows the server's message on a rejected save (400)", async () => {
+    openEditor();
+    typeInto(window, nameField(), "Soup");
 
-  openEditor({ recipe: SOUP });
-  typeInto(window, quantityFields()[0], "10");
-  pointerdown(window, dialog);
-  dialog.click();
-  assert.equal(dialog.open, true);
-  assert.equal(editor.hasChanges(), true);
-});
+    query(".done").click();
+    await respondTo(server, "POST", "/api/recipes", 400, {
+      error: "The name must be at most 100 characters.",
+    });
 
-describe("recipe editor", () => {
+    assert.equal(query(".save-message").textContent, "The name must be at most 100 characters.");
+    assert.equal(dialog.open, true);
+  });
+
+  test("keeps the editor open with the changes on a network error", async () => {
+    quiet.expect(1);
+    openEditor({ recipe: SOUP });
+    typeInto(window, nameField(), "Stew");
+
+    query(".done").click();
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    server.requestFor("PATCH", "/api/recipes/soup").fail();
+    await tick();
+
+    assert.equal(dialog.open, true);
+    assert.equal(query(".save-message").textContent, "Couldn't save the recipe. Try again.");
+    assert.equal(nameField().value, "Stew");
+    assertFocus(document, query(".done"));
+  });
+
+  test("removes a row and moves focus to the next Remove, then the title", () => {
+    openEditor({ recipe: SOUP });
+
+    query('[aria-label="Remove Onion"]').click();
+
+    assert.deepEqual(rowNames(), ["Salt (archived)"]);
+    assertFocus(document, query('[aria-label="Remove Salt"]'));
+    assert.deepEqual(optionTexts(), ["Egg (pcs)", "Milk (ml)", "Onion (g)"]);
+
+    query('[aria-label="Remove Salt"]').click();
+
+    assertFocus(document, query(".dialog-title"));
+    assert.equal(query(".no-ingredients").hidden, false);
+  });
+
+  test("discards the changes and returns focus to the opener with Cancel", () => {
+    const { opener, saved } = openEditor({ recipe: SOUP });
+    typeInto(window, nameField(), "Stew");
+
+    query(".cancel").click();
+
+    assert.equal(dialog.open, false);
+    assert.equal(editor.isOpen(), false);
+    assert.deepEqual(saved, []);
+    assertFocus(document, opener);
+    assert.equal(server.requests.length, 0);
+  });
+
+  test("discards the changes with Escape, the close event of the dialog", () => {
+    const { opener } = openEditor({ recipe: SOUP });
+    typeInto(window, nameField(), "Stew");
+
+    // The browser fires "close" for Escape and Android's Back; happy-dom
+    // doesn't drive that from a keypress, so the test closes the dialog itself.
+    dialog.close();
+
+    assert.equal(editor.isOpen(), false);
+    assertFocus(document, opener);
+    assert.equal(server.requests.length, 0);
+  });
+
+  test("closes on a backdrop click only when nothing changed", () => {
+    openEditor({ recipe: SOUP });
+    pointerdown(window, dialog);
+    dialog.click();
+    assert.equal(dialog.open, false);
+
+    openEditor({ recipe: SOUP });
+    typeInto(window, quantityFields()[0], "10");
+    pointerdown(window, dialog);
+    dialog.click();
+    assert.equal(dialog.open, true);
+    assert.equal(editor.hasChanges(), true);
+  });
+
   test("confirms with Enter in Name, the same as Done", async () => {
     openEditor({ recipe: SOUP });
     typeInto(window, nameField(), "Stew");
@@ -601,285 +625,281 @@ describe("recipe editor", () => {
     await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
     await respondTo(server, "PATCH", "/api/recipes/soup", 200, SOUP);
   });
-});
 
-test("at 50 ingredients, Add ingredient is disabled with the limit's placeholder", () => {
-  const many = Array.from({ length: 51 }, (_, index) => ({
-    id: `i${index}`,
-    name: `Ingredient ${index}`,
-    unit: "g",
-    archived: false,
-  }));
-  const big = {
-    id: "big",
-    name: "Big",
-    archived: false,
-    ingredients: many
-      .slice(0, 50)
-      .map((ingredient) => ({ ingredientId: ingredient.id, quantity: 1 })),
-  };
-  openEditor({ recipe: big, ingredients: many });
+  function openFullRecipe() {
+    const many = Array.from({ length: 51 }, (_, index) => ({
+      id: `i${index}`,
+      name: `Ingredient ${index}`,
+      unit: "g",
+      archived: false,
+    }));
+    const big = {
+      id: "big",
+      name: "Big",
+      archived: false,
+      ingredients: many
+        .slice(0, 50)
+        .map((ingredient) => ({ ingredientId: ingredient.id, quantity: 1 })),
+    };
+    openEditor({ recipe: big, ingredients: many });
+  }
 
-  assert.equal(search().disabled, true);
-  assert.equal(search().placeholder, "A recipe holds up to 50 ingredients.");
-  assert.equal(query(".no-match").hidden, true);
+  test("disables Add ingredient at 50 ingredients until one is removed", () => {
+    openFullRecipe();
 
-  query('[aria-label="Remove Ingredient 0"]').click();
+    assert.equal(search().disabled, true);
+    assert.equal(query(".no-match").hidden, true);
 
-  assert.equal(search().disabled, false);
-});
+    query('[aria-label="Remove Ingredient 0"]').click();
 
-test("an ingredient name with HTML renders as text", () => {
-  openEditor({ ingredients: [{ id: "b", name: "<b>Bold</b>", unit: "g", archived: false }] });
-
-  assert.deepEqual(optionTexts(), ["<b>Bold</b> (g)"]);
-  assert.equal(query(".options b") === null, true, "the options have no bold text");
-});
-
-function measureFields() {
-  return [...document.querySelectorAll("select.measure-field")];
-}
-
-test("a row offers the unit and then each measure, as medium (150 g)", () => {
-  openEditor({ recipe: SOUP });
-
-  const [select] = measureFields();
-  assert.equal(select.getAttribute("aria-label"), "Measure of Onion");
-  assert.deepEqual(
-    [...select.options].map((option) => [option.value, option.textContent]),
-    [
-      ["", "g"],
-      ["medium", "medium (150 g)"],
-      ["large", "large (250 g)"],
-    ],
-  );
-});
-
-test("a new row starts on the unit", () => {
-  openEditor();
-  addIngredient("onion");
-
-  const [select] = measureFields();
-  assert.equal(select.value, "");
-  assert.equal(select.options[select.selectedIndex].textContent, "g");
-});
-
-test("an existing line opens on its measure", () => {
-  const recipe = {
-    ...SOUP,
-    ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
-  };
-  openEditor({ recipe });
-
-  assert.equal(measureFields()[0].value, "large");
-  assert.equal(editor.hasChanges(), false);
-});
-
-test("Done sends measureId for a line in a measure and leaves it out for the unit", async () => {
-  openEditor();
-  typeInto(window, nameField(), "Stew");
-  addIngredient("onion");
-  typeInto(window, quantityFields()[0], "2");
-  measureFields()[0].value = "medium";
-  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
-  addIngredient("egg");
-  typeInto(window, quantityFields()[1], "3");
-
-  query(".done").click();
-
-  await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
-  const { ingredients } = server.requestFor("POST", "/api/recipes").body;
-  assert.deepEqual(ingredients, [
-    { ingredientId: "onion", quantity: 2, measureId: "medium" },
-    { ingredientId: "egg", quantity: 3 },
-  ]);
-  assert.equal("measureId" in ingredients[1], false);
-  await respondTo(server, "POST", "/api/recipes", 201, { id: "stew", name: "Stew", ingredients });
-});
-
-test("changing only the measure counts as a change and is sent", async () => {
-  openEditor({ recipe: SOUP });
-  assert.equal(editor.hasChanges(), false);
-  measureFields()[0].value = "large";
-  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
-  assert.equal(editor.hasChanges(), true);
-
-  query(".done").click();
-
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, {
-    ingredients: [
-      { ingredientId: "onion", quantity: 150, measureId: "large" },
-      { ingredientId: "salt", quantity: 0.5 },
-    ],
+    assert.equal(search().disabled, false);
   });
-  await respondTo(server, "PATCH", "/api/recipes/soup", 200, SOUP);
-});
 
-test("an ingredient without measures shows its unit as text", () => {
-  openEditor({ recipe: SOUP });
+  test("shows the limit's placeholder in Add ingredient at 50 ingredients", () => {
+    openFullRecipe();
 
-  const rows = [...document.querySelectorAll(".ingredient-row")];
-  assert.equal(
-    rows[1].querySelector("select.measure-field") === null,
-    true,
-    "the second row has no measure select",
-  );
-  assert.equal(rows[1].querySelector(".unit").textContent, "g");
-  assert.equal(rows[0].querySelector(".unit") === null, true, "the first row has no unit text");
-});
+    assert.equal(search().placeholder, "A recipe holds up to 50 ingredients.");
+  });
 
-test("switching an existing measure line back to the unit is a change and drops measureId", async () => {
-  const recipe = {
-    ...SOUP,
-    ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
-  };
-  openEditor({ recipe });
-  measureFields()[0].value = "";
-  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
-  assert.equal(editor.hasChanges(), true);
+  test("renders an ingredient name with HTML as text", () => {
+    openEditor({ ingredients: [{ id: "b", name: "<b>Bold</b>", unit: "g", archived: false }] });
 
-  query(".done").click();
+    assert.deepEqual(optionTexts(), ["<b>Bold</b> (g)"]);
+    assert.equal(query(".options b") === null, true, "the options have no bold text");
+  });
 
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  const { ingredients } = server.requestFor("PATCH", "/api/recipes/soup").body;
-  assert.deepEqual(ingredients, [{ ingredientId: "onion", quantity: 2 }]);
-  assert.equal("measureId" in ingredients[0], false);
-  await respondTo(server, "PATCH", "/api/recipes/soup", 200, { ...recipe, ingredients });
-});
+  test("offers the unit and then each measure in a row, as medium (150 g)", () => {
+    openEditor({ recipe: SOUP });
 
-test("a measure choice survives the re-render when another ingredient is added", () => {
-  openEditor();
-  addIngredient("onion");
-  measureFields()[0].value = "large";
-  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+    const [select] = measureFields();
+    assert.equal(select.getAttribute("aria-label"), "Measure of Onion");
+    assert.deepEqual(
+      [...select.options].map((option) => [option.value, option.textContent]),
+      [
+        ["", "g"],
+        ["medium", "medium (150 g)"],
+        ["large", "large (250 g)"],
+      ],
+    );
+  });
 
-  addIngredient("egg");
+  test("starts a new row on the unit", () => {
+    openEditor();
+    addIngredient("onion");
 
-  assert.equal(measureFields()[0].value, "large");
-});
+    const [select] = measureFields();
+    assert.equal(select.value, "");
+    assert.equal(select.options[select.selectedIndex].textContent, "g");
+  });
 
-test("an archived ingredient with measures still shows its measure select", () => {
-  const archived = { ...ONION, archived: true };
-  const recipe = {
-    ...SOUP,
-    ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
-  };
-  openEditor({ recipe, ingredients: [archived] });
+  test("opens an existing line on its measure", () => {
+    const recipe = {
+      ...SOUP,
+      ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
+    };
+    openEditor({ recipe });
 
-  assert.equal(measureFields().length, 1);
-  assert.equal(measureFields()[0].value, "large");
-  assert.equal(document.querySelector(".ingredient-name").textContent, "Onion (archived)");
-});
+    assert.equal(measureFields()[0].value, "large");
+    assert.equal(editor.hasChanges(), false);
+  });
 
-test("a measure choice survives the re-render after an invalid quantity", () => {
-  openEditor({ recipe: SOUP });
-  measureFields()[0].value = "large";
-  measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
-  typeInto(window, quantityFields()[0], "1.255");
+  test("sends measureId only for a line in a measure", async () => {
+    openEditor();
+    typeInto(window, nameField(), "Stew");
+    addIngredient("onion");
+    typeInto(window, quantityFields()[0], "2");
+    measureFields()[0].value = "medium";
+    measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+    addIngredient("egg");
+    typeInto(window, quantityFields()[1], "3");
 
-  query(".done").click();
+    query(".done").click();
 
-  assert.equal(document.querySelectorAll(".row-message").length, 1);
-  assert.equal(measureFields()[0].value, "large");
-});
+    await waitFor(() => server.requestFor("POST", "/api/recipes") !== undefined);
+    const { ingredients } = server.requestFor("POST", "/api/recipes").body;
+    assert.deepEqual(ingredients, [
+      { ingredientId: "onion", quantity: 2, measureId: "medium" },
+      { ingredientId: "egg", quantity: 3 },
+    ]);
+    assert.equal("measureId" in ingredients[1], false);
+    await respondTo(server, "POST", "/api/recipes", 201, { id: "stew", name: "Stew", ingredients });
+  });
 
-test("Archive shows only for a recipe that exists and isn't archived", () => {
-  openEditor();
-  assert.equal(query(".archive").hidden, true);
-  query(".cancel").click();
+  test("sends a change of only the measure", async () => {
+    openEditor({ recipe: SOUP });
+    assert.equal(editor.hasChanges(), false);
+    measureFields()[0].value = "large";
+    measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+    assert.equal(editor.hasChanges(), true);
 
-  openEditor({ recipe: { ...SOUP, archived: true } });
-  assert.equal(query(".archive").hidden, true);
-  query(".cancel").click();
+    query(".done").click();
 
-  openEditor({ recipe: SOUP });
-  assert.equal(query(".archive").hidden, false);
-});
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, {
+      ingredients: [
+        { ingredientId: "onion", quantity: 150, measureId: "large" },
+        { ingredientId: "salt", quantity: 0.5 },
+      ],
+    });
+    await respondTo(server, "PATCH", "/api/recipes/soup", 200, SOUP);
+  });
 
-test("Archive without changes sends only archived: true, then closes with the archived recipe", async () => {
-  const { saved } = openEditor({ recipe: SOUP });
+  test("shows the unit as text for an ingredient without measures", () => {
+    openEditor({ recipe: SOUP });
 
-  query(".archive").click();
-  assert.equal(query(".archive").disabled, true);
-  await respondTo(server, "PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+    const rows = [...document.querySelectorAll(".ingredient-row")];
+    assert.equal(
+      rows[1].querySelector("select.measure-field") === null,
+      true,
+      "the second row has no measure select",
+    );
+    assert.equal(rows[1].querySelector(".unit").textContent, "g");
+    assert.equal(rows[0].querySelector(".unit") === null, true, "the first row has no unit text");
+  });
 
-  assert.equal(document.querySelector('[role="alertdialog"]') === null, true, "no alert is open");
-  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
-  assert.equal(dialog.open, false);
-  assert.deepEqual(saved, [{ ...SOUP, archived: true }]);
-});
+  test("drops measureId when an existing line switches back to the unit", async () => {
+    const recipe = {
+      ...SOUP,
+      ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
+    };
+    openEditor({ recipe });
+    measureFields()[0].value = "";
+    measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+    assert.equal(editor.hasChanges(), true);
 
-// Changes the name, chooses Archive, and returns the alert that asks first.
-async function archiveWithChanges() {
-  openEditor({ recipe: SOUP });
-  typeInto(window, nameField(), "Changed, but not saved");
-  query(".archive").click();
-  await tick();
-  return document.querySelector('[role="alertdialog"]');
-}
+    query(".done").click();
 
-test("Archive with changes asks first, with Keep Editing focused", async () => {
-  const alert = await archiveWithChanges();
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    const { ingredients } = server.requestFor("PATCH", "/api/recipes/soup").body;
+    assert.deepEqual(ingredients, [{ ingredientId: "onion", quantity: 2 }]);
+    assert.equal("measureId" in ingredients[0], false);
+    await respondTo(server, "PATCH", "/api/recipes/soup", 200, { ...recipe, ingredients });
+  });
 
-  assert.equal(alert.open, true);
-  assert.equal(alert.querySelector(".alert-title").textContent, "Archive without saving?");
-  assert.equal(
-    alert.querySelector(".alert-message").textContent,
-    "Your changes aren't saved. If you archive now, they're lost.",
-  );
-  assert.equal(alert.getAttribute("aria-labelledby"), alert.querySelector(".alert-title").id);
-  assert.equal(alert.getAttribute("aria-describedby"), alert.querySelector(".alert-message").id);
-  assertFocus(document, alert.querySelector(".keep"));
-  assert.equal(alert.querySelector(".keep").textContent, "Keep Editing");
-  assert.equal(alert.querySelector(".lose").textContent, "Archive Without Saving");
-  alert.querySelector(".keep").click();
-  await tick();
-});
+  test("keeps a measure choice when another ingredient is added", () => {
+    openEditor();
+    addIngredient("onion");
+    measureFields()[0].value = "large";
+    measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
 
-test("Keep Editing keeps the editor and its changes, and sends nothing", async () => {
-  const alert = await archiveWithChanges();
+    addIngredient("egg");
 
-  alert.querySelector(".keep").click();
-  await tick();
+    assert.equal(measureFields()[0].value, "large");
+  });
 
-  assert.equal(document.querySelector('[role="alertdialog"]') === null, true, "no alert is open");
-  assert.equal(dialog.open, true);
-  assert.equal(nameField().value, "Changed, but not saved");
-  assert.equal(server.requests.length, 0);
-  assertFocus(document, query(".archive"));
-});
+  test("shows the measure select of an archived ingredient with measures", () => {
+    const archived = { ...ONION, archived: true };
+    const recipe = {
+      ...SOUP,
+      ingredients: [{ ingredientId: "onion", quantity: 2, measureId: "large" }],
+    };
+    openEditor({ recipe, ingredients: [archived] });
 
-test("Escape in the alert keeps the editor, the same as Keep Editing", async () => {
-  const alert = await archiveWithChanges();
+    assert.equal(measureFields().length, 1);
+    assert.equal(measureFields()[0].value, "large");
+    assert.equal(document.querySelector(".ingredient-name").textContent, "Onion (archived)");
+  });
 
-  alert.close(); // what Escape and Android's Back do to a modal dialog
-  await tick();
+  test("keeps a measure choice after an invalid quantity", () => {
+    openEditor({ recipe: SOUP });
+    measureFields()[0].value = "large";
+    measureFields()[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+    typeInto(window, quantityFields()[0], "1.255");
 
-  assert.equal(dialog.open, true);
-  assert.equal(server.requests.length, 0);
-});
+    query(".done").click();
 
-test("Archive Without Saving archives the recipe without the changes", async () => {
-  const alert = await archiveWithChanges();
+    assert.equal(document.querySelectorAll(".row-message").length, 1);
+    assert.equal(measureFields()[0].value, "large");
+  });
 
-  alert.querySelector(".lose").click();
-  await respondTo(server, "PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+  test("shows Archive only for a recipe that exists and isn't archived", () => {
+    openEditor();
+    assert.equal(query(".archive").hidden, true);
+    query(".cancel").click();
 
-  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
-  assert.equal(dialog.open, false);
-});
+    openEditor({ recipe: { ...SOUP, archived: true } });
+    assert.equal(query(".archive").hidden, true);
+    query(".cancel").click();
 
-test("a failed archive keeps the editor open and says so", async () => {
-  quiet.expect(1);
-  openEditor({ recipe: SOUP });
+    openEditor({ recipe: SOUP });
+    assert.equal(query(".archive").hidden, false);
+  });
 
-  query(".archive").click();
-  await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
-  server.requestFor("PATCH", "/api/recipes/soup").fail();
-  await tick();
+  test("sends only archived: true, then closes, on Archive without changes", async () => {
+    const { saved } = openEditor({ recipe: SOUP });
 
-  assert.equal(dialog.open, true);
-  assert.equal(query(".save-message").textContent, "Couldn't archive the recipe. Try again.");
-  assert.equal(query(".archive").disabled, false);
+    query(".archive").click();
+    assert.equal(query(".archive").disabled, true);
+    await respondTo(server, "PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+
+    assert.equal(document.querySelector('[role="alertdialog"]') === null, true, "no alert is open");
+    assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
+    assert.equal(dialog.open, false);
+    assert.deepEqual(saved, [{ ...SOUP, archived: true }]);
+  });
+
+  test("asks first, with Keep Editing focused, on Archive with changes", async () => {
+    const alert = await archiveWithChanges();
+
+    assert.equal(alert.open, true);
+    assert.equal(alert.querySelector(".alert-title").textContent, "Archive without saving?");
+    assert.equal(
+      alert.querySelector(".alert-message").textContent,
+      "Your changes aren't saved. If you archive now, they're lost.",
+    );
+    assert.equal(alert.getAttribute("aria-labelledby"), alert.querySelector(".alert-title").id);
+    assert.equal(alert.getAttribute("aria-describedby"), alert.querySelector(".alert-message").id);
+    assertFocus(document, alert.querySelector(".keep"));
+    assert.equal(alert.querySelector(".keep").textContent, "Keep Editing");
+    assert.equal(alert.querySelector(".lose").textContent, "Archive Without Saving");
+    alert.querySelector(".keep").click();
+    await tick();
+  });
+
+  test("keeps the editor and its changes with Keep Editing", async () => {
+    const alert = await archiveWithChanges();
+
+    alert.querySelector(".keep").click();
+    await tick();
+
+    assert.equal(document.querySelector('[role="alertdialog"]') === null, true, "no alert is open");
+    assert.equal(dialog.open, true);
+    assert.equal(nameField().value, "Changed, but not saved");
+    assert.equal(server.requests.length, 0);
+    assertFocus(document, query(".archive"));
+  });
+
+  test("keeps the editor with Escape in the alert, the same as Keep Editing", async () => {
+    const alert = await archiveWithChanges();
+
+    alert.close(); // what Escape and Android's Back do to a modal dialog
+    await tick();
+
+    assert.equal(dialog.open, true);
+    assert.equal(server.requests.length, 0);
+  });
+
+  test("archives the recipe without the changes with Archive Without Saving", async () => {
+    const alert = await archiveWithChanges();
+
+    alert.querySelector(".lose").click();
+    await respondTo(server, "PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
+
+    assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
+    assert.equal(dialog.open, false);
+  });
+
+  test("keeps the editor open and shows a message when the archive fails", async () => {
+    quiet.expect(1);
+    openEditor({ recipe: SOUP });
+
+    query(".archive").click();
+    await waitFor(() => server.requestFor("PATCH", "/api/recipes/soup") !== undefined);
+    server.requestFor("PATCH", "/api/recipes/soup").fail();
+    await tick();
+
+    assert.equal(dialog.open, true);
+    assert.equal(query(".save-message").textContent, "Couldn't archive the recipe. Try again.");
+    assert.equal(query(".archive").disabled, false);
+  });
 });

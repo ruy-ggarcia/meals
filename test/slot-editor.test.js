@@ -89,236 +89,260 @@ describe("slot editor", () => {
     assert.notEqual(header.querySelector(".cancel"), null, "Cancel is in the header");
     assert.notEqual(header.querySelector(".done"), null, "Done is in the header");
   });
-});
 
-test("an empty menu says that nothing is planned, until a recipe is added", () => {
-  openEditor();
-  const empty = document.querySelector(".empty-menu");
-  assert.equal(empty.hidden, false);
-  assert.equal(empty.textContent, "Nothing planned. Add a recipe below.");
+  test("says that nothing is planned until a recipe is added", () => {
+    openEditor();
+    const empty = document.querySelector(".empty-menu");
+    assert.equal(empty.hidden, false);
+    assert.equal(empty.textContent, "Nothing planned. Add a recipe below.");
 
-  typeInto(window, search(), "soup");
-  optionEls()[0].click();
+    typeInto(window, search(), "soup");
+    optionEls()[0].click();
 
-  assert.equal(empty.hidden, true);
-});
+    assert.equal(empty.hidden, true);
+  });
 
-test("Add recipe offers every addable recipe before you type, with a hint to type", () => {
-  openEditor({ menu: menu(["soup", 1]) });
+  test("offers every addable recipe before you type, with a hint to type", () => {
+    openEditor({ menu: menu(["soup", 1]) });
 
-  assert.equal(search().placeholder, "Type part of a name");
-  assert.deepEqual(
-    optionEls().map((option) => option.textContent),
-    ["Green salad", "Omelette"], // Café is archived, Lentil soup is in the menu; A to Z
-  );
-});
+    assert.equal(search().placeholder, "Type part of a name");
+    assert.deepEqual(
+      optionEls().map((option) => option.textContent),
+      ["Green salad", "Omelette"], // Café is archived, Lentil soup is in the menu; A to Z
+    );
+  });
 
-test("with no matches, Add recipe points to the Recipes page", () => {
-  openEditor();
+  test("points Add recipe to the Recipes page when no recipe matches", () => {
+    openEditor();
 
-  typeInto(window, search(), "xyz");
+    typeInto(window, search(), "xyz");
 
-  assert.equal(document.querySelector(".options").hidden, true);
-  assert.equal(
-    document.querySelector(".no-match").textContent,
-    "No active recipes match. Add recipes on the Recipes page.",
-  );
-});
+    assert.equal(document.querySelector(".options").hidden, true);
+    assert.equal(
+      document.querySelector(".no-match").textContent,
+      "No active recipes match. Add recipes on the Recipes page.",
+    );
+  });
 
-test("Done saves the copy, closes the dialog, and returns focus to the opener", () => {
-  const { opener, savedMenu } = openEditor();
-  typeInto(window, search(), "sal");
-  pressKey(window, search(), "Enter"); // adds Green salad
+  test("saves the copy and closes with Done", () => {
+    const { savedMenu } = openEditor();
+    typeInto(window, search(), "sal");
+    pressKey(window, search(), "Enter"); // adds Green salad
 
-  document.querySelector(".done").click();
+    document.querySelector(".done").click();
 
-  assert.equal(dialog.open, false);
-  assert.deepEqual(savedMenu(), menu(["salad", 1]));
-  assertFocus(document, opener);
-});
+    assert.equal(dialog.open, false);
+    assert.deepEqual(savedMenu(), menu(["salad", 1]));
+  });
 
-test("Cancel discards the copy and closes the dialog", () => {
-  const { opener, savedMenu } = openEditor();
-  typeInto(window, search(), "sal");
-  pressKey(window, search(), "Enter");
+  test("returns focus to the opener with Done", () => {
+    const { opener } = openEditor();
+    typeInto(window, search(), "sal");
+    pressKey(window, search(), "Enter"); // adds Green salad
 
-  document.querySelector(".cancel").click();
+    document.querySelector(".done").click();
 
-  assert.equal(dialog.open, false);
-  assert.equal(savedMenu(), "not called");
-  assertFocus(document, opener);
-});
+    assertFocus(document, opener);
+  });
 
-test("Escape (the dialog's close event) discards the copy", () => {
-  const { opener, savedMenu } = openEditor();
-  typeInto(window, search(), "sal");
-  pressKey(window, search(), "Enter");
+  test("discards the copy and closes the dialog with Cancel", () => {
+    const { opener, savedMenu } = openEditor();
+    typeInto(window, search(), "sal");
+    pressKey(window, search(), "Enter");
 
-  // The browser fires "close" on the dialog for Escape and Android's Back;
-  // happy-dom doesn't drive that from a real Escape keypress, so the test
-  // triggers the same event the browser would.
-  dialog.close();
+    document.querySelector(".cancel").click();
 
-  assert.equal(dialog.open, false);
-  assert.equal(savedMenu(), "not called");
-  assertFocus(document, opener);
-});
+    assert.equal(dialog.open, false);
+    assert.equal(savedMenu(), "not called");
+    assertFocus(document, opener);
+  });
 
-test("Escape in Add recipe with text clears it and keeps the editor open", () => {
-  openEditor();
-  typeInto(window, search(), "sal");
+  test("discards the copy with Escape, the close event of the dialog", () => {
+    const { opener, savedMenu } = openEditor();
+    typeInto(window, search(), "sal");
+    pressKey(window, search(), "Enter");
 
-  const event = pressKey(window, search(), "Escape");
+    // The browser fires "close" on the dialog for Escape and Android's Back;
+    // happy-dom doesn't drive that from a real Escape keypress, so the test
+    // triggers the same event the browser would.
+    dialog.close();
 
-  assert.equal(search().value, "");
-  assert.equal(dialog.open, true);
-  assert.equal(event.defaultPrevented, true);
-});
+    assert.equal(dialog.open, false);
+    assert.equal(savedMenu(), "not called");
+    assertFocus(document, opener);
+  });
 
-test("a backdrop click with no changes closes the editor without saving", () => {
-  const { savedMenu } = openEditor();
+  test("clears the text of Add recipe on Escape", () => {
+    openEditor();
+    typeInto(window, search(), "sal");
 
-  pointerdown(window, dialog);
-  dialog.click();
+    pressKey(window, search(), "Escape");
 
-  assert.equal(dialog.open, false);
-  assert.equal(savedMenu(), "not called");
-});
+    assert.equal(search().value, "");
+  });
 
-test("a backdrop click with changes leaves the editor open", () => {
-  openEditor();
-  typeInto(window, search(), "sal");
-  pressKey(window, search(), "Enter");
+  test("keeps the editor open on Escape in Add recipe with text", () => {
+    openEditor();
+    typeInto(window, search(), "sal");
 
-  pointerdown(window, dialog);
-  dialog.click();
+    const event = pressKey(window, search(), "Escape");
 
-  assert.equal(dialog.open, true);
-});
+    assert.equal(dialog.open, true);
+    assert.equal(event.defaultPrevented, true);
+  });
 
-test("a press that starts in the field and a click on the dialog doesn't close it", () => {
-  openEditor();
+  test("closes without saving on a backdrop click without changes", () => {
+    const { savedMenu } = openEditor();
 
-  pointerdown(window, search()); // the press started on the field, not the backdrop
-  dialog.click(); // released over the backdrop: target is the dialog
+    pointerdown(window, dialog);
+    dialog.click();
 
-  assert.equal(dialog.open, true);
-});
+    assert.equal(dialog.open, false);
+    assert.equal(savedMenu(), "not called");
+  });
 
-test("Enter on the title saves, the same as Done", () => {
-  const { savedMenu } = openEditor();
-  typeInto(window, search(), "sal");
-  pressKey(window, search(), "Enter"); // adds the recipe, doesn't confirm
+  test("stays open on a backdrop click with changes", () => {
+    openEditor();
+    typeInto(window, search(), "sal");
+    pressKey(window, search(), "Enter");
 
-  pressKey(window, title(), "Enter");
+    pointerdown(window, dialog);
+    dialog.click();
 
-  assert.equal(dialog.open, false);
-  assert.deepEqual(savedMenu(), menu(["salad", 1]));
-});
+    assert.equal(dialog.open, true);
+  });
 
-test("Enter in Add recipe adds the highlighted recipe and doesn't close the editor", () => {
-  openEditor();
-  typeInto(window, search(), "sal");
+  test("stays open after a press in the field and a click on the dialog", () => {
+    openEditor();
 
-  pressKey(window, search(), "Enter");
+    pointerdown(window, search()); // the press started on the field, not the backdrop
+    dialog.click(); // released over the backdrop: target is the dialog
 
-  assert.equal(dialog.open, true);
-  assert.deepEqual(
-    itemRows().map((row) => row.querySelector(".recipe-name").textContent),
-    ["Green salad"],
-  );
-  assert.equal(search().value, ""); // the field clears after adding
-});
+    assert.equal(dialog.open, true);
+  });
 
-test("arrow keys move the highlight among the offered recipes", () => {
-  openEditor(); // offers Green salad, Lentil soup, Omelette, A to Z
+  test("saves with Enter on the title, the same as Done", () => {
+    const { savedMenu } = openEditor();
+    typeInto(window, search(), "sal");
+    pressKey(window, search(), "Enter"); // adds the recipe, doesn't confirm
 
-  assert.deepEqual(
-    optionEls().map((option) => option.getAttribute("aria-selected")),
-    ["true", "false", "false"],
-  );
+    pressKey(window, title(), "Enter");
 
-  pressKey(window, search(), "ArrowDown");
-  assert.deepEqual(
-    optionEls().map((option) => option.getAttribute("aria-selected")),
-    ["false", "true", "false"],
-  );
+    assert.equal(dialog.open, false);
+    assert.deepEqual(savedMenu(), menu(["salad", 1]));
+  });
 
-  pressKey(window, search(), "ArrowUp");
-  pressKey(window, search(), "ArrowUp"); // wraps around to the last option
-  assert.deepEqual(
-    optionEls().map((option) => option.getAttribute("aria-selected")),
-    ["false", "false", "true"],
-  );
-});
+  test("adds the highlighted recipe with Enter and keeps the editor open", () => {
+    openEditor();
+    typeInto(window, search(), "sal");
 
-test("the + stepper stops at 99 and moves focus to −", () => {
-  openEditor({ menu: menu(["soup", 98.5]) });
-  const [decrease, increase] = document.querySelectorAll(".step");
+    pressKey(window, search(), "Enter");
 
-  increase.click();
+    assert.equal(dialog.open, true);
+    assert.deepEqual(
+      itemRows().map((row) => row.querySelector(".recipe-name").textContent),
+      ["Green salad"],
+    );
+    assert.equal(search().value, ""); // the field clears after adding
+  });
 
-  assert.equal(document.querySelector(".servings").textContent, "99");
-  assert.equal(increase.disabled, true);
-  assertFocus(document, decrease);
-});
+  test("moves the highlight among the offered recipes with arrow keys", () => {
+    openEditor(); // offers Green salad, Lentil soup, Omelette, A to Z
 
-test("the − stepper stops at 0.5 and moves focus to +", () => {
-  openEditor({ menu: menu(["soup", 1]) });
-  const [decrease, increase] = document.querySelectorAll(".step");
+    assert.deepEqual(
+      optionEls().map((option) => option.getAttribute("aria-selected")),
+      ["true", "false", "false"],
+    );
 
-  decrease.click();
+    pressKey(window, search(), "ArrowDown");
+    assert.deepEqual(
+      optionEls().map((option) => option.getAttribute("aria-selected")),
+      ["false", "true", "false"],
+    );
 
-  assert.equal(document.querySelector(".servings").textContent, "0.5");
-  assert.equal(decrease.disabled, true);
-  assertFocus(document, increase);
-});
+    pressKey(window, search(), "ArrowUp");
+    pressKey(window, search(), "ArrowUp"); // wraps around to the last option
+    assert.deepEqual(
+      optionEls().map((option) => option.getAttribute("aria-selected")),
+      ["false", "false", "true"],
+    );
+  });
 
-test("Remove moves focus to the next Remove, then the previous, then the title", () => {
-  openEditor({ menu: menu(["soup", 1], ["salad", 1], ["omelette", 1]) });
+  test("stops the + stepper at 99 and moves focus to −", () => {
+    openEditor({ menu: menu(["soup", 98.5]) });
+    const [decrease, increase] = document.querySelectorAll(".step");
 
-  itemRows()[1].querySelector(".remove").click(); // remove Green salad (the middle row)
-  assert.deepEqual(
-    itemRows().map((row) => row.querySelector(".recipe-name").textContent),
-    ["Lentil soup", "Omelette"],
-  );
-  assertFocus(document, itemRows()[1].querySelector(".remove")); // now Omelette
+    increase.click();
 
-  itemRows()[1].querySelector(".remove").click(); // remove Omelette (now the last row)
-  assert.deepEqual(
-    itemRows().map((row) => row.querySelector(".recipe-name").textContent),
-    ["Lentil soup"],
-  );
-  assertFocus(document, itemRows()[0].querySelector(".remove")); // the previous row
+    assert.equal(document.querySelector(".servings").textContent, "99");
+    assert.equal(increase.disabled, true);
+    assertFocus(document, decrease);
+  });
 
-  itemRows()[0].querySelector(".remove").click(); // remove the last remaining item
-  assert.equal(itemRows().length, 0);
-  assertFocus(document, title());
-});
+  test("stops the − stepper at 0.5 and moves focus to +", () => {
+    openEditor({ menu: menu(["soup", 1]) });
+    const [decrease, increase] = document.querySelectorAll(".step");
 
-test("at 20 items, Add recipe is disabled with the limit's placeholder", () => {
-  const recipes = [
-    ...RECIPES,
-    ...Array.from({ length: 20 }, (_, index) => recipe(`filler-${index}`, `Filler ${index}`)),
-  ];
-  const items = recipes.slice(0, 20).map((r) => [r.id, 1]);
-  openEditor({ menu: menu(...items), recipes });
+    decrease.click();
 
-  assert.equal(search().disabled, true);
-  assert.equal(search().placeholder, "A menu holds up to 20 recipes.");
-  assert.equal(optionEls().length, 0);
-});
+    assert.equal(document.querySelector(".servings").textContent, "0.5");
+    assert.equal(decrease.disabled, true);
+    assertFocus(document, increase);
+  });
 
-test("a recipe name with HTML renders as text, not markup", () => {
-  const recipes = [...RECIPES, recipe("bold", "<b>Bold</b> soup")];
-  openEditor({ menu: menu(["bold", 1]), recipes });
+  test("moves focus from Remove to the next Remove, the previous, or the title", () => {
+    openEditor({ menu: menu(["soup", 1], ["salad", 1], ["omelette", 1]) });
 
-  const name = itemRows()[0].querySelector(".recipe-name");
-  assert.equal(name.textContent, "<b>Bold</b> soup");
-  assert.equal(name.querySelector("b") === null, true, "the recipe name has no <b> element");
-});
+    itemRows()[1].querySelector(".remove").click(); // remove Green salad (the middle row)
+    assert.deepEqual(
+      itemRows().map((row) => row.querySelector(".recipe-name").textContent),
+      ["Lentil soup", "Omelette"],
+    );
+    assertFocus(document, itemRows()[1].querySelector(".remove")); // now Omelette
 
-describe("slot editor", () => {
+    itemRows()[1].querySelector(".remove").click(); // remove Omelette (now the last row)
+    assert.deepEqual(
+      itemRows().map((row) => row.querySelector(".recipe-name").textContent),
+      ["Lentil soup"],
+    );
+    assertFocus(document, itemRows()[0].querySelector(".remove")); // the previous row
+
+    itemRows()[0].querySelector(".remove").click(); // remove the last remaining item
+    assert.equal(itemRows().length, 0);
+    assertFocus(document, title());
+  });
+
+  function openFullMenu() {
+    const recipes = [
+      ...RECIPES,
+      ...Array.from({ length: 20 }, (_, index) => recipe(`filler-${index}`, `Filler ${index}`)),
+    ];
+    const items = recipes.slice(0, 20).map((r) => [r.id, 1]);
+    openEditor({ menu: menu(...items), recipes });
+  }
+
+  test("disables Add recipe at 20 items", () => {
+    openFullMenu();
+
+    assert.equal(search().disabled, true);
+    assert.equal(optionEls().length, 0);
+  });
+
+  test("shows the limit's placeholder in Add recipe at 20 items", () => {
+    openFullMenu();
+
+    assert.equal(search().placeholder, "A menu holds up to 20 recipes.");
+  });
+
+  test("renders a recipe name with HTML as text, not markup", () => {
+    const recipes = [...RECIPES, recipe("bold", "<b>Bold</b> soup")];
+    openEditor({ menu: menu(["bold", 1]), recipes });
+
+    const name = itemRows()[0].querySelector(".recipe-name");
+    assert.equal(name.textContent, "<b>Bold</b> soup");
+    assert.equal(name.querySelector("b") === null, true, "the recipe name has no <b> element");
+  });
+
   test("moves the focus to Done when the 20th recipe fills the menu", () => {
     const recipes = [
       ...RECIPES,
