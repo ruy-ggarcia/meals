@@ -20,26 +20,6 @@ function assertOriginalData() {
   return assertDataOf(host);
 }
 
-test("meals-restore brings back the data of a backup, after a pre-restore backup", async () => {
-  await host.makeBackup(BACKUP);
-  await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
-  await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
-
-  const result = await host.run("meals-restore", BACKUP);
-
-  assertExit(result, 0);
-  await assertOriginalData();
-  const preRestore = (await host.backups()).filter((name) => name.includes("-pre-restore-v0.2.0"));
-  assert.equal(preRestore.length, 1);
-  assert.ok(host.archiveEntries(preRestore[0]).includes("data/v2/weeks/2026-09-28.json"));
-  const calls = await host.calls();
-  const stop = calls.findIndex((call) => / compose .* stop$/.test(call));
-  const up = calls.findIndex((call) => / compose .* up --detach --wait /.test(call));
-  assert.ok(stop >= 0 && up > stop, calls.join("\n"));
-  assert.equal(await host.exists("data.old"), false);
-  assert.match(result.stdout, /Restored 2026-10-01T033000Z-daily-v0\.2\.0\.tar\.gz/);
-});
-
 test("a backup by meals-backup and a restore by meals-restore give back identical data", async () => {
   assertExit(await host.run("meals-backup", "daily"), 0);
   const [daily] = await host.backups();
@@ -69,17 +49,6 @@ test("meals-restore works from a working directory that it can't read", {
   await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
 
   const result = await host.runFromUnreadableDir("meals-restore", BACKUP);
-
-  assertExit(result, 0);
-  await assertOriginalData();
-});
-
-test("meals-restore accepts an absolute path, and a backup from an older version", async () => {
-  const older = "2026-09-01T033000Z-daily-v0.1.0.tar.gz";
-  await host.makeBackup(older);
-  await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
-
-  const result = await host.run("meals-restore", `${host.root}/backups/${older}`);
 
   assertExit(result, 0);
   await assertOriginalData();
@@ -135,7 +104,80 @@ test("meals-restore names the new pre-restore backup, whatever the clock says", 
   assert.ok(result.stderr.includes(`meals-restore ${preRestore[0]}.`), result.stderr);
 });
 
+/**
+ * Restores BACKUP over data that changed after the backup, and checks that
+ * the script succeeds.
+ */
+async function restoreChangedData() {
+  await host.makeBackup(BACKUP);
+  await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
+  await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
+
+  const result = await host.run("meals-restore", BACKUP);
+
+  assertExit(result, 0);
+  return result;
+}
+
 describe("meals-restore", () => {
+  test("replaces the data with the data of the backup", async () => {
+    await restoreChangedData();
+
+    await assertOriginalData();
+  });
+
+  test("takes a pre-restore backup of the previous data", async () => {
+    await restoreChangedData();
+
+    const preRestore = (await host.backups()).filter((name) =>
+      name.includes("-pre-restore-v0.2.0"),
+    );
+    assert.equal(preRestore.length, 1);
+    assert.ok(host.archiveEntries(preRestore[0]).includes("data/v2/weeks/2026-09-28.json"));
+  });
+
+  test("stops the app before it starts it again", async () => {
+    await restoreChangedData();
+
+    const calls = await host.calls();
+    const stop = calls.findIndex((call) => / compose .* stop$/.test(call));
+    const up = calls.findIndex((call) => / compose .* up --detach --wait /.test(call));
+    assert.ok(stop >= 0 && up > stop, calls.join("\n"));
+  });
+
+  test("leaves no data.old", async () => {
+    await restoreChangedData();
+
+    assert.equal(await host.exists("data.old"), false);
+  });
+
+  test("says which backup it restored", async () => {
+    const result = await restoreChangedData();
+
+    assert.match(result.stdout, /Restored 2026-10-01T033000Z-daily-v0\.2\.0\.tar\.gz/);
+  });
+
+  test("accepts the absolute path of a backup", async () => {
+    await host.makeBackup(BACKUP);
+    await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
+
+    const result = await host.run("meals-restore", `${host.root}/backups/${BACKUP}`);
+
+    assertExit(result, 0);
+    await assertOriginalData();
+  });
+
+  test("restores a backup of an older version", async () => {
+    const older = "2026-09-01T033000Z-daily-v0.1.0.tar.gz";
+    await host.makeBackup(older);
+    await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
+
+    const result = await host.run("meals-restore", older);
+
+    assertExit(result, 0);
+    await assertOriginalData();
+  });
+
   test("waits for the lock that another script holds", async (t) => {
     await host.makeBackup(BACKUP);
 

@@ -54,39 +54,6 @@ async function appRuns({ check = false } = {}) {
   }
 }
 
-test("meals-restore-check checks the latest backup, each of its weeks, and cleans up", async () => {
-  await host.makeBackup(OLDER, withWeeks("2026-09-21"));
-  await host.makeBackup(LATEST, withWeeks("2026-09-28", "2026-10-05"));
-  await host.writeBackup("2026-10-03T033000Z-daily-v0.2.0.tar.gz.partial", "interrupted");
-
-  const result = await host.run("meals-restore-check");
-
-  assertExit(result, 0);
-  assert.deepEqual(await requestedPaths(), [
-    "/api/health",
-    "/api/recipes",
-    "/api/ingredients",
-    "/api/weeks/2026-09-28",
-    "/api/weeks/2026-10-05",
-  ]);
-  const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
-  const project = `--project-name meals-restore-check --project-directory ${host.root}/.restore-check.`;
-  const compose = docker.filter((call) => call.includes(project));
-  assert.deepEqual(compose, docker, "every docker call stays off the live meals project");
-  assert.ok(
-    compose.some((call) => call.includes(" up --detach --wait ")),
-    compose.join("\n"),
-  );
-  assert.ok(compose.at(-1).endsWith(" down"), compose.join("\n"));
-  assert.equal(await appRuns({ check: true }), false, "the check's app stopped");
-  assert.equal(await appRuns(), true, "the deployed app still runs");
-  assert.deepEqual(await leftovers(), []);
-  assert.ok(
-    result.stdout.includes(`The backup ${LATEST} restores into version 0.2.0:`),
-    result.stdout,
-  );
-});
-
 test("meals-restore-check runs the deployed image as the app's user, on a free loopback port", async () => {
   await host.makeBackup(LATEST);
 
@@ -228,7 +195,92 @@ test("meals-restore-check fails when it can't list the backups", async () => {
   assert.ok(!(await host.calls()).some((call) => call.includes(" up ")));
 });
 
+/**
+ * Checks the latest of two backups, next to an interrupted copy that sorts
+ * after it, and checks that the script succeeds.
+ */
+async function checkLatestBackup() {
+  await host.makeBackup(OLDER, withWeeks("2026-09-21"));
+  await host.makeBackup(LATEST, withWeeks("2026-09-28", "2026-10-05"));
+  await host.writeBackup("2026-10-03T033000Z-daily-v0.2.0.tar.gz.partial", "interrupted");
+
+  const result = await host.run("meals-restore-check");
+
+  assertExit(result, 0);
+  return result;
+}
+
+/** The calls to docker that the check made in its own Compose project. */
+async function checkComposeCalls() {
+  const project = `--project-name meals-restore-check --project-directory ${host.root}/.restore-check.`;
+  return (await host.calls()).filter(
+    (call) => call.startsWith("docker ") && call.includes(project),
+  );
+}
+
 describe("meals-restore-check", () => {
+  test("checks the latest backup", async () => {
+    const result = await checkLatestBackup();
+
+    assert.ok(
+      result.stdout.includes(`The backup ${LATEST} restores into version 0.2.0:`),
+      result.stdout,
+    );
+  });
+
+  test("requests the health, the recipes, the ingredients, and each week", async () => {
+    await checkLatestBackup();
+
+    assert.deepEqual(await requestedPaths(), [
+      "/api/health",
+      "/api/recipes",
+      "/api/ingredients",
+      "/api/weeks/2026-09-28",
+      "/api/weeks/2026-10-05",
+    ]);
+  });
+
+  test("keeps every Docker call in its own Compose project", async () => {
+    await checkLatestBackup();
+
+    const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
+    assert.deepEqual(
+      await checkComposeCalls(),
+      docker,
+      "every docker call stays off the live meals project",
+    );
+  });
+
+  test("starts the app of the check, and waits until it's healthy", async () => {
+    await checkLatestBackup();
+
+    const compose = await checkComposeCalls();
+    assert.ok(
+      compose.some((call) => call.includes(" up --detach --wait ")),
+      compose.join("\n"),
+    );
+  });
+
+  test("stops the app of the check", async () => {
+    await checkLatestBackup();
+
+    const compose = await checkComposeCalls();
+    assert.ok(compose.at(-1).endsWith(" down"), compose.join("\n"));
+    assert.equal(await appRuns({ check: true }), false, "the check's app stopped");
+  });
+
+  test("removes its copy of the backup", async () => {
+    await checkLatestBackup();
+
+    assert.deepEqual(await leftovers(), []);
+  });
+
+  test("leaves the deployed app running", async () => {
+    await checkLatestBackup();
+
+    assert.equal(await appRuns(), true, "the deployed app still runs");
+  });
+
   test("removes what an interrupted check left when there are no backups", async () => {
     const stale = path.join(".restore-check.AbC123", "data");
     await mkdir(path.join(host.root, stale), { recursive: true });
