@@ -83,14 +83,21 @@ function pointerdownOn(element) {
   element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
 }
 
-test("the editor shows its title and subtitle, and Cancel and Done above the menu", () => {
-  openEditor();
+describe("slot editor", () => {
+  test("shows its title and subtitle", () => {
+    openEditor();
 
-  assert.equal(title().textContent, "Lunch");
-  assert.equal(document.querySelector(".sheet-subtitle").textContent, "Monday, Sep 21");
-  const header = document.querySelector(".sheet-header");
-  assert.ok(header.querySelector(".cancel"));
-  assert.ok(header.querySelector(".done"));
+    assert.equal(title().textContent, "Lunch");
+    assert.equal(document.querySelector(".sheet-subtitle").textContent, "Monday, Sep 21");
+  });
+
+  test("holds Cancel and Done above the menu", () => {
+    openEditor();
+
+    const header = document.querySelector(".sheet-header");
+    assert.notEqual(header.querySelector(".cancel"), null, "Cancel is in the header");
+    assert.notEqual(header.querySelector(".done"), null, "Done is in the header");
+  });
 });
 
 test("an empty menu says that nothing is planned, until a recipe is added", () => {

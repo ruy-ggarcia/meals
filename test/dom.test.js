@@ -2,7 +2,7 @@
 // elements that it gets, so plain objects stand in for them.
 
 import assert from "node:assert/strict";
-import { beforeEach, test } from "node:test";
+import { beforeEach, describe, test } from "node:test";
 import { withLoadState } from "../public/dom.js";
 import { useQuietConsole } from "./dom-helpers.js";
 
@@ -30,19 +30,37 @@ test("withLoadState resolves to true and shows the content when the load succeed
   assert.equal(retryButton.disabled, false);
 });
 
-test("withLoadState resolves to false and shows the load error when the load fails", async () => {
-  quiet.expect(1);
+describe("withLoadState after a failed load", () => {
   const error = new Error("offline");
 
-  assert.equal(
-    await load(async () => {
+  function failingLoad() {
+    return load(async () => {
       throw error;
-    }),
-    false,
-  );
+    });
+  }
 
-  assert.equal(content[0].hidden, true);
-  assert.equal(loadError.hidden, false);
-  assert.equal(retryButton.disabled, false);
-  assert.deepEqual(quiet.calls(), [["Couldn't load:", error]]);
+  test("resolves to false and shows the load error", async () => {
+    quiet.expect(1);
+
+    assert.equal(await failingLoad(), false);
+
+    assert.equal(content[0].hidden, true);
+    assert.equal(loadError.hidden, false);
+  });
+
+  test("enables Retry", async () => {
+    quiet.expect(1);
+
+    await failingLoad();
+
+    assert.equal(retryButton.disabled, false);
+  });
+
+  test("logs the error with its message", async () => {
+    quiet.expect(1);
+
+    await failingLoad();
+
+    assert.deepEqual(quiet.calls(), [["Couldn't load:", error]]);
+  });
 });

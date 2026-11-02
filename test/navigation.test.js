@@ -69,24 +69,39 @@ test("each page links the app icon, the Home Screen icon, and the web app manife
   }
 });
 
-test("Hide sidebar and Show sidebar switch the sidebar on every page, and the choice is remembered", async () => {
-  for (const [html, script] of PAGES) {
-    page = await loadPage({ html, script, fetch: fakeFetch().fetch });
-    const { document, window } = page;
-    const root = document.documentElement;
-    // No choice yet: the width of the screen decides.
-    assert.equal(root.dataset.sidebar, undefined, html);
+describe("sidebar", () => {
+  test("switches with Hide sidebar and Show sidebar on every page", async () => {
+    for (const [html, script] of PAGES) {
+      page = await loadPage({ html, script, fetch: fakeFetch().fetch });
+      const { document } = page;
+      const root = document.documentElement;
+      // No choice yet: the width of the screen decides.
+      assert.equal(root.dataset.sidebar, undefined, html);
 
-    document.querySelector(".hide-sidebar").click();
-    assert.equal(root.dataset.sidebar, "hidden", html);
-    assert.equal(window.localStorage.getItem("meals.sidebar"), "hidden", html);
+      document.querySelector(".hide-sidebar").click();
+      assert.equal(root.dataset.sidebar, "hidden", html);
 
-    document.querySelector(".show-sidebar").click();
-    assert.equal(root.dataset.sidebar, "shown", html);
-    assert.equal(window.localStorage.getItem("meals.sidebar"), "shown", html);
-    await page.cleanup();
-  }
-  page = undefined;
+      document.querySelector(".show-sidebar").click();
+      assert.equal(root.dataset.sidebar, "shown", html);
+      await page.cleanup();
+    }
+    page = undefined;
+  });
+
+  test("stores the choice in localStorage on every page", async () => {
+    for (const [html, script] of PAGES) {
+      page = await loadPage({ html, script, fetch: fakeFetch().fetch });
+      const { document, window } = page;
+
+      document.querySelector(".hide-sidebar").click();
+      assert.equal(window.localStorage.getItem("meals.sidebar"), "hidden", html);
+
+      document.querySelector(".show-sidebar").click();
+      assert.equal(window.localStorage.getItem("meals.sidebar"), "shown", html);
+      await page.cleanup();
+    }
+    page = undefined;
+  });
 });
 
 test("a page opens with the sidebar choice that another page remembered", async () => {

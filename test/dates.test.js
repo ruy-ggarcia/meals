@@ -80,10 +80,15 @@ describe("isWeekId", () => {
   });
 });
 
-test("weekStart returns the Monday at local midnight", () => {
-  assert.deepEqual(localParts(weekStart("2026-09-21")), [2026, 9, 21, 0]);
-  // The Date constructor would turn year 1 into 1901.
-  assert.equal(weekStart("0001-01-01").getFullYear(), 1);
+describe("weekStart", () => {
+  test("returns the Monday at local midnight", () => {
+    assert.deepEqual(localParts(weekStart("2026-09-21")), [2026, 9, 21, 0]);
+  });
+
+  test("keeps years below 1000", () => {
+    // The Date constructor would turn year 1 into 1901.
+    assert.equal(weekStart("0001-01-01").getFullYear(), 1);
+  });
 });
 
 test("addWeeks moves across months, years, and daylight saving time", () => {
