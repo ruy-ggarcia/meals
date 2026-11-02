@@ -22,15 +22,7 @@ function load(run) {
   return withLoadState({ loadError, retryButton, content, run, errorMessage: "Couldn't load:" });
 }
 
-test("withLoadState resolves to true and shows the content when the load succeeds", async () => {
-  assert.equal(await load(async () => {}), true);
-
-  assert.equal(content[0].hidden, false);
-  assert.equal(loadError.hidden, true);
-  assert.equal(retryButton.disabled, false);
-});
-
-describe("withLoadState after a failed load", () => {
+describe("withLoadState", () => {
   const error = new Error("offline");
 
   function failingLoad() {
@@ -39,7 +31,15 @@ describe("withLoadState after a failed load", () => {
     });
   }
 
-  test("resolves to false and shows the load error", async () => {
+  test("shows the content and resolves to true when the load succeeds", async () => {
+    assert.equal(await load(async () => {}), true);
+
+    assert.equal(content[0].hidden, false);
+    assert.equal(loadError.hidden, true);
+    assert.equal(retryButton.disabled, false);
+  });
+
+  test("resolves to false and shows the load error when the load fails", async () => {
     quiet.expect(1);
 
     assert.equal(await failingLoad(), false);
@@ -48,7 +48,7 @@ describe("withLoadState after a failed load", () => {
     assert.equal(loadError.hidden, false);
   });
 
-  test("enables Retry", async () => {
+  test("enables Retry when the load fails", async () => {
     quiet.expect(1);
 
     await failingLoad();
@@ -56,7 +56,7 @@ describe("withLoadState after a failed load", () => {
     assert.equal(retryButton.disabled, false);
   });
 
-  test("logs the error with its message", async () => {
+  test("logs the error with its message when the load fails", async () => {
     quiet.expect(1);
 
     await failingLoad();

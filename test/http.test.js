@@ -13,8 +13,10 @@ afterEach(() => {
   mock.restoreAll();
 });
 
-test("the timeout constant is 5 seconds", () => {
-  assert.equal(REQUEST_TIMEOUT_MS, 5000);
+describe("public/http.js", () => {
+  test("has a request timeout of 5 seconds", () => {
+    assert.equal(REQUEST_TIMEOUT_MS, 5000);
+  });
 });
 
 describe("getJson", () => {
@@ -33,11 +35,11 @@ describe("getJson", () => {
     assert.equal(url, "/api/recipes");
     assert.ok(options.signal instanceof AbortSignal, "the request has a timeout signal");
   });
-});
 
-test("getJson rejects on a status other than 2xx", async () => {
-  mock.method(globalThis, "fetch", async () => jsonResponse(500, { error: "Internal" }));
-  await assert.rejects(getJson("/api/recipes"), /HTTP 500/);
+  test("rejects when the status isn't 2xx", async () => {
+    mock.method(globalThis, "fetch", async () => jsonResponse(500, { error: "Internal" }));
+    await assert.rejects(getJson("/api/recipes"), /HTTP 500/);
+  });
 });
 
 describe("sendJson", () => {
@@ -63,19 +65,19 @@ describe("sendJson", () => {
 
     assert.deepEqual(result, { status: 409, body: { error: "Taken", recipe: { id: "1" } } });
   });
-});
 
-test("sendJson returns an empty body when the response isn't JSON", async () => {
-  mock.method(globalThis, "fetch", async () => new Response("Bad gateway", { status: 502 }));
-  assert.deepEqual(await sendJson("PATCH", "/api/recipes/1", { archived: true }), {
-    status: 502,
-    body: {},
+  test("returns an empty body when the response isn't JSON", async () => {
+    mock.method(globalThis, "fetch", async () => new Response("Bad gateway", { status: 502 }));
+    assert.deepEqual(await sendJson("PATCH", "/api/recipes/1", { archived: true }), {
+      status: 502,
+      body: {},
+    });
   });
-});
 
-test("sendJson rejects on a network error", async () => {
-  mock.method(globalThis, "fetch", async () => {
-    throw new TypeError("Network error");
+  test("rejects when the network fails", async () => {
+    mock.method(globalThis, "fetch", async () => {
+      throw new TypeError("Network error");
+    });
+    await assert.rejects(sendJson("POST", "/api/recipes", { name: "Soup" }), TypeError);
   });
-  await assert.rejects(sendJson("POST", "/api/recipes", { name: "Soup" }), TypeError);
 });

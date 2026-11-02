@@ -30,34 +30,38 @@ describe("cleanName", () => {
   });
 });
 
-test("sortByName returns a new array from A to Z by name key", () => {
-  const input = [entry("omelette"), entry("Ñoquis"), entry("Café"), entry("banana")];
+describe("sortByName", () => {
+  test("returns a new array from A to Z by name key", () => {
+    const input = [entry("omelette"), entry("Ñoquis"), entry("Café"), entry("banana")];
 
-  const sorted = sortByName(input);
+    const sorted = sortByName(input);
 
-  assert.deepEqual(
-    sorted.map((item) => item.name),
-    ["banana", "Café", "Ñoquis", "omelette"],
-  );
-  assert.equal(input[0].name, "omelette", "the input keeps its order");
+    assert.deepEqual(
+      sorted.map((item) => item.name),
+      ["banana", "Café", "Ñoquis", "omelette"],
+    );
+    assert.equal(input[0].name, "omelette", "the input keeps its order");
+  });
 });
 
-test("filterByName matches part of the name, ignoring case, accents, and extra spaces", () => {
-  const entries = [entry("Iced café"), entry("Tea"), entry("Café con leche")];
+describe("filterByName", () => {
+  test("matches part of the name, ignoring case, accents, and spaces", () => {
+    const entries = [entry("Iced café"), entry("Tea"), entry("Café con leche")];
 
-  assert.deepEqual(
-    filterByName(entries, "cafe").map((item) => item.name),
-    ["Iced café", "Café con leche"],
-  );
-  assert.deepEqual(
-    filterByName(entries, "  CAFÉ   CON ").map((item) => item.name),
-    ["Café con leche"],
-  );
-  assert.deepEqual(filterByName(entries, "juice"), []);
-});
+    assert.deepEqual(
+      filterByName(entries, "cafe").map((item) => item.name),
+      ["Iced café", "Café con leche"],
+    );
+    assert.deepEqual(
+      filterByName(entries, "  CAFÉ   CON ").map((item) => item.name),
+      ["Café con leche"],
+    );
+    assert.deepEqual(filterByName(entries, "juice"), []);
+  });
 
-test("filterByName with a blank query matches every entry", () => {
-  const entries = [entry("Tea"), entry("Soup")];
-  assert.deepEqual(filterByName(entries, ""), entries);
-  assert.deepEqual(filterByName(entries, "   "), entries);
+  test("matches every entry with a blank query", () => {
+    const entries = [entry("Tea"), entry("Soup")];
+    assert.deepEqual(filterByName(entries, ""), entries);
+    assert.deepEqual(filterByName(entries, "   "), entries);
+  });
 });
