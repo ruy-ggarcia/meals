@@ -102,12 +102,17 @@ test("start() rejects when it can't create the data directory", async (t) => {
 });
 
 test("stop() waits for a request in progress, and then closes its keep-alive connection", async (t) => {
-  // The server emits "request" once it has parsed the headers.
+  // The server emits "request" once it has parsed the headers. A keep-alive
+  // timeout of a minute outlasts the time limit of the test, so a stop() that
+  // waits for the timeout instead of closing the connection hangs the test.
   /** @type {PromiseWithResolvers<void>} */
   const requestReceived = Promise.withResolvers();
   const emit = http.Server.prototype.emit;
   t.mock.method(http.Server.prototype, "emit", function (event, ...args) {
-    if (event === "request") requestReceived.resolve();
+    if (event === "request") {
+      this.keepAliveTimeout = 60_000;
+      requestReceived.resolve();
+    }
     return emit.call(this, event, ...args);
   });
   const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
@@ -139,15 +144,12 @@ test("stop() waits for a request in progress, and then closes its keep-alive con
   await delay(100);
   assert.equal(stopped, false, "stop() resolved before the request finished");
 
-  const sentAt = Date.now();
   socket.write(body);
   await stopping;
   // stop() can resolve before the client reads the response, so wait for the
   // server to close the connection.
   await socketClosed;
 
-  // Without closing the connection, stop() waits for the 5-second keep-alive timeout.
-  assert.ok(Date.now() - sentAt < 4000, "stop() waited for the keep-alive timeout");
   assert.match(response, /^HTTP\/1\.1 201 /);
   assert.deepEqual(await savedIngredients(), ["Onion"]);
 });
