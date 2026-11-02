@@ -93,11 +93,22 @@ test("a loaded week shows each menu item with its servings, and Add in every slo
 });
 
 test("each day header shows the short name of the day and its day of the month", async (t) => {
-  await openWeek(t);
+  await openWeek(t, { week: "2026-09-28" }); // the month changes on Thursday
 
-  const header = page.document.querySelector('.day-header[data-day="tue"]');
-  assert.equal(header.querySelector(".day-name").textContent, "Tue");
-  assert.equal(header.querySelector(".day-number").textContent, "22");
+  const headers = [...page.document.querySelectorAll(".day-header")].map((header) => [
+    header.querySelector(".day-name").textContent,
+    header.querySelector(".day-number").textContent,
+  ]);
+
+  assert.deepEqual(headers, [
+    ["Mon", "28"],
+    ["Tue", "29"],
+    ["Wed", "30"],
+    ["Thu", "1"],
+    ["Fri", "2"],
+    ["Sat", "3"],
+    ["Sun", "4"],
+  ]);
 });
 
 test("the toolbar shows the range of the week, and a short range for phones", async (t) => {
@@ -343,6 +354,85 @@ describe("meal plan", () => {
       .map((request) => request.url)
       .filter((url) => url.startsWith("/api/weeks/") && url !== `/api/weeks/${WEEK}`);
     assert.deepEqual(weekUrls, ["/api/weeks/2026-09-28"]);
+  });
+
+  test("marks the week range and the save announcement as polite live regions", async (t) => {
+    await openWeek(t);
+
+    for (const id of ["week-range", "save-announcement"]) {
+      assert.equal(page.document.getElementById(id).getAttribute("aria-live"), "polite", id);
+    }
+  });
+
+  test("opens the editor on the menu of a slot whose save failed", async (t) => {
+    quiet.expect(1);
+    await openWeekWithUnsavedLunch(t);
+
+    slotButton("mon", "lunch").click();
+
+    const editor = page.document.getElementById("slot-editor");
+    const names = () =>
+      [...editor.querySelectorAll(".menu-item .recipe-name")].map((name) => name.textContent);
+    assert.deepEqual(names(), ["Soup", "Salad"]);
+
+    editor.querySelector(".cancel").click();
+
+    assert.deepEqual(slotItems("mon", "lunch"), [
+      ["Soup", "×1"],
+      ["Salad", "×1"],
+    ]);
+  });
+
+  test("changes weeks without asking while the week can't load", async (t) => {
+    await openWeek(t);
+    const alert = page.document.getElementById("leave-alert");
+    const loadError = page.document.getElementById("load-error");
+    const answered = new Set(server.requests);
+    let failures = 0;
+
+    // Presses `button`, and answers the requests that the week change sends
+    // until it ends. The week fails when `fails` is true. happy-dom's
+    // replaceState fires a hashchange that sends one more request.
+    const change = async (button, fails) => {
+      page.document.getElementById(button).click();
+      for (let rounds = 0; rounds < 4; rounds += 1) {
+        await tick();
+        for (const request of server.requests.filter((entry) => !answered.has(entry))) {
+          answered.add(request);
+          if (!request.url.startsWith("/api/weeks/")) {
+            request.respond(
+              200,
+              request.url === "/api/recipes" ? { recipes: [] } : { ingredients: [] },
+            );
+          } else if (fails) {
+            failures += 1;
+            request.fail();
+          } else {
+            request.respond(200, blankWeek(DAYS, MEALS));
+          }
+        }
+      }
+      assert.equal(page.document.getElementById("next-week").disabled, false, "the change ended");
+    };
+
+    await change("next-week", true);
+    assert.equal(loadError.hidden, false);
+    assert.equal(page.window.location.hash, "#2026-09-28");
+
+    await change("previous-week", true);
+    assert.equal(loadError.hidden, false);
+    assert.equal(page.window.location.hash, `#${WEEK}`);
+
+    await change("next-week", true);
+    assert.equal(loadError.hidden, false);
+    assert.equal(page.window.location.hash, "#2026-09-28");
+    assert.equal(alert.open, false);
+
+    await change("retry-load", false);
+    assert.equal(loadError.hidden, true);
+    assert.equal(page.document.getElementById("grid").dataset.week, "2026-09-28");
+    assert.equal(failures, 6, "two failed loads for each of the three failed week changes");
+    quiet.expect(failures);
   });
 });
 
