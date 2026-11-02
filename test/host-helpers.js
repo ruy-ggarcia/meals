@@ -212,6 +212,25 @@ export async function createHost({ version = "0.2.0" } = {}) {
   return new Host(root, stubDir);
 }
 
+/**
+ * Replaces HOST, the host that the `beforeEach` hook of the test T made, with
+ * a host of the options of createHost(), such as `{ version: "" }`, and
+ * cleans the new host up when T ends. A test that needs another host than
+ * the default one calls it, so that the test carries the condition and
+ * shares its describe block with the others. Assign the result to the
+ * variable that holds the host.
+ *
+ * @param {import("node:test").TestContext} t
+ * @param {Host} host
+ * @param {Parameters<typeof createHost>[0]} options
+ */
+export async function replaceHost(t, host, options) {
+  await host.cleanup();
+  const replacement = await createHost(options);
+  t.after(() => replacement.cleanup());
+  return replacement;
+}
+
 class Host {
   /** @type {import("node:child_process").ChildProcess[]} */
   #holders = [];

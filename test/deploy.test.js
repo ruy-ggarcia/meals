@@ -3,7 +3,13 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { dockerCalls } from "./deploy-helpers.js";
-import { assertExit, assertWaitsForLock, createHost, imageFor } from "./host-helpers.js";
+import {
+  assertExit,
+  assertWaitsForLock,
+  createHost,
+  imageFor,
+  replaceHost,
+} from "./host-helpers.js";
 
 let host;
 
@@ -220,19 +226,6 @@ test("meals-deploy fails on an image.txt that isn't a reference by digest", asyn
   assert.deepEqual(await dockerCalls(host), []);
 });
 
-test("the first deployment takes no backup", async () => {
-  await host.cleanup();
-  host = await createHost({ version: "" });
-  await host.addRelease("0.2.0");
-
-  const result = await host.run("meals-deploy");
-
-  assertExit(result, 0);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-  assert.deepEqual(await host.backups(), []);
-  assert.ok(!(await dockerCalls(host)).some((call) => / compose .* stop$/.test(call)));
-});
-
 test("a deployment removes the meals images other than the current and the previous one", async () => {
   await host.addRelease("0.3.0");
   await host.stub(
@@ -278,5 +271,17 @@ describe("meals-deploy", () => {
     await host.addRelease("0.3.0");
 
     await assertWaitsForLock(t, host, "meals-deploy");
+  });
+
+  test("takes no backup when no version is deployed", async (t) => {
+    host = await replaceHost(t, host, { version: "" });
+    await host.addRelease("0.2.0");
+
+    const result = await host.run("meals-deploy");
+
+    assertExit(result, 0);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+    assert.deepEqual(await host.backups(), []);
+    assert.ok(!(await dockerCalls(host)).some((call) => / compose .* stop$/.test(call)));
   });
 });

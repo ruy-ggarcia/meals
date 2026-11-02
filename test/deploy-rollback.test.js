@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { blockEnvWrite, dockerCalls, migrateOnUp } from "./deploy-helpers.js";
-import { assertExit, createHost, DATA, imageFor } from "./host-helpers.js";
+import { assertExit, createHost, DATA, imageFor, replaceHost } from "./host-helpers.js";
 
 let host;
 
@@ -149,20 +149,6 @@ test("meals-deploy says when the previous version doesn't start again after it c
   assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
 });
 
-test("a first deployment that can't write .env starts nothing", async () => {
-  await host.cleanup();
-  host = await createHost({ version: "" });
-  await host.addRelease("0.2.0");
-  await blockEnvWrite(host);
-
-  const result = await host.run("meals-deploy");
-
-  assertExit(result, 1);
-  assert.match(result.stderr, /Couldn't write \.env, so version 0\.2\.0 wasn't deployed\./);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "");
-  assert.ok(!(await dockerCalls(host)).some((call) => call.includes(" compose ")));
-});
-
 test("meals-deploy changes nothing, and doesn't record a failed version, when the pull fails", async () => {
   await host.addRelease("0.3.0");
   await host.stub("pull-fails", "");
@@ -287,9 +273,21 @@ test("meals-deploy leaves the data alone when the pre-deploy backup fails valida
   );
 });
 
-test("a failed first deployment leaves the data as it is and starts nothing", async () => {
-  await host.cleanup();
-  host = await createHost({ version: "" });
+test("meals-deploy starts nothing when no version is deployed and it can't write .env", async (t) => {
+  host = await replaceHost(t, host, { version: "" });
+  await host.addRelease("0.2.0");
+  await blockEnvWrite(host);
+
+  const result = await host.run("meals-deploy");
+
+  assertExit(result, 1);
+  assert.match(result.stderr, /Couldn't write \.env, so version 0\.2\.0 wasn't deployed\./);
+  assert.equal((await host.readEnv()).MEALS_VERSION, "");
+  assert.ok(!(await dockerCalls(host)).some((call) => call.includes(" compose ")));
+});
+
+test("meals-deploy stops the app and leaves the data when the first version fails", async (t) => {
+  host = await replaceHost(t, host, { version: "" });
   await host.addRelease("0.2.0");
   await host.stub("broken", "0.2.0\n");
   await host.stub("on-up", migrateOnUp("0.2.0"), { executable: true });

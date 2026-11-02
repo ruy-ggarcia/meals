@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { rm, utimes } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertExit, assertWaitsForLock, createHost, skipAsRoot } from "./host-helpers.js";
+import {
+  assertExit,
+  assertWaitsForLock,
+  createHost,
+  replaceHost,
+  skipAsRoot,
+} from "./host-helpers.js";
 
 let host;
 
@@ -32,17 +38,6 @@ test("meals-backup archives the data directory, named after the time, the kind, 
     "data/v2/recipes.json",
     "data/v2/weeks/2026-09-21.json",
   ]);
-});
-
-test("meals-backup takes no backup when no version is deployed", async () => {
-  await host.cleanup();
-  host = await createHost({ version: "" });
-
-  const result = await host.run("meals-backup", "daily");
-
-  assertExit(result, 0);
-  assert.match(result.stdout, /No version is deployed/);
-  assert.deepEqual(await host.backups(), []);
 });
 
 test("meals-backup takes no backup when .env doesn't exist", async () => {
@@ -232,6 +227,15 @@ test("meals-backup rejects an unknown kind", async () => {
 
   assertExit(result, 1);
   assert.match(result.stderr, /Usage: meals-backup daily\|pre-deploy\|pre-restore/);
+  assert.deepEqual(await host.backups(), []);
+});
+
+test("meals-backup takes no backup when no version is deployed", async (t) => {
+  host = await replaceHost(t, host, { version: "" });
+  const result = await host.run("meals-backup", "daily");
+
+  assertExit(result, 0);
+  assert.match(result.stdout, /No version is deployed/);
   assert.deepEqual(await host.backups(), []);
 });
 

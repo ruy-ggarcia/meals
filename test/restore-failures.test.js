@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, rename, symlink } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { assertExit, createHost, DATA } from "./host-helpers.js";
+import { assertExit, createHost, DATA, replaceHost } from "./host-helpers.js";
 import { assertOriginalData as assertDataOf, BACKUP } from "./restore-helpers.js";
 
 let host;
@@ -254,18 +254,6 @@ test("meals-restore keeps data.old when data/ is missing", async () => {
   }
 });
 
-test("meals-restore fails without changing anything when no version is deployed", async () => {
-  await host.cleanup();
-  host = await createHost({ version: "" });
-  await host.makeBackup(BACKUP);
-
-  const result = await host.run("meals-restore", BACKUP);
-
-  assertExit(result, 1);
-  assert.match(result.stderr, /No version is deployed\. .*meals-deploy VERSION/);
-  assert.deepEqual(await host.calls(), []);
-});
-
 test("meals-restore fails without changing anything on a damaged archive", async () => {
   await host.writeBackup(BACKUP, "not an archive");
 
@@ -362,4 +350,15 @@ test("meals-restore goes on, and says so, when it can't remove a stale staging d
     ),
     result.stdout,
   );
+});
+
+test("meals-restore fails without changing anything when no version is deployed", async (t) => {
+  host = await replaceHost(t, host, { version: "" });
+  await host.makeBackup(BACKUP);
+
+  const result = await host.run("meals-restore", BACKUP);
+
+  assertExit(result, 1);
+  assert.match(result.stderr, /No version is deployed\. .*meals-deploy VERSION/);
+  assert.deepEqual(await host.calls(), []);
 });

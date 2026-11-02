@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { access, mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertExit, assertWaitsForLock, createHost, DATA, imageFor } from "./host-helpers.js";
+import {
+  assertExit,
+  assertWaitsForLock,
+  createHost,
+  DATA,
+  imageFor,
+  replaceHost,
+} from "./host-helpers.js";
 
 const OLDER = "2026-10-01T033000Z-daily-v0.2.0.tar.gz";
 const LATEST = "2026-10-02T033000Z-pre-deploy-v0.2.0.tar.gz";
@@ -128,40 +135,6 @@ test("meals-restore-check goes on, and says so, when it can't remove a stale cop
   );
 });
 
-test("meals-restore-check removes what an interrupted check left, also with nothing to check", async () => {
-  const stale = path.join(".restore-check.AbC123", "data");
-  await mkdir(path.join(host.root, stale), { recursive: true });
-
-  const noBackup = await host.run("meals-restore-check");
-
-  assertExit(noBackup, 0);
-  assert.match(noBackup.stdout, /There are no backups to check\./);
-  assert.match(
-    noBackup.stdout,
-    /Removed \.restore-check\.AbC123, which an interrupted check left\./,
-  );
-  assert.deepEqual(await leftovers(), []);
-  const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
-  assert.ok(docker[0].endsWith(" down"), docker.join("\n"));
-
-  await host.cleanup();
-  host = await createHost({ version: "" });
-  await host.makeBackup(LATEST);
-  await mkdir(path.join(host.root, stale), { recursive: true });
-
-  const noVersion = await host.run("meals-restore-check");
-
-  assertExit(noVersion, 0);
-  assert.match(noVersion.stdout, /No version is deployed/);
-  assert.match(
-    noVersion.stdout,
-    /Removed \.restore-check\.AbC123, which an interrupted check left\./,
-  );
-  assert.deepEqual(await leftovers(), []);
-  // Without an image, Compose can't read compose.yaml.
-  assert.deepEqual(await host.calls(), []);
-});
-
 test("meals-restore-check fails when it can't remove the containers of an interrupted check", async () => {
   await host.makeBackup(LATEST);
   await host.stub("stop-fails", "");
@@ -225,30 +198,6 @@ test("meals-restore-check fails when the app doesn't become healthy on the backu
   assert.deepEqual(await leftovers(), []);
 });
 
-test("meals-restore-check fails, and cleans up, when it can't get the address of the app", async () => {
-  for (const [file, content] of [
-    ["port-fails", ""],
-    ["port", ""],
-  ]) {
-    await host.cleanup();
-    host = await createHost();
-    await host.makeBackup(LATEST);
-    await host.stub(file, content);
-
-    const result = await host.run("meals-restore-check");
-
-    assertExit(result, 1, file);
-    assert.ok(
-      result.stderr.includes(
-        `Error: Couldn't get the address of version 0.2.0 on the backup ${LATEST}.`,
-      ),
-      `${file}: ${result.stderr}`,
-    );
-    assert.ok((await host.calls()).at(-1).endsWith(" down"), file);
-    assert.deepEqual(await leftovers(), [], file);
-  }
-});
-
 test("meals-restore-check fails when it can't create the directory for the copy", async () => {
   await host.makeBackup(LATEST);
   await host.failCommand("mktemp");
@@ -279,24 +228,84 @@ test("meals-restore-check fails when it can't list the backups", async () => {
   assert.ok(!(await host.calls()).some((call) => call.includes(" up ")));
 });
 
-test("meals-restore-check does nothing without a deployed version or a backup", async () => {
-  const noBackup = await host.run("meals-restore-check");
-  assertExit(noBackup, 0);
-  assert.match(noBackup.stdout, /There are no backups to check\./);
-
-  await host.cleanup();
-  host = await createHost({ version: "" });
-  await host.makeBackup(LATEST);
-  const noVersion = await host.run("meals-restore-check");
-  assertExit(noVersion, 0);
-  assert.match(noVersion.stdout, /No version is deployed/);
-  assert.deepEqual(await host.calls(), []);
-});
-
 describe("meals-restore-check", () => {
+  test("removes what an interrupted check left when there are no backups", async () => {
+    const stale = path.join(".restore-check.AbC123", "data");
+    await mkdir(path.join(host.root, stale), { recursive: true });
+
+    const result = await host.run("meals-restore-check");
+
+    assertExit(result, 0);
+    assert.match(
+      result.stdout,
+      /Removed \.restore-check\.AbC123, which an interrupted check left\./,
+    );
+    assert.deepEqual(await leftovers(), []);
+    const docker = (await host.calls()).filter((call) => call.startsWith("docker "));
+    assert.ok(docker[0].endsWith(" down"), docker.join("\n"));
+  });
+
+  test("says that there are no backups to check", async () => {
+    const result = await host.run("meals-restore-check");
+
+    assertExit(result, 0);
+    assert.match(result.stdout, /There are no backups to check\./);
+  });
+
+  // The cases of the stub docker that give no address for the check's app.
+  for (const [reason, file] of [
+    ["docker port fails", "port-fails"],
+    ["docker port prints no address", "port"],
+  ]) {
+    test(`cleans up when ${reason}`, async () => {
+      await host.makeBackup(LATEST);
+      await host.stub(file, "");
+
+      const result = await host.run("meals-restore-check");
+
+      assertExit(result, 1);
+      assert.ok(
+        result.stderr.includes(
+          `Error: Couldn't get the address of version 0.2.0 on the backup ${LATEST}.`,
+        ),
+        result.stderr,
+      );
+      assert.ok((await host.calls()).at(-1).endsWith(" down"));
+      assert.deepEqual(await leftovers(), []);
+    });
+  }
+
   test("waits for the lock that another script holds", async (t) => {
     await host.makeBackup(LATEST);
 
     await assertWaitsForLock(t, host, "meals-restore-check");
+  });
+
+  test("removes what an interrupted check left when no version is deployed", async (t) => {
+    host = await replaceHost(t, host, { version: "" });
+    await host.makeBackup(LATEST);
+    await mkdir(path.join(host.root, ".restore-check.AbC123", "data"), { recursive: true });
+
+    const result = await host.run("meals-restore-check");
+
+    assertExit(result, 0);
+    assert.match(
+      result.stdout,
+      /Removed \.restore-check\.AbC123, which an interrupted check left\./,
+    );
+    assert.deepEqual(await leftovers(), []);
+    // Without an image, Compose can't read compose.yaml.
+    assert.deepEqual(await host.calls(), []);
+  });
+
+  test("makes no call when no version is deployed", async (t) => {
+    host = await replaceHost(t, host, { version: "" });
+    await host.makeBackup(LATEST);
+
+    const result = await host.run("meals-restore-check");
+
+    assertExit(result, 0);
+    assert.match(result.stdout, /No version is deployed/);
+    assert.deepEqual(await host.calls(), []);
   });
 });
