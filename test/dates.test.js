@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { readFile } from "node:fs/promises";
+import { describe, test } from "node:test";
 
 // Set the time zone before the module creates any Date, so the results don't
 // depend on the machine. Europe/Madrid ends daylight saving time on 2026-10-25.
@@ -57,33 +58,26 @@ test("addDays doesn't change its argument", () => {
   assert.deepEqual(localParts(date), [2026, 9, 21, 0]);
 });
 
-// Parallels the isWeekId tests in test/weeks.test.js on purpose: this tests
-// public/dates.js's own implementation, required by the public/-never-
-// imports-server/ rule, not a duplicate of that other test.
-test("isWeekId accepts a Monday in YYYY-MM-DD format", () => {
-  for (const id of ["2026-09-21", "2026-12-28", "2027-01-04"]) {
-    assert.equal(isWeekId(id), true, id);
-  }
-});
+// public/dates.js and server/weeks.js implement isWeekId on purpose, because
+// the browser never imports from server/. Both sides' tests read the cases of
+// test/fixtures/week-ids.json, so the two can't drift apart.
+const weekIds = JSON.parse(
+  await readFile(new URL("./fixtures/week-ids.json", import.meta.url), "utf8"),
+);
 
-test("isWeekId rejects other weekdays, impossible dates, and other formats", () => {
-  const invalid = [
-    "2026-09-22", // Tuesday
-    "2026-09-27", // Sunday
-    "2026-02-30", // doesn't exist; JavaScript rolls it over to Monday, March 2
-    "2026-13-07",
-    "2026-9-21",
-    "20260921",
-    "2026-09-21T00:00:00Z",
-    " 2026-09-21",
-    "hello",
-    "",
-    undefined,
-    21,
-  ];
-  for (const id of invalid) {
-    assert.equal(isWeekId(id), false, String(id));
-  }
+describe("isWeekId", () => {
+  test("accepts each valid shared case", () => {
+    for (const id of weekIds.valid) {
+      assert.equal(isWeekId(id), true, id);
+    }
+  });
+
+  test("rejects each invalid shared case, and a missing ID", () => {
+    // JSON can't hold undefined, so the missing ID is added here.
+    for (const { id, why } of [...weekIds.invalid, { id: undefined, why: "missing" }]) {
+      assert.equal(isWeekId(id), false, `${String(id)}: ${why}`);
+    }
+  });
 });
 
 test("weekStart returns the Monday at local midnight", () => {
