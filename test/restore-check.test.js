@@ -54,169 +54,175 @@ async function appRuns({ check = false } = {}) {
   }
 }
 
-test("meals-restore-check runs the deployed image as the app's user, on a free loopback port", async () => {
-  await host.makeBackup(LATEST);
+describe("meals-restore-check", () => {
+  test("runs the deployed image as the app's user, on a free loopback port", async () => {
+    await host.makeBackup(LATEST);
 
-  const result = await host.run("meals-restore-check");
+    const result = await host.run("meals-restore-check");
 
-  assertExit(result, 0);
-  // Not the live port 3000, and not on every address.
-  assert.equal(
-    await readFile(path.join(host.stubDir, "up-env"), "utf8"),
-    `MEALS_GID=1000 MEALS_IMAGE=${imageFor("0.2.0")} MEALS_PORT=127.0.0.1:0 MEALS_UID=1000\n`,
-  );
-});
+    assertExit(result, 0);
+    // Not the live port 3000, and not on every address.
+    assert.equal(
+      await readFile(path.join(host.stubDir, "up-env"), "utf8"),
+      `MEALS_GID=1000 MEALS_IMAGE=${imageFor("0.2.0")} MEALS_PORT=127.0.0.1:0 MEALS_UID=1000\n`,
+    );
+  });
 
-test("meals-restore-check first removes what an interrupted check left", async () => {
-  await host.makeBackup(LATEST);
-  await mkdir(path.join(host.root, ".restore-check.AbC123", "data"), { recursive: true });
+  test("removes what an interrupted check left before it starts its app", async () => {
+    await host.makeBackup(LATEST);
+    await mkdir(path.join(host.root, ".restore-check.AbC123", "data"), { recursive: true });
 
-  const result = await host.run("meals-restore-check");
+    const result = await host.run("meals-restore-check");
 
-  assertExit(result, 0);
-  assert.deepEqual(await leftovers(), []);
-  assert.match(result.stdout, /Removed \.restore-check\.AbC123, which an interrupted check left\./);
-  const docker = await host.dockerCalls();
-  assert.ok(docker[0].endsWith(" down"), docker.join("\n"));
-});
+    assertExit(result, 0);
+    assert.deepEqual(await leftovers(), []);
+    assert.match(
+      result.stdout,
+      /Removed \.restore-check\.AbC123, which an interrupted check left\./,
+    );
+    const docker = await host.dockerCalls();
+    assert.ok(docker[0].endsWith(" down"), docker.join("\n"));
+  });
 
-test("meals-restore-check goes on, and says so, when it can't remove a stale copy", async () => {
-  await host.makeBackup(LATEST);
-  // As after a backup with a read-only directory: its files can't go.
-  const stale = path.join(host.root, ".restore-check.AbC123");
-  await mkdir(path.join(stale, "data", "v2"), { recursive: true });
-  await host.failCommand("rm", "$last == */.restore-check.AbC123");
+  test("goes on when it can't remove a stale copy", async () => {
+    await host.makeBackup(LATEST);
+    // As after a backup with a read-only directory: its files can't go.
+    const stale = path.join(host.root, ".restore-check.AbC123");
+    await mkdir(path.join(stale, "data", "v2"), { recursive: true });
+    await host.failCommand("rm", "$last == */.restore-check.AbC123");
 
-  const result = await host.run("meals-restore-check");
+    const result = await host.run("meals-restore-check");
 
-  assertExit(result, 0);
-  assert.ok(
-    result.stdout.includes(
-      `Couldn't remove ${stale}, which an interrupted check left. To free the space, run sudo rm -rf ${stale}.`,
-    ),
-    result.stdout,
-  );
-  assert.ok(
-    result.stdout.includes(`The backup ${LATEST} restores into version 0.2.0:`),
-    result.stdout,
-  );
-});
+    assertExit(result, 0);
+    assert.ok(
+      result.stdout.includes(
+        `Couldn't remove ${stale}, which an interrupted check left. To free the space, run sudo rm -rf ${stale}.`,
+      ),
+      result.stdout,
+    );
+    assert.ok(
+      result.stdout.includes(`The backup ${LATEST} restores into version 0.2.0:`),
+      result.stdout,
+    );
+  });
 
-test("meals-restore-check fails when it can't remove the containers of an interrupted check", async () => {
-  await host.makeBackup(LATEST);
-  await host.stub("stop-fails", "");
+  test("fails when it can't remove the containers of an interrupted check", async () => {
+    await host.makeBackup(LATEST);
+    await host.stub("stop-fails", "");
 
-  const result = await host.run("meals-restore-check");
+    const result = await host.run("meals-restore-check");
 
-  assertExit(result, 1);
-  assert.match(
-    result.stderr,
-    /Error: Couldn't remove the containers that an interrupted check left\./,
-  );
-  assert.ok(!(await host.calls()).some((call) => call.includes(" up ")));
-  assert.deepEqual(await leftovers(), []);
-});
+    assertExit(result, 1);
+    assert.match(
+      result.stderr,
+      /Error: Couldn't remove the containers that an interrupted check left\./,
+    );
+    assert.ok(!(await host.calls()).some((call) => call.includes(" up ")));
+    assert.deepEqual(await leftovers(), []);
+  });
 
-test("meals-restore-check fails, and cleans up, when a request fails", async () => {
-  await host.makeBackup(LATEST, withWeeks("2026-09-28"));
-  await host.stub("failing-paths", "/api/weeks/2026-09-28\n");
+  test("fails when a request to the app of the check fails", async () => {
+    await host.makeBackup(LATEST, withWeeks("2026-09-28"));
+    await host.stub("failing-paths", "/api/weeks/2026-09-28\n");
 
-  const result = await host.run("meals-restore-check");
+    const result = await host.run("meals-restore-check");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /GET \/api\/weeks\/2026-09-28 failed/);
-  assert.ok((await host.calls()).at(-1).endsWith(" down"));
-  assert.equal(await appRuns({ check: true }), false, "the check's app stopped");
-  assert.equal(await appRuns(), true, "the deployed app still runs");
-  assert.deepEqual(await leftovers(), []);
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /GET \/api\/weeks\/2026-09-28 failed/);
+    assert.ok((await host.calls()).at(-1).endsWith(" down"));
+    assert.equal(await appRuns({ check: true }), false, "the check's app stopped");
+    assert.equal(await appRuns(), true, "the deployed app still runs");
+    assert.deepEqual(await leftovers(), []);
+  });
 
-/** @type {[string, () => Promise<unknown>][]} */
-const damages = [
-  ["isn't an archive", () => host.writeBackup(LATEST, "not an archive")],
-  ["has invalid JSON", () => host.makeBackup(LATEST, { ...DATA, "v2/recipes.json": "{ not json" })],
-];
-for (const [damage, writeLatest] of damages) {
-  test(`meals-restore-check fails, and checks no older backup, when the latest backup ${damage}`, async () => {
-    await host.makeBackup(OLDER);
-    await writeLatest();
+  /** @type {[string, () => Promise<unknown>][]} */
+  const damages = [
+    ["isn't an archive", () => host.writeBackup(LATEST, "not an archive")],
+    [
+      "has invalid JSON",
+      () => host.makeBackup(LATEST, { ...DATA, "v2/recipes.json": "{ not json" }),
+    ],
+  ];
+  for (const [damage, writeLatest] of damages) {
+    test(`fails when the latest backup ${damage}`, async () => {
+      await host.makeBackup(OLDER);
+      await writeLatest();
+
+      const result = await host.run("meals-restore-check");
+
+      assertExit(result, 1);
+      assert.ok(
+        result.stderr.includes(`Error: The backup ${LATEST} failed validation.`),
+        result.stderr,
+      );
+      assert.ok(!(await host.calls()).some((call) => call.includes(" up ")));
+      assert.ok(!`${result.stdout}${result.stderr}`.includes(OLDER), result.stdout);
+      assert.deepEqual(await leftovers(), []);
+    });
+  }
+
+  test("fails when the app doesn't become healthy on the backup", async () => {
+    await host.makeBackup(LATEST);
+    await host.stub("broken", "0.2.0\n");
+
+    const result = await host.run("meals-restore-check");
+
+    assertExit(result, 1);
+    assert.match(result.stderr, /didn't become healthy/);
+    assert.deepEqual(await leftovers(), []);
+  });
+
+  test("fails when it can't create the directory for the copy", async () => {
+    await host.makeBackup(LATEST);
+    await host.failCommand("mktemp");
 
     const result = await host.run("meals-restore-check");
 
     assertExit(result, 1);
     assert.ok(
-      result.stderr.includes(`Error: The backup ${LATEST} failed validation.`),
+      result.stderr.includes(
+        `Error: Couldn't create a directory for the copy of the backup in ${host.root}.`,
+      ),
+      result.stderr,
+    );
+    assert.deepEqual(await host.calls(), []);
+  });
+
+  test("fails when it can't list the backups", async () => {
+    await host.makeBackup(LATEST);
+    await host.failCommand("find", "$* == *'-v*.tar.gz'*");
+
+    const result = await host.run("meals-restore-check");
+
+    assertExit(result, 1);
+    assert.ok(
+      result.stderr.includes(`Error: Couldn't list the backups in ${host.root}/backups.`),
       result.stderr,
     );
     assert.ok(!(await host.calls()).some((call) => call.includes(" up ")));
-    assert.ok(!`${result.stdout}${result.stderr}`.includes(OLDER), result.stdout);
-    assert.deepEqual(await leftovers(), []);
   });
-}
 
-test("meals-restore-check fails when the app doesn't become healthy on the backup", async () => {
-  await host.makeBackup(LATEST);
-  await host.stub("broken", "0.2.0\n");
+  /**
+   * Checks the latest of two backups, next to an interrupted copy that sorts
+   * after it, and checks that the script succeeds.
+   */
+  async function checkLatestBackup() {
+    await host.makeBackup(OLDER, withWeeks("2026-09-21"));
+    await host.makeBackup(LATEST, withWeeks("2026-09-28", "2026-10-05"));
+    await host.writeBackup("2026-10-03T033000Z-daily-v0.2.0.tar.gz.partial", "interrupted");
 
-  const result = await host.run("meals-restore-check");
+    const result = await host.run("meals-restore-check");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /didn't become healthy/);
-  assert.deepEqual(await leftovers(), []);
-});
+    assertExit(result, 0);
+    return result;
+  }
 
-test("meals-restore-check fails when it can't create the directory for the copy", async () => {
-  await host.makeBackup(LATEST);
-  await host.failCommand("mktemp");
+  /** The calls to docker that the check made in its own Compose project. */
+  async function checkComposeCalls() {
+    const project = `--project-name meals-restore-check --project-directory ${host.root}/.restore-check.`;
+    return (await host.dockerCalls()).filter((call) => call.includes(project));
+  }
 
-  const result = await host.run("meals-restore-check");
-
-  assertExit(result, 1);
-  assert.ok(
-    result.stderr.includes(
-      `Error: Couldn't create a directory for the copy of the backup in ${host.root}.`,
-    ),
-    result.stderr,
-  );
-  assert.deepEqual(await host.calls(), []);
-});
-
-test("meals-restore-check fails when it can't list the backups", async () => {
-  await host.makeBackup(LATEST);
-  await host.failCommand("find", "$* == *'-v*.tar.gz'*");
-
-  const result = await host.run("meals-restore-check");
-
-  assertExit(result, 1);
-  assert.ok(
-    result.stderr.includes(`Error: Couldn't list the backups in ${host.root}/backups.`),
-    result.stderr,
-  );
-  assert.ok(!(await host.calls()).some((call) => call.includes(" up ")));
-});
-
-/**
- * Checks the latest of two backups, next to an interrupted copy that sorts
- * after it, and checks that the script succeeds.
- */
-async function checkLatestBackup() {
-  await host.makeBackup(OLDER, withWeeks("2026-09-21"));
-  await host.makeBackup(LATEST, withWeeks("2026-09-28", "2026-10-05"));
-  await host.writeBackup("2026-10-03T033000Z-daily-v0.2.0.tar.gz.partial", "interrupted");
-
-  const result = await host.run("meals-restore-check");
-
-  assertExit(result, 0);
-  return result;
-}
-
-/** The calls to docker that the check made in its own Compose project. */
-async function checkComposeCalls() {
-  const project = `--project-name meals-restore-check --project-directory ${host.root}/.restore-check.`;
-  return (await host.dockerCalls()).filter((call) => call.includes(project));
-}
-
-describe("meals-restore-check", () => {
   test("checks the latest backup", async () => {
     const result = await checkLatestBackup();
 

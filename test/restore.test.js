@@ -22,90 +22,6 @@ afterEach(async () => {
   await host.cleanup();
 });
 
-test("a backup by meals-backup and a restore by meals-restore give back identical data", async () => {
-  assertExit(await host.run("meals-backup", "daily"), 0);
-  const [daily] = await host.backups();
-  await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
-  await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
-
-  const result = await host.run("meals-restore", daily);
-
-  assertExit(result, 0);
-  await assertOriginalData(host);
-});
-
-test("meals-restore replaces data with invalid JSON", async () => {
-  await host.makeBackup(BACKUP);
-  await host.writeData("v2/recipes.json", "{ not json");
-
-  const result = await host.run("meals-restore", BACKUP);
-
-  assertExit(result, 0);
-  await assertOriginalData(host);
-});
-
-test("meals-restore works from a working directory that it can't read", {
-  skip: skipAsRoot("root can read any directory"),
-}, async () => {
-  await host.makeBackup(BACKUP);
-  await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
-
-  const result = await host.runFromUnreadableDir("meals-restore", BACKUP);
-
-  assertExit(result, 0);
-  await assertOriginalData(host);
-});
-
-test("meals-restore removes the staging directories that an interrupted restore left", async () => {
-  await host.makeBackup(BACKUP);
-  await mkdir(path.join(host.root, ".restore.AbC123", "data"), { recursive: true });
-
-  const result = await host.run("meals-restore", BACKUP);
-
-  assertExit(result, 0);
-  assert.equal(await host.exists(".restore.AbC123"), false);
-  assert.match(result.stdout, /Removed \.restore\.AbC123, which an interrupted restore left\./);
-});
-
-test("meals-restore checks the health at the address that Compose publishes", async () => {
-  const env = await readFile(path.join(host.root, ".env"), "utf8");
-  await host.writeRootFile(".env", env.replace("MEALS_PORT=3000", "MEALS_PORT=127.0.0.1:3000"));
-  await host.makeBackup(BACKUP);
-
-  const result = await host.run("meals-restore", BACKUP);
-
-  assertExit(result, 0);
-  assert.match((await host.calls()).at(-1), / http:\/\/127\.0\.0\.1:49153\/api\/health$/);
-});
-
-test("meals-restore checks the health on 127.0.0.1 when Compose publishes on every address", async () => {
-  await host.stub("port", "0.0.0.0:3000\n");
-  await host.makeBackup(BACKUP);
-
-  const result = await host.run("meals-restore", BACKUP);
-
-  assertExit(result, 0);
-  assert.match((await host.calls()).at(-1), / http:\/\/127\.0\.0\.1:3000\/api\/health$/);
-});
-
-test("meals-restore names the new pre-restore backup, whatever the clock says", async () => {
-  // A pre-restore backup whose name sorts after the new one, as after the
-  // clock went back.
-  const later = "2099-01-01T000000Z-pre-restore-v0.2.0.tar.gz";
-  await host.makeBackup(BACKUP);
-  await host.makeBackup(later);
-  await host.stub("broken", "0.2.0\n");
-
-  const result = await host.run("meals-restore", BACKUP);
-
-  assertExit(result, 1);
-  const preRestore = (await host.backups()).filter(
-    (name) => name.includes("-pre-restore-v0.2.0") && name !== later,
-  );
-  assert.equal(preRestore.length, 1);
-  assert.ok(result.stderr.includes(`meals-restore ${preRestore[0]}.`), result.stderr);
-});
-
 /**
  * Restores BACKUP over data that changed after the backup, and checks that
  * the script succeeds.
@@ -122,6 +38,90 @@ async function restoreChangedData() {
 }
 
 describe("meals-restore", () => {
+  test("restores the data that meals-backup archived", async () => {
+    assertExit(await host.run("meals-backup", "daily"), 0);
+    const [daily] = await host.backups();
+    await host.writeData("v2/recipes.json", '{ "recipes": [{ "id": "new" }] }\n');
+    await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
+
+    const result = await host.run("meals-restore", daily);
+
+    assertExit(result, 0);
+    await assertOriginalData(host);
+  });
+
+  test("replaces data that has invalid JSON", async () => {
+    await host.makeBackup(BACKUP);
+    await host.writeData("v2/recipes.json", "{ not json");
+
+    const result = await host.run("meals-restore", BACKUP);
+
+    assertExit(result, 0);
+    await assertOriginalData(host);
+  });
+
+  test("works from a working directory that it can't read", {
+    skip: skipAsRoot("root can read any directory"),
+  }, async () => {
+    await host.makeBackup(BACKUP);
+    await host.writeData("v2/weeks/2026-09-28.json", "{}\n");
+
+    const result = await host.runFromUnreadableDir("meals-restore", BACKUP);
+
+    assertExit(result, 0);
+    await assertOriginalData(host);
+  });
+
+  test("removes the staging directories that an interrupted restore left", async () => {
+    await host.makeBackup(BACKUP);
+    await mkdir(path.join(host.root, ".restore.AbC123", "data"), { recursive: true });
+
+    const result = await host.run("meals-restore", BACKUP);
+
+    assertExit(result, 0);
+    assert.equal(await host.exists(".restore.AbC123"), false);
+    assert.match(result.stdout, /Removed \.restore\.AbC123, which an interrupted restore left\./);
+  });
+
+  test("checks the health at the address that Compose publishes", async () => {
+    const env = await readFile(path.join(host.root, ".env"), "utf8");
+    await host.writeRootFile(".env", env.replace("MEALS_PORT=3000", "MEALS_PORT=127.0.0.1:3000"));
+    await host.makeBackup(BACKUP);
+
+    const result = await host.run("meals-restore", BACKUP);
+
+    assertExit(result, 0);
+    assert.match((await host.calls()).at(-1), / http:\/\/127\.0\.0\.1:49153\/api\/health$/);
+  });
+
+  test("checks the health on 127.0.0.1 when Compose publishes on every address", async () => {
+    await host.stub("port", "0.0.0.0:3000\n");
+    await host.makeBackup(BACKUP);
+
+    const result = await host.run("meals-restore", BACKUP);
+
+    assertExit(result, 0);
+    assert.match((await host.calls()).at(-1), / http:\/\/127\.0\.0\.1:3000\/api\/health$/);
+  });
+
+  test("names the new pre-restore backup, whatever the clock says", async () => {
+    // A pre-restore backup whose name sorts after the new one, as after the
+    // clock went back.
+    const later = "2099-01-01T000000Z-pre-restore-v0.2.0.tar.gz";
+    await host.makeBackup(BACKUP);
+    await host.makeBackup(later);
+    await host.stub("broken", "0.2.0\n");
+
+    const result = await host.run("meals-restore", BACKUP);
+
+    assertExit(result, 1);
+    const preRestore = (await host.backups()).filter(
+      (name) => name.includes("-pre-restore-v0.2.0") && name !== later,
+    );
+    assert.equal(preRestore.length, 1);
+    assert.ok(result.stderr.includes(`meals-restore ${preRestore[0]}.`), result.stderr);
+  });
+
   test("replaces the data with the data of the backup", async () => {
     await restoreChangedData();
 
