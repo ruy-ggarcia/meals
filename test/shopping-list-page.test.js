@@ -117,7 +117,7 @@ describe("shopping list", () => {
     );
   });
 
-  test("counts one ingredient in the summary", async (t) => {
+  test("words the summary in the singular for one ingredient", async (t) => {
     await openWeekWithOnionSoup(t);
 
     shoppingButton().click();
@@ -141,7 +141,7 @@ describe("shopping list", () => {
     );
   });
 
-  test("counts the ingredients in the summary", async (t) => {
+  test("words the summary in the plural for two ingredients", async (t) => {
     await openWeekWithEggAndOnion(t);
 
     shoppingButton().click();
@@ -192,111 +192,111 @@ describe("shopping list", () => {
     assert.equal(shoppingDialog().open, false);
     assertFocus(page.document, shoppingButton());
   });
-});
 
-test("the shopping list counts a slot whose save is still pending", async (t) => {
-  await openWeek(t, {
-    recipes: [
+  test("counts a slot whose save is still pending", async (t) => {
+    await openWeek(t, {
+      recipes: [
+        {
+          id: "omelette",
+          name: "Omelette",
+          archived: false,
+          ingredients: [{ ingredientId: "egg", quantity: 2 }],
+        },
+      ],
+      ingredients: [EGG],
+    });
+    const save = await addWithEditor(page, server, "mon", "lunch", "omel");
+
+    shoppingButton().click();
+
+    assert.deepEqual(lineTexts(), [["Egg", "2 pcs"]]);
+    save.respond(200, { week: WEEK, day: "mon", meal: "lunch", items: [] });
+    await tick();
+  });
+
+  test("lists recipes without ingredients as not included, with their slots", async (t) => {
+    let weekData = withSlot(blankWeek(), "mon", "dinner", [{ recipeId: "burrito", servings: 2 }]);
+    weekData = withSlot(weekData, "thu", "snack_am", [{ recipeId: "burrito", servings: 1 }]);
+    await openWeek(t, {
+      weekData,
+      recipes: [{ id: "burrito", name: "Burrito", archived: false, ingredients: [] }],
+    });
+
+    shoppingButton().click();
+
+    const block = shoppingDialog().querySelector(".not-included");
+    assert.equal(block.hidden, false);
+    assert.equal(
+      block.querySelector(".not-included-title").textContent,
+      "Not included: these recipes have no ingredients.",
+    );
+    assert.notEqual(
+      block.querySelector(".not-included-title .warning-icon"),
+      null,
+      "the warning icon in the title of the block",
+    );
+    assert.deepEqual(
+      [...block.querySelectorAll("li")].map((item) => item.textContent),
+      ["Burrito · Mon dinner, Thu morning snack"],
+    );
+    assert.deepEqual(lineTexts(), []);
+    assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
+  });
+
+  test("says there is nothing to buy for an empty week", async (t) => {
+    await openWeek(t);
+
+    shoppingButton().click();
+
+    const empty = shoppingDialog().querySelector(".empty-week");
+    assert.equal(empty.hidden, false);
+    assert.equal(empty.textContent, "Nothing to buy. Plan some meals first.");
+    assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
+  });
+
+  test("closes with a backdrop click", async (t) => {
+    await openWeek(t);
+    shoppingButton().click();
+
+    shoppingDialog().dispatchEvent(new page.window.PointerEvent("pointerdown", { bubbles: true }));
+    shoppingDialog().click();
+
+    assert.equal(shoppingDialog().open, false);
+    assertFocus(page.document, shoppingButton());
+  });
+
+  test("disables Shopping list until a week is shown", async (t) => {
+    quiet.expect(1);
+    server = fakeFetch();
+    page = await openPage(t, {
+      html: "index.html",
+      script: "app.js",
+      fetch: server.fetch,
+      url: `http://localhost/#${WEEK}`,
+    });
+    await tick();
+    server.requestFor("GET", `/api/weeks/${WEEK}`).fail();
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
+    server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
+    await tick();
+
+    assert.equal(page.document.getElementById("grid").hidden, true);
+    assert.equal(shoppingButton().disabled, true);
+
+    page.document.getElementById("retry-load").click();
+    await waitFor(
+      () => server.requests.filter((request) => request.url === `/api/weeks/${WEEK}`).length === 2,
       {
-        id: "omelette",
-        name: "Omelette",
-        archived: false,
-        ingredients: [{ ingredientId: "egg", quantity: 2 }],
+        message: () =>
+          `Retry sent a second load of the week, but the page has ${server.requests.map((request) => request.url).join(", ")}`,
       },
-    ],
-    ingredients: [EGG],
+    );
+    server.requestFor("GET", `/api/weeks/${WEEK}`).respond(200, blankWeek());
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
+    server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
+    await tick();
+
+    assert.equal(page.document.getElementById("grid").hidden, false);
+    assert.equal(shoppingButton().disabled, false);
   });
-  const save = await addWithEditor(page, server, "mon", "lunch", "omel");
-
-  shoppingButton().click();
-
-  assert.deepEqual(lineTexts(), [["Egg", "2 pcs"]]);
-  save.respond(200, { week: WEEK, day: "mon", meal: "lunch", items: [] });
-  await tick();
-});
-
-test("recipes without ingredients are listed as not included, with their slots", async (t) => {
-  let weekData = withSlot(blankWeek(), "mon", "dinner", [{ recipeId: "burrito", servings: 2 }]);
-  weekData = withSlot(weekData, "thu", "snack_am", [{ recipeId: "burrito", servings: 1 }]);
-  await openWeek(t, {
-    weekData,
-    recipes: [{ id: "burrito", name: "Burrito", archived: false, ingredients: [] }],
-  });
-
-  shoppingButton().click();
-
-  const block = shoppingDialog().querySelector(".not-included");
-  assert.equal(block.hidden, false);
-  assert.equal(
-    block.querySelector(".not-included-title").textContent,
-    "Not included: these recipes have no ingredients.",
-  );
-  assert.notEqual(
-    block.querySelector(".not-included-title .warning-icon"),
-    null,
-    "the warning icon in the title of the block",
-  );
-  assert.deepEqual(
-    [...block.querySelectorAll("li")].map((item) => item.textContent),
-    ["Burrito · Mon dinner, Thu morning snack"],
-  );
-  assert.deepEqual(lineTexts(), []);
-  assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
-});
-
-test("an empty week says there is nothing to buy", async (t) => {
-  await openWeek(t);
-
-  shoppingButton().click();
-
-  const empty = shoppingDialog().querySelector(".empty-week");
-  assert.equal(empty.hidden, false);
-  assert.equal(empty.textContent, "Nothing to buy. Plan some meals first.");
-  assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
-});
-
-test("a backdrop click closes the shopping list", async (t) => {
-  await openWeek(t);
-  shoppingButton().click();
-
-  shoppingDialog().dispatchEvent(new page.window.PointerEvent("pointerdown", { bubbles: true }));
-  shoppingDialog().click();
-
-  assert.equal(shoppingDialog().open, false);
-  assertFocus(page.document, shoppingButton());
-});
-
-test("Shopping list is disabled while no week is shown, and enabled when a week loads", async (t) => {
-  quiet.expect(1);
-  server = fakeFetch();
-  page = await openPage(t, {
-    html: "index.html",
-    script: "app.js",
-    fetch: server.fetch,
-    url: `http://localhost/#${WEEK}`,
-  });
-  await tick();
-  server.requestFor("GET", `/api/weeks/${WEEK}`).fail();
-  server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
-  server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
-  await tick();
-
-  assert.equal(page.document.getElementById("grid").hidden, true);
-  assert.equal(shoppingButton().disabled, true);
-
-  page.document.getElementById("retry-load").click();
-  await waitFor(
-    () => server.requests.filter((request) => request.url === `/api/weeks/${WEEK}`).length === 2,
-    {
-      message: () =>
-        `Retry sent a second load of the week, but the page has ${server.requests.map((request) => request.url).join(", ")}`,
-    },
-  );
-  server.requestFor("GET", `/api/weeks/${WEEK}`).respond(200, blankWeek());
-  server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
-  server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
-  await tick();
-
-  assert.equal(page.document.getElementById("grid").hidden, false);
-  assert.equal(shoppingButton().disabled, false);
 });

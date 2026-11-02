@@ -42,49 +42,51 @@ afterEach(async () => {
   page = undefined;
 });
 
-test("each page links to the three sections, in order, and marks its own as the current page", async () => {
-  for (const [html, , own] of PAGES) {
-    const window = await loadMarkup(html);
-
-    const links = [...window.document.querySelectorAll(".page-links a")].map((link) => [
-      link.getAttribute("href"),
-      link.querySelector(".page-name").textContent,
-      link.getAttribute("aria-current"),
-    ]);
-
-    assert.deepEqual(
-      links,
-      [
-        ["/", "Meal plan", own === "/" ? "page" : null],
-        ["/recipes.html", "Recipes", own === "/recipes.html" ? "page" : null],
-        ["/ingredients.html", "Ingredients", own === "/ingredients.html" ? "page" : null],
-      ],
-      html,
-    );
-    await window.happyDOM.close();
-  }
-});
-
-test("each page links the app icon, the Home Screen icon, and the web app manifest", async () => {
-  for (const [html] of PAGES) {
-    const window = await loadMarkup(html);
-    const href = (selector) => window.document.querySelector(selector)?.getAttribute("href");
-
-    assert.equal(href('link[rel="icon"][type="image/svg+xml"]'), "/icons/favicon.svg", html);
-    assert.equal(href('link[rel="icon"][type="image/png"]'), "/icons/favicon-32.png", html);
-    assert.equal(href('link[rel="apple-touch-icon"]'), "/icons/apple-touch-icon.png", html);
-    assert.equal(href('link[rel="manifest"]'), "/manifest.webmanifest", html);
-    assert.equal(
-      /** @type {any} */ (window.document.querySelector('meta[name="apple-mobile-web-app-title"]'))
-        ?.content,
-      "Meals",
-      html,
-    );
-    await window.happyDOM.close();
-  }
-});
-
 describe("sidebar", () => {
+  test("links the three sections in order", async () => {
+    for (const [html] of PAGES) {
+      const window = await loadMarkup(html);
+
+      const links = [...window.document.querySelectorAll(".page-links a")].map((link) => [
+        link.getAttribute("href"),
+        link.querySelector(".page-name").textContent,
+      ]);
+
+      assert.deepEqual(
+        links,
+        [
+          ["/", "Meal plan"],
+          ["/recipes.html", "Recipes"],
+          ["/ingredients.html", "Ingredients"],
+        ],
+        html,
+      );
+      await window.happyDOM.close();
+    }
+  });
+
+  test("marks the current page", async () => {
+    for (const [html, , own] of PAGES) {
+      const window = await loadMarkup(html);
+
+      const current = [...window.document.querySelectorAll(".page-links a")].map((link) => [
+        link.getAttribute("href"),
+        link.getAttribute("aria-current"),
+      ]);
+
+      assert.deepEqual(
+        current,
+        [
+          ["/", own === "/" ? "page" : null],
+          ["/recipes.html", own === "/recipes.html" ? "page" : null],
+          ["/ingredients.html", own === "/ingredients.html" ? "page" : null],
+        ],
+        html,
+      );
+      await window.happyDOM.close();
+    }
+  });
+
   test("switches with Hide sidebar and Show sidebar on every page", async () => {
     for (const [html, script] of PAGES) {
       page = await loadAnswered({ html, script });
@@ -117,41 +119,63 @@ describe("sidebar", () => {
     }
     page = undefined;
   });
-});
 
-test("a page opens with the sidebar choice that another page remembered", async () => {
-  for (const [html, script] of PAGES) {
-    page = await loadAnswered({
-      html,
-      script,
-      beforeScript: (window) => window.localStorage.setItem("meals.sidebar", "hidden"),
-    });
-
-    assert.equal(page.document.documentElement.dataset.sidebar, "hidden", html);
-    await page.cleanup();
-  }
-  page = undefined;
-});
-
-test("a page without storage still opens, and the sidebar still switches", async () => {
-  page = await loadAnswered({
-    html: "recipes.html",
-    script: "recipes.js",
-    beforeScript: (window) => {
-      Object.defineProperty(window, "localStorage", {
-        get() {
-          throw new Error("Storage is off");
-        },
+  test("opens a page with the sidebar choice that another page remembered", async () => {
+    for (const [html, script] of PAGES) {
+      page = await loadAnswered({
+        html,
+        script,
+        beforeScript: (window) => window.localStorage.setItem("meals.sidebar", "hidden"),
       });
-    },
+
+      assert.equal(page.document.documentElement.dataset.sidebar, "hidden", html);
+      await page.cleanup();
+    }
+    page = undefined;
   });
 
-  page.document.querySelector(".hide-sidebar").click();
+  test("switches the sidebar when localStorage throws", async () => {
+    page = await loadAnswered({
+      html: "recipes.html",
+      script: "recipes.js",
+      beforeScript: (window) => {
+        Object.defineProperty(window, "localStorage", {
+          get() {
+            throw new Error("Storage is off");
+          },
+        });
+      },
+    });
 
-  assert.equal(page.document.documentElement.dataset.sidebar, "hidden");
+    page.document.querySelector(".hide-sidebar").click();
+
+    assert.equal(page.document.documentElement.dataset.sidebar, "hidden");
+  });
 });
 
-describe("manifest.webmanifest", () => {
+describe("public/*.html", () => {
+  test("links the app icon, Home Screen icon, and manifest", async () => {
+    for (const [html] of PAGES) {
+      const window = await loadMarkup(html);
+      const href = (selector) => window.document.querySelector(selector)?.getAttribute("href");
+
+      assert.equal(href('link[rel="icon"][type="image/svg+xml"]'), "/icons/favicon.svg", html);
+      assert.equal(href('link[rel="icon"][type="image/png"]'), "/icons/favicon-32.png", html);
+      assert.equal(href('link[rel="apple-touch-icon"]'), "/icons/apple-touch-icon.png", html);
+      assert.equal(href('link[rel="manifest"]'), "/manifest.webmanifest", html);
+      assert.equal(
+        /** @type {any} */ (
+          window.document.querySelector('meta[name="apple-mobile-web-app-title"]')
+        )?.content,
+        "Meals",
+        html,
+      );
+      await window.happyDOM.close();
+    }
+  });
+});
+
+describe("public/manifest.webmanifest", () => {
   async function readManifest() {
     const file = new URL("../public/manifest.webmanifest", import.meta.url);
     return JSON.parse(await readFile(file, "utf8"));
