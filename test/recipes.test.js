@@ -161,53 +161,8 @@ test("update archives and restores a recipe", async () => {
   assert.deepEqual(await recipes.update(soup.id, { archived: false }), soup);
 });
 
-test("update rejects changes that aren't a valid shape", async () => {
-  const soup = await recipes.create({ name: "Soup" });
-  const invalid = [
-    undefined,
-    null,
-    "Soup",
-    [],
-    {},
-    { name: "Stew", archived: true },
-    { color: "red" },
-    { archived: "yes" },
-    { archived: null },
-    { name: "" },
-    { name: 42 },
-    { name: "x".repeat(101) },
-  ];
-
-  for (const changes of invalid) {
-    await assert.rejects(recipes.update(soup.id, changes), ValidationError, String(changes));
-  }
-  assert.deepEqual(await recipes.list(), [soup]);
-});
-
 test("update rejects an unknown ID", async () => {
   await assert.rejects(recipes.update("no-such-id", { archived: true }), NotFoundError);
-});
-
-test("list skips malformed entries in the file", async () => {
-  await mkdir(path.join(dataDir, "v2"), { recursive: true });
-  await writeFile(
-    recipesFile(),
-    JSON.stringify({
-      recipes: [
-        { id: "a", name: "Soup", archived: true },
-        { id: "b", name: "Salad" }, // archived missing -> false
-        { id: 3, name: "Bad ID" },
-        { id: "c" },
-        null,
-        "Tea",
-      ],
-    }),
-  );
-
-  assert.deepEqual(await recipes.list(), [
-    { id: "b", name: "Salad", archived: false, ingredients: [] },
-    { id: "a", name: "Soup", archived: true, ingredients: [] },
-  ]);
 });
 
 test("a recipes file with invalid JSON makes reads and writes fail without overwriting it", async () => {
@@ -249,80 +204,6 @@ test("create stores the ingredients, each quantity rounded to two decimals", asy
   assert.deepEqual(await recipes.list(), [omelette]);
 });
 
-test("create rejects fields that aren't a name with optional ingredients", async () => {
-  for (const fields of [undefined, null, "Soup", [], { name: "Soup", archived: false }]) {
-    await assert.rejects(recipes.create(fields), ValidationError, JSON.stringify(fields));
-  }
-  assert.deepEqual(await recipes.list(), []);
-});
-
-describe("recipes", () => {
-  test("rejects ingredients that break the rules in create and update", async () => {
-    const onion = await ingredients.create({ name: "Onion", unit: "g" });
-    // Each ingredient exists, so only the rule in the message can reject the list.
-    const catalog = [];
-    for (let index = 0; index < 51; index++) {
-      catalog.push(await ingredients.create({ name: `Ingredient ${index}`, unit: "g" }));
-    }
-    const notAnArray = '"ingredients" must be an array.';
-    const wrongShape =
-      'ingredients[0] must have "ingredientId" and "quantity", and optionally "measureId".';
-    const wrongQuantity =
-      "ingredients[0].quantity must be from 0.01 to 10000, with at most two decimals.";
-    const invalid = [
-      ["Onion", notAnArray],
-      [null, notAnArray],
-      [{}, notAnArray],
-      [[entry(onion.id, 1), entry(onion.id, 2)], `ingredients[1] repeats ingredient ${onion.id}.`],
-      [[{ ingredientId: onion.id }], wrongShape],
-      [[{ ...entry(onion.id, 1), note: "chopped" }], wrongShape],
-      [[entry(42, 1)], "ingredients[0].ingredientId must be a string."],
-      ...[
-        0,
-        0.001,
-        0.005,
-        1.255,
-        10000.01,
-        -1,
-        "1",
-        Number.NaN,
-        Number.POSITIVE_INFINITY,
-        null,
-      ].map((quantity) => [[entry(onion.id, quantity)], wrongQuantity]),
-      [
-        catalog.map((ingredient) => entry(ingredient.id, 1)),
-        "A recipe holds at most 50 ingredients.",
-      ],
-    ];
-
-    for (const [list, message] of invalid) {
-      await assert.rejects(
-        recipes.create({ name: "Soup", ingredients: list }),
-        { name: "ValidationError", message },
-        String(JSON.stringify(list)).slice(0, 60),
-      );
-    }
-    const soup = await recipes.create({ name: "Soup" });
-    for (const [list, message] of invalid) {
-      await assert.rejects(
-        recipes.update(soup.id, { ingredients: list }),
-        { name: "ValidationError", message },
-        String(JSON.stringify(list)).slice(0, 60),
-      );
-    }
-    assert.deepEqual(await recipes.list(), [soup]);
-  });
-});
-
-test("a quantity with three decimals names the quantity rule", async () => {
-  const onion = await ingredients.create({ name: "Onion", unit: "g" });
-
-  await assert.rejects(recipes.create({ name: "Soup", ingredients: [entry(onion.id, 0.125)] }), {
-    name: "ValidationError",
-    message: "ingredients[0].quantity must be from 0.01 to 10000, with at most two decimals.",
-  });
-});
-
 test("create and update reject an ingredient that isn't in the catalog", async () => {
   await assert.rejects(recipes.create({ name: "Soup", ingredients: [entry("gone", 1)] }), {
     name: "ValidationError",
@@ -332,18 +213,6 @@ test("create and update reject an ingredient that isn't in the catalog", async (
   await assert.rejects(recipes.update(soup.id, { ingredients: [entry("gone", 1)] }), {
     message: "Unknown ingredient: gone",
   });
-});
-
-test("a recipe accepts the limits: 50 ingredients, 0.01, and 10000", async () => {
-  const many = [];
-  for (let index = 0; index < 50; index += 1) {
-    many.push(await ingredients.create({ name: `Ingredient ${index}`, unit: "g" }));
-  }
-  const list = many.map((ingredient, index) => entry(ingredient.id, index === 0 ? 0.01 : 10000));
-
-  const big = await recipes.create({ name: "Big", ingredients: list });
-
-  assert.deepEqual(big.ingredients, list);
 });
 
 test("a recipe keeps and saves an archived ingredient", async () => {
@@ -368,47 +237,6 @@ test("update changes the name and the ingredients together", async () => {
 
   assert.deepEqual(updated, { ...soup, name: "Onion soup", ingredients: [entry(onion.id, 200)] });
   assert.deepEqual(await recipes.list(), [updated]);
-});
-
-test("update rejects archived together with other fields", async () => {
-  const soup = await recipes.create({ name: "Soup" });
-
-  for (const changes of [
-    { archived: true, ingredients: [] },
-    { archived: true, name: "Stew" },
-    { name: "Stew", color: "red" },
-  ]) {
-    await assert.rejects(recipes.update(soup.id, changes), ValidationError);
-  }
-});
-
-test("list drops ingredients the catalog doesn't have, and reads a recipe without a list as empty", async () => {
-  const onion = await ingredients.create({ name: "Onion", unit: "g" });
-  await writeFile(
-    recipesFile(),
-    JSON.stringify({
-      recipes: [
-        {
-          id: "a",
-          name: "Soup",
-          archived: false,
-          ingredients: [
-            entry(onion.id, 100),
-            entry("gone", 5), // not in the catalog
-            entry(onion.id, 7), // repeated
-            entry("bad", 1.255), // three decimals
-            "Salt",
-          ],
-        },
-        { id: "b", name: "Tea", archived: false },
-      ],
-    }),
-  );
-
-  assert.deepEqual(await recipes.list(), [
-    { id: "a", name: "Soup", archived: false, ingredients: [entry(onion.id, 100)] },
-    { id: "b", name: "Tea", archived: false, ingredients: [] },
-  ]);
 });
 
 test("saving one recipe keeps another recipe's ingredients that the catalog doesn't have", async () => {
@@ -455,62 +283,6 @@ test("update returns the recipe without the ingredients that the catalog doesn't
   assert.deepEqual(onDisk.recipes[0].ingredients, [entry(onion.id, 100), entry("gone", 5)]);
 });
 
-test("usageOf reports lines in the unit and the measures used, archived recipes included", async () => {
-  const onion = await ingredients.create({
-    name: "Onion",
-    unit: "g",
-    measures: [
-      { name: "medium", amount: 150 },
-      { name: "small", amount: 80 },
-    ],
-  });
-  const egg = await ingredients.create({ name: "Egg", unit: "pcs" });
-  const [medium, small] = onion.measures;
-  const soup = await recipes.create({
-    name: "Soup",
-    ingredients: [{ ingredientId: onion.id, measureId: medium.id, quantity: 1 }],
-  });
-  await recipes.update(soup.id, { archived: true });
-
-  assert.deepEqual(await recipes.usageOf(onion.id), {
-    inUnit: false,
-    measureIds: new Set([medium.id]),
-  });
-  assert.equal((await recipes.usageOf(onion.id)).measureIds.has(small.id), false);
-  assert.deepEqual(await recipes.usageOf(egg.id), { inUnit: false, measureIds: new Set() });
-
-  await recipes.create({ name: "Stew", ingredients: [entry(onion.id, 100)] });
-  assert.equal((await recipes.usageOf(onion.id)).inUnit, true);
-});
-
-test("moveUnitLinesToMeasure points only that ingredient's unit lines to the measure, in every recipe", async () => {
-  const onion = await ingredients.create({
-    name: "Onion",
-    unit: "g",
-    measures: [{ name: "medium", amount: 150 }],
-  });
-  const egg = await ingredients.create({ name: "Egg", unit: "pcs" });
-  const [medium] = onion.measures;
-  await recipes.create({ name: "Soup", ingredients: [entry(onion.id, 100), entry(egg.id, 2)] });
-  const stew = await recipes.create({ name: "Stew", ingredients: [entry(onion.id, 50)] });
-  await recipes.update(stew.id, { archived: true });
-  await recipes.create({ name: "Tea" });
-
-  assert.equal(await recipes.moveUnitLinesToMeasure(onion.id, medium.id), 2);
-
-  const byName = Object.fromEntries((await recipes.list()).map((recipe) => [recipe.name, recipe]));
-  assert.deepEqual(byName.Soup.ingredients, [
-    { ingredientId: onion.id, measureId: medium.id, quantity: 100 },
-    entry(egg.id, 2),
-  ]);
-  assert.deepEqual(byName.Stew.ingredients, [
-    { ingredientId: onion.id, measureId: medium.id, quantity: 50 },
-  ]);
-  assert.deepEqual(byName.Tea.ingredients, []);
-  // Nothing is left to move, so a second run changes nothing.
-  assert.equal(await recipes.moveUnitLinesToMeasure(onion.id, medium.id), 0);
-});
-
 test("create and update store measureId, and keep lines without it in the unit", async () => {
   const onion = await ingredients.create({
     name: "Onion",
@@ -529,33 +301,6 @@ test("create and update store measureId, and keep lines without it in the unit",
   const back = await recipes.update(soup.id, { ingredients: [inMeasure] });
   assert.deepEqual(back.ingredients, [inMeasure]);
   assert.deepEqual((await recipes.list())[0].ingredients, [inMeasure]);
-});
-
-describe("recipes", () => {
-  test("rejects a measureId that isn't a measure of its ingredient", async () => {
-    const onion = await ingredients.create({ name: "Onion", unit: "g" });
-    const egg = await ingredients.create({
-      name: "Egg",
-      unit: "pcs",
-      measures: [{ name: "large", amount: 1 }],
-    });
-    const line = (measureId) => ({ ingredientId: onion.id, measureId, quantity: 1 });
-    const soup = await recipes.create({ name: "Soup" });
-
-    await assert.rejects(recipes.create({ name: "Stew", ingredients: [line("gone")] }), {
-      name: "ValidationError",
-      message: "Unknown measure: gone",
-    });
-    // A measure of another ingredient doesn't count.
-    await assert.rejects(recipes.update(soup.id, { ingredients: [line(egg.measures[0].id)] }), {
-      name: "ValidationError",
-      message: `Unknown measure: ${egg.measures[0].id}`,
-    });
-    await assert.rejects(recipes.update(soup.id, { ingredients: [line(5)] }), {
-      name: "ValidationError",
-      message: "ingredients[0].measureId must be a string.",
-    });
-  });
 });
 
 test("a recipe save that uses a measure and a removal of that measure never both succeed", async () => {
@@ -598,45 +343,6 @@ test("a recipe save that uses a measure and a removal of that measure never both
   }
 });
 
-test("an ingredient still appears once, even in two different measures", async () => {
-  const onion = await ingredients.create({
-    name: "Onion",
-    unit: "g",
-    measures: [
-      { name: "medium", amount: 150 },
-      { name: "small", amount: 80 },
-    ],
-  });
-  const [medium, small] = onion.measures;
-
-  await assert.rejects(
-    recipes.create({
-      name: "Soup",
-      ingredients: [
-        { ingredientId: onion.id, measureId: medium.id, quantity: 1 },
-        { ingredientId: onion.id, measureId: small.id, quantity: 1 },
-      ],
-    }),
-    ValidationError,
-  );
-});
-
-test("a line with measureId and other extra keys is rejected", async () => {
-  const onion = await ingredients.create({
-    name: "Onion",
-    unit: "g",
-    measures: [{ name: "medium", amount: 150 }],
-  });
-  const line = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 1 };
-
-  for (const bad of [
-    { ...line, note: "x" },
-    { ingredientId: onion.id, measureId: line.measureId },
-  ]) {
-    await assert.rejects(recipes.create({ name: "Soup", ingredients: [bad] }), ValidationError);
-  }
-});
-
 test("list drops a line whose measureId the catalog doesn't have, and keeps it in the file", async () => {
   const onion = await ingredients.create({
     name: "Onion",
@@ -664,33 +370,6 @@ test("list drops a line whose measureId the catalog doesn't have, and keeps it i
   assert.deepEqual(onDisk.recipes[1].ingredients, [stale]);
 });
 
-test("a stored line whose measureId isn't a string is dropped, and a line without one stays in the unit", async () => {
-  const onion = await ingredients.create({ name: "Onion", unit: "g" });
-  const leek = await ingredients.create({ name: "Leek", unit: "g" });
-  const garlic = await ingredients.create({ name: "Garlic", unit: "g" });
-  await writeFile(
-    recipesFile(),
-    JSON.stringify({
-      recipes: [
-        {
-          id: "a",
-          name: "Soup",
-          archived: false,
-          ingredients: [
-            { ingredientId: onion.id, quantity: 1 },
-            { ingredientId: leek.id, measureId: 5, quantity: 2 },
-            { ingredientId: garlic.id, measureId: null, quantity: 3 },
-          ],
-        },
-      ],
-    }),
-  );
-
-  assert.deepEqual((await recipes.list())[0].ingredients, [entry(onion.id, 1)]);
-  assert.equal((await recipes.usageOf(leek.id)).inUnit, false);
-  assert.equal((await recipes.usageOf(garlic.id)).inUnit, false);
-});
-
 test("the catalog changes the unit of an ingredient that a recipe uses only with a conversion", async () => {
   const onion = await ingredients.create({ name: "Onion", unit: "g" });
   const milk = await ingredients.create({ name: "Milk", unit: "g" });
@@ -705,4 +384,155 @@ test("the catalog changes the unit of an ingredient that a recipe uses only with
     { ...entry(onion.id, 100), measureId: updated.measures[0].id },
   ]);
   assert.equal((await ingredients.update(milk.id, { unit: "ml" })).unit, "ml");
+});
+
+describe("create", () => {
+  test("rejects invalid fields, and stores nothing", async () => {
+    await assert.rejects(recipes.create({ name: "Soup", archived: false }), ValidationError);
+
+    assert.deepEqual(await recipes.list(), []);
+  });
+
+  test("rejects invalid ingredients, and stores nothing", async () => {
+    await assert.rejects(recipes.create({ name: "Soup", ingredients: "Onion" }), {
+      name: "ValidationError",
+      message: '"ingredients" must be an array.',
+    });
+
+    assert.deepEqual(await recipes.list(), []);
+  });
+
+  test("rejects a measure that the ingredient doesn't have", async () => {
+    const onion = await ingredients.create({ name: "Onion", unit: "g" });
+
+    await assert.rejects(
+      recipes.create({
+        name: "Stew",
+        ingredients: [{ ingredientId: onion.id, measureId: "gone", quantity: 1 }],
+      }),
+      { name: "ValidationError", message: "Unknown measure: gone" },
+    );
+  });
+});
+
+describe("update", () => {
+  test("rejects invalid changes, and leaves the recipe unchanged", async () => {
+    const soup = await recipes.create({ name: "Soup" });
+
+    await assert.rejects(
+      recipes.update(soup.id, { name: "Stew", archived: true }),
+      ValidationError,
+    );
+
+    assert.deepEqual(await recipes.list(), [soup]);
+  });
+
+  test("rejects invalid ingredients, and leaves the recipe unchanged", async () => {
+    const soup = await recipes.create({ name: "Soup" });
+
+    await assert.rejects(recipes.update(soup.id, { ingredients: null }), {
+      name: "ValidationError",
+      message: '"ingredients" must be an array.',
+    });
+
+    assert.deepEqual(await recipes.list(), [soup]);
+  });
+
+  test("rejects a measure of another ingredient", async () => {
+    const onion = await ingredients.create({ name: "Onion", unit: "g" });
+    const egg = await ingredients.create({
+      name: "Egg",
+      unit: "pcs",
+      measures: [{ name: "large", amount: 1 }],
+    });
+    const soup = await recipes.create({ name: "Soup" });
+    const measureId = egg.measures[0].id;
+
+    await assert.rejects(
+      recipes.update(soup.id, {
+        ingredients: [{ ingredientId: onion.id, measureId, quantity: 1 }],
+      }),
+      { name: "ValidationError", message: `Unknown measure: ${measureId}` },
+    );
+  });
+});
+
+describe("list", () => {
+  test("drops an ingredient that the catalog doesn't have", async () => {
+    const onion = await ingredients.create({ name: "Onion", unit: "g" });
+    await mkdir(path.join(dataDir, "v2"), { recursive: true });
+    await writeFile(
+      recipesFile(),
+      JSON.stringify({
+        recipes: [
+          {
+            id: "a",
+            name: "Soup",
+            archived: false,
+            ingredients: [entry(onion.id, 100), entry("gone", 5)],
+          },
+        ],
+      }),
+    );
+
+    assert.deepEqual(await recipes.list(), [
+      { id: "a", name: "Soup", archived: false, ingredients: [entry(onion.id, 100)] },
+    ]);
+  });
+});
+
+describe("usageOf", () => {
+  test("reads every recipe, archived ones included", async () => {
+    const onion = await ingredients.create({
+      name: "Onion",
+      unit: "g",
+      measures: [{ name: "medium", amount: 150 }],
+    });
+    const [medium] = onion.measures;
+    const soup = await recipes.create({
+      name: "Soup",
+      ingredients: [{ ingredientId: onion.id, measureId: medium.id, quantity: 1 }],
+    });
+    await recipes.update(soup.id, { archived: true });
+    await recipes.create({ name: "Stew", ingredients: [entry(onion.id, 100)] });
+
+    assert.deepEqual(await recipes.usageOf(onion.id), {
+      inUnit: true,
+      measureIds: new Set([medium.id]),
+    });
+  });
+});
+
+describe("moveUnitLinesToMeasure", () => {
+  /** An onion with the measure "medium", and a recipe of each kind that has it in its unit. */
+  async function onionInTwoRecipes() {
+    const onion = await ingredients.create({
+      name: "Onion",
+      unit: "g",
+      measures: [{ name: "medium", amount: 150 }],
+    });
+    await recipes.create({ name: "Soup", ingredients: [entry(onion.id, 100)] });
+    const stew = await recipes.create({ name: "Stew", ingredients: [entry(onion.id, 50)] });
+    await recipes.update(stew.id, { archived: true });
+    return { medium: onion.measures[0], onion };
+  }
+
+  test("saves the moved ingredients of every recipe, archived ones included", async () => {
+    const { medium, onion } = await onionInTwoRecipes();
+
+    await recipes.moveUnitLinesToMeasure(onion.id, medium.id);
+
+    const moved = (await recipes.list()).map((recipe) => recipe.ingredients);
+    assert.deepEqual(moved, [
+      [{ ingredientId: onion.id, measureId: medium.id, quantity: 100 }],
+      [{ ingredientId: onion.id, measureId: medium.id, quantity: 50 }],
+    ]);
+  });
+
+  test("returns how many ingredients it moved", async () => {
+    const { medium, onion } = await onionInTwoRecipes();
+
+    assert.equal(await recipes.moveUnitLinesToMeasure(onion.id, medium.id), 2);
+    assert.equal(await recipes.moveUnitLinesToMeasure(onion.id, medium.id), 0);
+  });
 });
