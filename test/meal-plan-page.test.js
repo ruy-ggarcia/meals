@@ -161,9 +161,13 @@ test("the day bar marks the days with menu items, also after an edit", async (t)
   assert.equal(dayButton("mon").hasAttribute("data-planned"), true);
   assert.equal(dayButton("tue").hasAttribute("data-planned"), false);
 
-  await addWithEditor("tue", "dinner", "soup");
+  const save = await addWithEditor("tue", "dinner", "soup");
 
   assert.equal(dayButton("tue").hasAttribute("data-planned"), true);
+  // Answer the save: a request that stays open times out in 5 seconds, and
+  // logs an error in whichever test runs then.
+  save.respond(200, { items: [{ recipeId: "soup", servings: 1 }] });
+  await tick();
 });
 
 test("the toolbar says while the week saves, and then that all changes are saved", async (t) => {
