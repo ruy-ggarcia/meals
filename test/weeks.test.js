@@ -119,22 +119,6 @@ test("saveSlot with no items empties the slot", async () => {
   assert.deepEqual(await weeks.readWeek(WEEK), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
 });
 
-test("saveSlot writes each week to its own file and leaves other weeks unchanged", async () => {
-  const items = [{ recipeId: soup.id, servings: 1 }];
-  await Promise.all([
-    weeks.saveSlot(WEEK, "tue", "lunch", items),
-    weeks.saveSlot(OTHER_WEEK, "wed", "lunch", items),
-  ]);
-
-  const first = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
-  first.tue.lunch = { items };
-  const second = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
-  second.wed.lunch = { items };
-  assert.deepEqual(await weeks.readWeek(WEEK), first);
-  assert.deepEqual(await weeks.readWeek(OTHER_WEEK), second);
-  assert.deepEqual(await weeks.readWeek("2026-10-05"), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
-});
-
 test("concurrent saves to different slots are all kept", async () => {
   const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
   const saves = [];
@@ -152,6 +136,22 @@ test("concurrent saves to different slots are all kept", async () => {
 });
 
 describe("saveSlot", () => {
+  test("keeps the slot of each week when two weeks save at once", async () => {
+    const items = [{ recipeId: soup.id, servings: 1 }];
+    await Promise.all([
+      weeks.saveSlot(WEEK, "tue", "lunch", items),
+      weeks.saveSlot(OTHER_WEEK, "wed", "lunch", items),
+    ]);
+
+    const first = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+    first.tue.lunch = { items };
+    const second = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+    second.wed.lunch = { items };
+    assert.deepEqual(await weeks.readWeek(WEEK), first);
+    assert.deepEqual(await weeks.readWeek(OTHER_WEEK), second);
+    assert.deepEqual(await weeks.readWeek("2026-10-05"), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+  });
+
   test("returns the saved slot", async () => {
     const items = [
       { recipeId: soup.id, servings: 1.5 },
