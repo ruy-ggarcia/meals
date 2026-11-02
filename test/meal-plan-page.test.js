@@ -3,7 +3,8 @@
 // DOM library choice.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
+import { afterEach, beforeEach, describe, mock, test } from "node:test";
+import { addWeeks } from "../public/dates.js";
 import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
@@ -253,6 +254,93 @@ test("the shown week stays in sync with the hash", async (t) => {
 
   assert.equal(page.document.getElementById("grid").dataset.week, nextWeek);
   assert.equal(page.window.location.hash, `#${nextWeek}`);
+});
+
+// The week that holds the only menu of the tests of week changes.
+const MENU_WEEK = "2026-10-05";
+const LAST_WEEK = "2026-10-26"; // five weeks ahead of WEEK, which is the first
+
+const LENTIL_SOUP = { id: "soup", name: "Lentil soup", archived: false };
+
+// The order in which each of five weeks answers its three requests. MENU_WEEK
+// is the second, and its week answers first.
+const ANSWER_ORDERS = [
+  ["ingredients", "recipes", "week"],
+  ["week", "recipes", "ingredients"],
+  ["recipes", "week", "ingredients"],
+  ["ingredients", "week", "recipes"],
+  ["recipes", "ingredients", "week"],
+];
+
+function menuOf(week) {
+  const blank = blankWeek(DAYS, MEALS);
+  return week === MENU_WEEK
+    ? withSlot(blank, "mon", "lunch", [{ recipeId: "soup", servings: 1 }])
+    : blank;
+}
+
+// Taps Next week five times, each time once the week before has loaded, and
+// answers the three requests of every week in the order of ANSWER_ORDERS.
+// Resolves to the weeks that the grid showed while it held the menu of
+// MENU_WEEK, so a menu that shows in another week, even for a moment, counts.
+async function tapNextWeekFiveTimes() {
+  const grid = page.document.getElementById("grid");
+  const next = page.document.getElementById("next-week");
+  const weeksWithTheMenu = new Set();
+  new page.window.MutationObserver(() => {
+    if (grid.textContent.includes("Lentil soup")) weeksWithTheMenu.add(grid.dataset.week);
+  }).observe(grid, { attributes: true, characterData: true, childList: true, subtree: true });
+
+  let week = WEEK;
+  for (const order of ANSWER_ORDERS) {
+    week = addWeeks(week, 1);
+    next.click();
+    await waitFor(() => server.requestFor("GET", `/api/weeks/${week}`) !== undefined);
+    const answers = {
+      week: () => server.requestFor("GET", `/api/weeks/${week}`).respond(200, menuOf(week)),
+      recipes: () =>
+        server
+          .requestFor("GET", "/api/recipes")
+          .respond(200, { recipes: week === MENU_WEEK ? [LENTIL_SOUP] : [] }),
+      ingredients: () =>
+        server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] }),
+    };
+    for (const name of order) answers[name]();
+    await waitFor(() => grid.dataset.week === week && !next.disabled);
+  }
+  return weeksWithTheMenu;
+}
+
+describe("meal plan", () => {
+  test("ends on the last week after five changes with answers in any order", async (t) => {
+    await openWeek(t); // the recipe book is empty until the first week change loads it
+
+    const weeksWithTheMenu = await tapNextWeekFiveTimes();
+
+    const grid = page.document.getElementById("grid");
+    assert.equal(grid.dataset.week, LAST_WEEK);
+    assert.equal(
+      page.document.querySelector('.day-header[data-day="sun"] .day-number').textContent,
+      "1",
+    );
+    assert.deepEqual(slotItems("mon", "lunch"), []);
+    assert.deepEqual([...weeksWithTheMenu], [MENU_WEEK], "the weeks that showed the menu");
+  });
+
+  test("ignores taps on Next week while a week loads", async (t) => {
+    await openWeek(t);
+    const next = page.document.getElementById("next-week");
+
+    next.click();
+    next.click();
+    next.click();
+    await tick();
+
+    const weekUrls = server.requests
+      .map((request) => request.url)
+      .filter((url) => url.startsWith("/api/weeks/") && url !== `/api/weeks/${WEEK}`);
+    assert.deepEqual(weekUrls, ["/api/weeks/2026-09-28"]);
+  });
 });
 
 // Opens a week whose Monday lunch holds Soup, adds Salad with the editor, and
