@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
+import { plain } from "./dom-helpers.js";
 
 // Set the time zone before the module creates any Date, so the results don't
 // depend on the machine. Europe/Madrid ends daylight saving time on 2026-10-25.
@@ -18,11 +19,6 @@ const {
   weekIdOf,
   weekStart,
 } = await import("../public/dates.js");
-
-// Intl puts thin spaces around the dash in a range; compare with plain spaces.
-function plain(text) {
-  return text.replace(/\s/g, " ");
-}
 
 function localParts(date) {
   return [date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours()];

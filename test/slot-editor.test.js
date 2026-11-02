@@ -4,7 +4,13 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test } from "node:test";
-import { assertFocus, loadSlotEditorDialog } from "./dom-helpers.js";
+import {
+  assertFocus,
+  loadSlotEditorDialog,
+  pointerdown,
+  pressKey,
+  typeInto,
+} from "./dom-helpers.js";
 
 function recipe(id, name, archived = false) {
   return { id, name, archived };
@@ -68,21 +74,6 @@ function openEditor({ menu: initialMenu = menu(), recipes = RECIPES } = {}) {
   return { opener, savedMenu: () => done };
 }
 
-function type(value) {
-  search().value = value;
-  search().dispatchEvent(new window.Event("input", { bubbles: true }));
-}
-
-function keydownOn(element, key) {
-  const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
-  element.dispatchEvent(event);
-  return event;
-}
-
-function pointerdownOn(element) {
-  element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
-}
-
 describe("slot editor", () => {
   test("shows its title and subtitle", () => {
     openEditor();
@@ -106,7 +97,7 @@ test("an empty menu says that nothing is planned, until a recipe is added", () =
   assert.equal(empty.hidden, false);
   assert.equal(empty.textContent, "Nothing planned. Add a recipe below.");
 
-  type("soup");
+  typeInto(window, search(), "soup");
   optionEls()[0].click();
 
   assert.equal(empty.hidden, true);
@@ -125,7 +116,7 @@ test("Add recipe offers every addable recipe before you type, with a hint to typ
 test("with no matches, Add recipe points to the Recipes page", () => {
   openEditor();
 
-  type("xyz");
+  typeInto(window, search(), "xyz");
 
   assert.equal(document.querySelector(".options").hidden, true);
   assert.equal(
@@ -136,8 +127,8 @@ test("with no matches, Add recipe points to the Recipes page", () => {
 
 test("Done saves the copy, closes the dialog, and returns focus to the opener", () => {
   const { opener, savedMenu } = openEditor();
-  type("sal");
-  keydownOn(search(), "Enter"); // adds Green salad
+  typeInto(window, search(), "sal");
+  pressKey(window, search(), "Enter"); // adds Green salad
 
   document.querySelector(".done").click();
 
@@ -148,8 +139,8 @@ test("Done saves the copy, closes the dialog, and returns focus to the opener", 
 
 test("Cancel discards the copy and closes the dialog", () => {
   const { opener, savedMenu } = openEditor();
-  type("sal");
-  keydownOn(search(), "Enter");
+  typeInto(window, search(), "sal");
+  pressKey(window, search(), "Enter");
 
   document.querySelector(".cancel").click();
 
@@ -160,8 +151,8 @@ test("Cancel discards the copy and closes the dialog", () => {
 
 test("Escape (the dialog's close event) discards the copy", () => {
   const { opener, savedMenu } = openEditor();
-  type("sal");
-  keydownOn(search(), "Enter");
+  typeInto(window, search(), "sal");
+  pressKey(window, search(), "Enter");
 
   // The browser fires "close" on the dialog for Escape and Android's Back;
   // happy-dom doesn't drive that from a real Escape keypress, so the test
@@ -175,9 +166,9 @@ test("Escape (the dialog's close event) discards the copy", () => {
 
 test("Escape in Add recipe with text clears it and keeps the editor open", () => {
   openEditor();
-  type("sal");
+  typeInto(window, search(), "sal");
 
-  const event = keydownOn(search(), "Escape");
+  const event = pressKey(window, search(), "Escape");
 
   assert.equal(search().value, "");
   assert.equal(dialog.open, true);
@@ -187,7 +178,7 @@ test("Escape in Add recipe with text clears it and keeps the editor open", () =>
 test("a backdrop click with no changes closes the editor without saving", () => {
   const { savedMenu } = openEditor();
 
-  pointerdownOn(dialog);
+  pointerdown(window, dialog);
   dialog.click();
 
   assert.equal(dialog.open, false);
@@ -196,10 +187,10 @@ test("a backdrop click with no changes closes the editor without saving", () => 
 
 test("a backdrop click with changes leaves the editor open", () => {
   openEditor();
-  type("sal");
-  keydownOn(search(), "Enter");
+  typeInto(window, search(), "sal");
+  pressKey(window, search(), "Enter");
 
-  pointerdownOn(dialog);
+  pointerdown(window, dialog);
   dialog.click();
 
   assert.equal(dialog.open, true);
@@ -208,7 +199,7 @@ test("a backdrop click with changes leaves the editor open", () => {
 test("a press that starts in the field and a click on the dialog doesn't close it", () => {
   openEditor();
 
-  pointerdownOn(search()); // the press started on the field, not the backdrop
+  pointerdown(window, search()); // the press started on the field, not the backdrop
   dialog.click(); // released over the backdrop: target is the dialog
 
   assert.equal(dialog.open, true);
@@ -216,10 +207,10 @@ test("a press that starts in the field and a click on the dialog doesn't close i
 
 test("Enter on the title saves, the same as Done", () => {
   const { savedMenu } = openEditor();
-  type("sal");
-  keydownOn(search(), "Enter"); // adds the recipe, doesn't confirm
+  typeInto(window, search(), "sal");
+  pressKey(window, search(), "Enter"); // adds the recipe, doesn't confirm
 
-  keydownOn(title(), "Enter");
+  pressKey(window, title(), "Enter");
 
   assert.equal(dialog.open, false);
   assert.deepEqual(savedMenu(), menu(["salad", 1]));
@@ -227,9 +218,9 @@ test("Enter on the title saves, the same as Done", () => {
 
 test("Enter in Add recipe adds the highlighted recipe and doesn't close the editor", () => {
   openEditor();
-  type("sal");
+  typeInto(window, search(), "sal");
 
-  keydownOn(search(), "Enter");
+  pressKey(window, search(), "Enter");
 
   assert.equal(dialog.open, true);
   assert.deepEqual(
@@ -247,14 +238,14 @@ test("arrow keys move the highlight among the offered recipes", () => {
     ["true", "false", "false"],
   );
 
-  keydownOn(search(), "ArrowDown");
+  pressKey(window, search(), "ArrowDown");
   assert.deepEqual(
     optionEls().map((option) => option.getAttribute("aria-selected")),
     ["false", "true", "false"],
   );
 
-  keydownOn(search(), "ArrowUp");
-  keydownOn(search(), "ArrowUp"); // wraps around to the last option
+  pressKey(window, search(), "ArrowUp");
+  pressKey(window, search(), "ArrowUp"); // wraps around to the last option
   assert.deepEqual(
     optionEls().map((option) => option.getAttribute("aria-selected")),
     ["false", "false", "true"],
@@ -336,9 +327,9 @@ describe("slot editor", () => {
     const items = recipes.slice(4, 23).map((r) => [r.id, 1]);
     openEditor({ menu: menu(...items), recipes });
     assert.equal(itemRows().length, 19);
-    type("Filler");
+    typeInto(window, search(), "Filler");
 
-    keydownOn(search(), "Enter");
+    pressKey(window, search(), "Enter");
 
     assert.equal(itemRows().length, 20);
     assert.equal(search().disabled, true);
@@ -347,9 +338,9 @@ describe("slot editor", () => {
 
   test("stops offering a recipe once you add it", () => {
     openEditor();
-    type("sal");
+    typeInto(window, search(), "sal");
 
-    keydownOn(search(), "Enter");
+    pressKey(window, search(), "Enter");
 
     assert.deepEqual(
       optionEls().map((option) => option.textContent),
@@ -362,7 +353,7 @@ describe("slot editor", () => {
     const highlightedId = () => search().getAttribute("aria-activedescendant");
     assert.equal(highlightedId(), optionEls()[0].id);
 
-    keydownOn(search(), "ArrowDown");
+    pressKey(window, search(), "ArrowDown");
 
     assert.equal(highlightedId(), optionEls()[1].id);
     assert.ok(optionEls()[1].id, "the option has an ID");

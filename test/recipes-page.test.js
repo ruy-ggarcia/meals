@@ -5,7 +5,20 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
+import {
+  assertFocus,
+  catalogPage,
+  dispatchBeforeUnload,
+  fakeFetch,
+  openPage,
+  pointerdown,
+  pressKey,
+  respondTo,
+  tick,
+  typeInto,
+  useQuietConsole,
+  waitFor,
+} from "./dom-helpers.js";
 
 const quiet = useQuietConsole();
 
@@ -23,56 +36,15 @@ let window;
 /** The recipes and the catalog that the page loaded with: { recipes, ingredients }. */
 let served;
 
+const { clickAndReload, reloadRequests, requestUrls, open } = catalogPage({
+  html: "recipes.html",
+  script: "recipes.js",
+  collections: ["recipes", "ingredients"],
+});
+
 async function openRecipesPage(t, recipes = [], ingredients = [ONION]) {
-  server = fakeFetch();
-  page = await openPage(t, { html: "recipes.html", script: "recipes.js", fetch: server.fetch });
+  ({ page, server, served } = await open(t, { recipes, ingredients }));
   ({ document, window } = page);
-  served = { recipes, ingredients };
-  await tick();
-  server.requestFor("GET", "/api/recipes").respond(200, { recipes });
-  server.requestFor("GET", "/api/ingredients").respond(200, { ingredients });
-  await tick();
-}
-
-function requestUrls() {
-  return server.requests.map((request) => request.url).join(", ");
-}
-
-// Waits for the reload that New and Edit send before the editor opens.
-async function reloadRequests() {
-  await waitFor(
-    () => server.requests.filter((request) => request.url === "/api/recipes").length === 2,
-    { message: () => `the page sent ${requestUrls()}, not a load and a reload of the recipes` },
-  );
-  return {
-    recipes: server.requestFor("GET", "/api/recipes"),
-    ingredients: server.requestFor("GET", "/api/ingredients"),
-  };
-}
-
-// Clicks New or Edit, and answers the reload with `fresh`, or else with the
-// data that the page loaded with.
-async function clickAndReload(button, fresh = served) {
-  button.click();
-  const reload = await reloadRequests();
-  reload.recipes.respond(200, { recipes: fresh.recipes });
-  reload.ingredients.respond(200, { ingredients: fresh.ingredients });
-  await tick();
-}
-
-function setValue(element, value) {
-  element.value = value;
-  element.dispatchEvent(new window.Event("input", { bubbles: true }));
-}
-
-function keydownOn(element, key) {
-  const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
-  element.dispatchEvent(event);
-  return event;
-}
-
-function pointerdownOn(element) {
-  element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
 }
 
 function searchField() {
@@ -101,20 +73,14 @@ function editorDialog() {
   return document.getElementById("recipe-editor");
 }
 
-async function respondTo(method, url, status, body) {
-  await waitFor(() => server.requestFor(method, url) !== undefined);
-  server.requestFor(method, url).respond(status, body);
-  await tick();
-}
-
 // Opens the editor with New recipe, names the recipe Apple pie, and answers
 // the save of the new recipe. The book held Green salad.
 async function saveNewRecipe(t) {
   await openRecipesPage(t, [recipe("1", "Green salad", false, WITH_ONION)]);
   await clickAndReload(document.getElementById("new-recipe"));
-  setValue(document.getElementById("recipe-name"), "Apple pie");
+  typeInto(window, document.getElementById("recipe-name"), "Apple pie");
   editorDialog().querySelector(".done").click();
-  await respondTo("POST", "/api/recipes", 201, recipe("2", "Apple pie"));
+  await respondTo(server, "POST", "/api/recipes", 201, recipe("2", "Apple pie"));
 }
 
 // Opens the editor with Edit on Soup, renames the recipe Onion soup, and
@@ -122,9 +88,15 @@ async function saveNewRecipe(t) {
 async function saveEditedRecipe(t) {
   await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
   await clickAndReload(buttonLabeled("Edit Soup"));
-  setValue(document.getElementById("recipe-name"), "Onion soup");
+  typeInto(window, document.getElementById("recipe-name"), "Onion soup");
   editorDialog().querySelector(".done").click();
-  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Onion soup", false, WITH_ONION));
+  await respondTo(
+    server,
+    "PATCH",
+    "/api/recipes/1",
+    200,
+    recipe("1", "Onion soup", false, WITH_ONION),
+  );
 }
 
 // Archives Omelette in the editor, in a book where Pancakes follows it and
@@ -142,7 +114,7 @@ async function archiveOmelette(t) {
 async function restoreCafe(t) {
   await openRecipesPage(t, [recipe("1", "Omelette", true), recipe("2", "Café", true)]);
   buttonLabeled("Restore Café").click();
-  await respondTo("PATCH", "/api/recipes/2", 200, recipe("2", "Café", false));
+  await respondTo(server, "PATCH", "/api/recipes/2", 200, recipe("2", "Café", false));
 }
 
 describe("recipe book", () => {
@@ -238,12 +210,12 @@ test("Cancel in a new recipe returns focus to New recipe and sends nothing", asy
 
 test("a save whose recipe the search hides focuses Search", async (t) => {
   await openRecipesPage(t, [recipe("1", "Green salad", false, WITH_ONION)]);
-  setValue(searchField(), "sal");
+  typeInto(window, searchField(), "sal");
 
   await clickAndReload(buttonLabeled("Edit Green salad"));
-  setValue(document.getElementById("recipe-name"), "Soup");
+  typeInto(window, document.getElementById("recipe-name"), "Soup");
   editorDialog().querySelector(".done").click();
-  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
+  await respondTo(server, "PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
 
   assert.deepEqual(activeNames(), []);
   assertFocus(document, searchField());
@@ -272,7 +244,7 @@ test("a backdrop click with no changes after Edit returns focus to the recipe's 
   await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
 
   await clickAndReload(buttonLabeled("Edit Soup"));
-  pointerdownOn(editorDialog());
+  pointerdown(window, editorDialog());
   editorDialog().click();
 
   assert.equal(editorDialog().open, false);
@@ -286,7 +258,7 @@ test("the editor checks the name against the recipes of the reload as you type",
     recipes: [recipe("1", "Soup"), recipe("2", "Stew", true)],
     ingredients: [ONION],
   });
-  setValue(document.getElementById("recipe-name"), "stew");
+  typeInto(window, document.getElementById("recipe-name"), "stew");
 
   assert.equal(
     editorDialog().querySelector(".name-message").textContent,
@@ -331,11 +303,11 @@ test("saving ingredients for a recipe removes its warning icon", async (t) => {
 
   await clickAndReload(buttonLabeled("Edit Soup"));
   const search = editorDialog().querySelector(".option-search");
-  setValue(search, "oni");
-  keydownOn(search, "Enter");
-  setValue(editorDialog().querySelector(".quantity-field"), "100");
+  typeInto(window, search, "oni");
+  pressKey(window, search, "Enter");
+  typeInto(window, editorDialog().querySelector(".quantity-field"), "100");
   editorDialog().querySelector(".done").click();
-  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
+  await respondTo(server, "PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
 
   assert.equal(
     rowById("1").querySelector(".warning-icon") === null,
@@ -346,18 +318,12 @@ test("saving ingredients for a recipe removes its warning icon", async (t) => {
 
 test("beforeunload prevents leaving only while the editor has changes", async (t) => {
   await openRecipesPage(t);
-  function dispatchBeforeUnload() {
-    const event = new window.Event("beforeunload", { cancelable: true });
-    window.dispatchEvent(event);
-    return event;
-  }
-
   await clickAndReload(document.getElementById("new-recipe"));
-  assert.equal(dispatchBeforeUnload().defaultPrevented, false);
-  setValue(document.getElementById("recipe-name"), "Pie");
-  assert.equal(dispatchBeforeUnload().defaultPrevented, true);
+  assert.equal(dispatchBeforeUnload(window).defaultPrevented, false);
+  typeInto(window, document.getElementById("recipe-name"), "Pie");
+  assert.equal(dispatchBeforeUnload(window).defaultPrevented, true);
   editorDialog().querySelector(".cancel").click();
-  assert.equal(dispatchBeforeUnload().defaultPrevented, false);
+  assert.equal(dispatchBeforeUnload(window).defaultPrevented, false);
 });
 
 // Opens the editor on the recipe named `name`, chooses Archive, and answers
@@ -365,7 +331,7 @@ test("beforeunload prevents leaving only while the editor has changes", async (t
 async function archiveWithEditor(id, name) {
   await clickAndReload(buttonLabeled(`Edit ${name}`));
   editorDialog().querySelector(".archive").click();
-  await respondTo("PATCH", `/api/recipes/${id}`, 200, recipe(id, name, true));
+  await respondTo(server, "PATCH", `/api/recipes/${id}`, 200, recipe(id, name, true));
 }
 
 test("a failed restore shows its message and leaves the recipe in Archived", async (t) => {
@@ -412,7 +378,7 @@ test("search filters the active list to matches", async (t) => {
   assert.equal(document.getElementById("empty-book").hidden, true);
   assert.equal(document.getElementById("no-matches").hidden, true);
 
-  setValue(searchField(), "sal");
+  typeInto(window, searchField(), "sal");
 
   assert.deepEqual(activeNames(), ["Green salad"]);
 });
@@ -420,7 +386,7 @@ test("search filters the active list to matches", async (t) => {
 test("search shows the no-match message when no active recipe matches", async (t) => {
   await openRecipesPage(t, [recipe("1", "Green salad"), recipe("2", "Lentil soup")]);
 
-  setValue(searchField(), "zzz");
+  typeInto(window, searchField(), "zzz");
 
   assert.deepEqual(activeNames(), []);
   assert.equal(document.getElementById("no-matches").hidden, false);
@@ -430,7 +396,7 @@ test("search shows the no-match message when no active recipe matches", async (t
 test("a search that matches only an archived recipe still shows the no-match message", async (t) => {
   await openRecipesPage(t, [recipe("1", "Omelette", true)]);
 
-  setValue(searchField(), "omel");
+  typeInto(window, searchField(), "omel");
 
   assert.deepEqual(activeNames(), []);
   assert.equal(document.getElementById("no-matches").hidden, false);
@@ -453,7 +419,7 @@ test("a search that doesn't match an archived recipe leaves the Archived count u
   await openRecipesPage(t, [recipe("1", "Omelette"), recipe("2", "Café", true)]);
   assert.equal(document.getElementById("archived-count").textContent, "1");
 
-  setValue(searchField(), "zzz");
+  typeInto(window, searchField(), "zzz");
 
   assert.equal(document.getElementById("archived-count").textContent, "1");
 });
@@ -525,7 +491,7 @@ test("New recipe offers the catalog from a reload", async (t) => {
     recipes: [],
     ingredients: [CARROT_G, ONION],
   });
-  setValue(editorDialog().querySelector(".option-search"), "car");
+  typeInto(window, editorDialog().querySelector(".option-search"), "car");
 
   assert.equal(editorDialog().open, true);
   assert.deepEqual(

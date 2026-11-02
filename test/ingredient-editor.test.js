@@ -8,7 +8,11 @@ import {
   assertFocus,
   fakeFetch,
   loadDialog,
+  pointerdown,
+  pressKey,
+  respondTo,
   tick,
+  typeInto,
   useQuietConsole,
   waitFor,
 } from "./dom-helpers.js";
@@ -63,11 +67,6 @@ function query(selector) {
   return document.querySelector(selector);
 }
 
-function setName(value) {
-  query(".name-field").value = value;
-  query(".name-field").dispatchEvent(new window.Event("input", { bubbles: true }));
-}
-
 function unitRadio(value) {
   return query(`.unit-field input[value="${value}"]`);
 }
@@ -81,22 +80,6 @@ function setUnit(value) {
 /** The checked unit, or "" when none is. */
 function unitValue() {
   return query(".unit-field input:checked")?.value ?? "";
-}
-
-function pointerdownOn(element) {
-  element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
-}
-
-async function respondToPost(status, body) {
-  await waitFor(() => server.requestFor("POST", "/api/ingredients") !== undefined);
-  server.requestFor("POST", "/api/ingredients").respond(status, body);
-  await tick();
-}
-
-async function respondToPatch(status, body) {
-  await waitFor(() => server.requestFor("PATCH", "/api/ingredients/milk") !== undefined);
-  server.requestFor("PATCH", "/api/ingredients/milk").respond(status, body);
-  await tick();
 }
 
 describe("ingredient editor", () => {
@@ -135,7 +118,7 @@ test("Done with no changes closes without a request and returns focus to the ope
 
 test("Done sends the changed name and unit in one PATCH, then closes", async () => {
   const { saved } = openEditor();
-  setName("Whole milk");
+  typeInto(window, query(".name-field"), "Whole milk");
   setUnit("ml");
 
   query(".done").click();
@@ -147,17 +130,17 @@ test("Done sends the changed name and unit in one PATCH, then closes", async () 
     unit: "ml",
   });
   const updated = { ...MILK, name: "Whole milk", unit: "ml" };
-  await respondToPatch(200, updated);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, updated);
   assert.equal(dialog.open, false);
   assert.deepEqual(saved, [updated]);
 });
 
 test("a name conflict (409) shows the message under Name", async () => {
   openEditor();
-  setName("egg");
+  typeInto(window, query(".name-field"), "egg");
 
   query(".done").click();
-  await respondToPatch(409, {
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 409, {
     error: 'An ingredient named "Egg" already exists.',
     ingredient: { id: "egg", name: "Egg", unit: "pcs", archived: false },
   });
@@ -169,10 +152,10 @@ test("a name conflict (409) shows the message under Name", async () => {
 
 test("a conflict with an archived ingredient says to restore it from Archived", async () => {
   openEditor();
-  setName("saffron");
+  typeInto(window, query(".name-field"), "saffron");
 
   query(".done").click();
-  await respondToPatch(409, {
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 409, {
     error: 'An ingredient named "Saffron" already exists.',
     ingredient: { id: "saffron", name: "Saffron", unit: "g", archived: true },
   });
@@ -188,7 +171,7 @@ test("a unit in use (409 without an ingredient) shows the server's message", asy
   setUnit("ml");
 
   query(".done").click();
-  await respondToPatch(409, {
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 409, {
     error: '"Milk" is used in recipes. To change its unit, remove it from those recipes first.',
   });
 
@@ -202,7 +185,7 @@ test("a unit in use (409 without an ingredient) shows the server's message", asy
 
 test("Done with an empty name shows a message under Name and sends nothing", () => {
   openEditor();
-  setName("   ");
+  typeInto(window, query(".name-field"), "   ");
 
   query(".done").click();
 
@@ -214,10 +197,12 @@ test("Done with an empty name shows a message under Name and sends nothing", () 
 
 test("a rejected save (400) shows the server's message", async () => {
   openEditor();
-  setName("x".repeat(101));
+  typeInto(window, query(".name-field"), "x".repeat(101));
 
   query(".done").click();
-  await respondToPatch(400, { error: "The name must be at most 100 characters." });
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 400, {
+    error: "The name must be at most 100 characters.",
+  });
 
   assert.equal(query(".save-message").textContent, "The name must be at most 100 characters.");
 });
@@ -225,7 +210,7 @@ test("a rejected save (400) shows the server's message", async () => {
 test("a network error keeps the editor open with the changes", async () => {
   quiet.expect(1);
   openEditor();
-  setName("Oat milk");
+  typeInto(window, query(".name-field"), "Oat milk");
 
   query(".done").click();
   await waitFor(() => server.requestFor("PATCH", "/api/ingredients/milk") !== undefined);
@@ -241,7 +226,7 @@ test("a network error keeps the editor open with the changes", async () => {
 describe("ingredient editor", () => {
   test("closes and returns focus to the opener with Cancel", () => {
     const { opener } = openEditor();
-    setName("Oat milk");
+    typeInto(window, query(".name-field"), "Oat milk");
 
     query(".cancel").click();
 
@@ -251,7 +236,7 @@ describe("ingredient editor", () => {
 
   test("discards the changes with Escape, the close event of the dialog", () => {
     openEditor();
-    setName("Oat milk");
+    typeInto(window, query(".name-field"), "Oat milk");
 
     dialog.close();
 
@@ -263,30 +248,25 @@ describe("ingredient editor", () => {
 
 test("a backdrop click closes the editor only when nothing changed", () => {
   openEditor();
-  pointerdownOn(dialog);
+  pointerdown(window, dialog);
   dialog.click();
   assert.equal(dialog.open, false);
 
   openEditor();
   setUnit("ml");
-  pointerdownOn(dialog);
+  pointerdown(window, dialog);
   dialog.click();
   assert.equal(dialog.open, true);
 });
 
 test("Enter in Name confirms, the same as Done", async () => {
   openEditor();
-  setName("Oat milk");
+  typeInto(window, query(".name-field"), "Oat milk");
 
-  const event = new window.KeyboardEvent("keydown", {
-    key: "Enter",
-    bubbles: true,
-    cancelable: true,
-  });
-  query(".name-field").dispatchEvent(event);
+  const event = pressKey(window, query(".name-field"), "Enter");
 
   assert.equal(event.defaultPrevented, true);
-  await respondToPatch(200, { ...MILK, name: "Oat milk" });
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, { ...MILK, name: "Oat milk" });
 });
 
 function openNewEditor() {
@@ -335,7 +315,7 @@ test("an existing ingredient opens titled Edit ingredient, with its unit chosen,
 
 test("Done on a new ingredient without a unit shows Choose a unit. and sends nothing", () => {
   openNewEditor();
-  setName("Onion");
+  typeInto(window, query(".name-field"), "Onion");
 
   query(".done").click();
 
@@ -347,7 +327,7 @@ test("Done on a new ingredient without a unit shows Choose a unit. and sends not
 
 test("Done on a new ingredient sends POST with the name and the unit, then closes", async () => {
   const { saved } = openNewEditor();
-  setName("Onion");
+  typeInto(window, query(".name-field"), "Onion");
   setUnit("pcs");
 
   query(".done").click();
@@ -357,7 +337,7 @@ test("Done on a new ingredient sends POST with the name and the unit, then close
     unit: "pcs",
   });
   const created = { id: "onion", name: "Onion", unit: "pcs", measures: [], archived: false };
-  await respondToPost(201, created);
+  await respondTo(server, "POST", "/api/ingredients", 201, created);
 
   assert.equal(dialog.open, false);
   assert.deepEqual(saved, [created]);
@@ -365,11 +345,11 @@ test("Done on a new ingredient sends POST with the name and the unit, then close
 
 test("a 409 with an archived ingredient says to restore it from Archived", async () => {
   openNewEditor();
-  setName("saffron");
+  typeInto(window, query(".name-field"), "saffron");
   setUnit("g");
 
   query(".done").click();
-  await respondToPost(409, {
+  await respondTo(server, "POST", "/api/ingredients", 409, {
     error: 'An ingredient named "Saffron" already exists.',
     ingredient: { id: "saffron", name: "Saffron", unit: "g", archived: true },
   });
@@ -385,7 +365,7 @@ test("a new ingredient has changes once a field is filled", () => {
   openNewEditor();
   assert.equal(editor.hasChanges(), false);
 
-  setName("Onion");
+  typeInto(window, query(".name-field"), "Onion");
   assert.equal(editor.hasChanges(), true);
 });
 
@@ -406,21 +386,6 @@ function measureValues() {
     row.querySelector(".measure-name").value,
     row.querySelector(".measure-amount").value,
   ]);
-}
-
-function setField(element, value) {
-  element.value = value;
-  element.dispatchEvent(new window.Event("input", { bubbles: true }));
-}
-
-function pressEnter(element) {
-  const event = new window.KeyboardEvent("keydown", {
-    key: "Enter",
-    bubbles: true,
-    cancelable: true,
-  });
-  element.dispatchEvent(event);
-  return event;
 }
 
 async function sentBody() {
@@ -502,7 +467,7 @@ test("Remove stays disabled after a failed save", async () => {
     ingredient: SIZED_MILK,
     usage: { ...noUsage(), measures: new Map([["m1", 1]]) },
   });
-  setName("Oat milk");
+  typeInto(window, query(".name-field"), "Oat milk");
 
   query(".done").click();
   await waitFor(() => server.requestFor("PATCH", "/api/ingredients/milk") !== undefined);
@@ -549,8 +514,8 @@ test("Remove moves focus to the previous row's Remove when the next row's is dis
 test("Done with an empty name or an invalid amount shows a message under its row and sends nothing", () => {
   openEditor({ ingredient: SIZED_MILK });
   const [first, second] = measureRows();
-  setField(first.querySelector(".measure-name"), "  ");
-  setField(second.querySelector(".measure-amount"), "0");
+  typeInto(window, first.querySelector(".measure-name"), "  ");
+  typeInto(window, second.querySelector(".measure-amount"), "0");
 
   query(".done").click();
 
@@ -566,23 +531,23 @@ test("Done with an empty name or an invalid amount shows a message under its row
 
 test("editing an invalid measure field clears its message and aria-invalid, and keeps focus in it", () => {
   openEditor({ ingredient: SIZED_MILK });
-  setField(measureRows()[0].querySelector(".measure-name"), "  ");
-  setField(measureRows()[1].querySelector(".measure-amount"), "0");
+  typeInto(window, measureRows()[0].querySelector(".measure-name"), "  ");
+  typeInto(window, measureRows()[1].querySelector(".measure-amount"), "0");
   query(".done").click();
   const [first, second] = measureRows();
 
-  setField(first.querySelector(".measure-amount"), "151");
+  typeInto(window, first.querySelector(".measure-amount"), "151");
   assert.equal(first.querySelector(".row-message").textContent, "Enter a name.");
 
   const name = first.querySelector(".measure-name");
-  setField(name, "s");
+  typeInto(window, name, "s");
   assert.equal(first.querySelector(".row-message")?.textContent, undefined);
   assert.equal(name.hasAttribute("aria-invalid"), false);
   assertFocus(document, name);
 
   const amount = second.querySelector(".measure-amount");
   amount.focus();
-  setField(amount, "2");
+  typeInto(window, amount, "2");
   assert.equal(second.querySelector(".row-message")?.textContent, undefined);
   assert.equal(amount.hasAttribute("aria-invalid"), false);
   assertFocus(document, amount);
@@ -590,38 +555,38 @@ test("editing an invalid measure field clears its message and aria-invalid, and 
 
 test("a valid Done clears a message that a fix in another row made stale", async () => {
   openEditor({ ingredient: SIZED_MILK });
-  setField(measureRows()[1].querySelector(".measure-name"), "medium");
+  typeInto(window, measureRows()[1].querySelector(".measure-name"), "medium");
   query(".done").click();
   assert.equal(
     measureRows()[1].querySelector(".row-message").textContent,
     '"medium" is already a measure.',
   );
-  setField(measureRows()[0].querySelector(".measure-name"), "small");
+  typeInto(window, measureRows()[0].querySelector(".measure-name"), "small");
 
   query(".done").click();
 
   assert.equal(measureRows()[1].querySelector(".row-message")?.textContent, undefined);
   assert.deepEqual((await sentBody()).measures[0], { id: "m1", name: "small", amount: 150 });
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 test("Enter in a valid measure field keeps the rows, so focus stays in the field", async () => {
   openEditor({ ingredient: SIZED_MILK });
   const amount = measureRows()[0].querySelector(".measure-amount");
   amount.focus();
-  setField(amount, "160");
+  typeInto(window, amount, "160");
 
-  pressEnter(amount);
+  pressKey(window, amount, "Enter");
 
   await sentBody();
   assert.equal(amount.isConnected, true);
   assertFocus(document, amount);
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 test('Done with two names that share a name key shows "medium" is already a measure.', () => {
   openEditor({ ingredient: SIZED_MILK });
-  setField(measureRows()[1].querySelector(".measure-name"), " MÉDIUM ");
+  typeInto(window, measureRows()[1].querySelector(".measure-name"), " MÉDIUM ");
 
   query(".done").click();
 
@@ -640,7 +605,7 @@ test('Done with two names that share a name key shows "medium" is already a meas
 
 test("an amount typed as 1,09 is sent as 1.09", async () => {
   openEditor({ ingredient: SIZED_MILK });
-  setField(measureRows()[0].querySelector(".measure-amount"), "1,09");
+  typeInto(window, measureRows()[0].querySelector(".measure-amount"), "1,09");
 
   query(".done").click();
 
@@ -651,12 +616,12 @@ test("an amount typed as 1,09 is sent as 1.09", async () => {
       { id: "m2", name: "large", amount: 250 },
     ],
   });
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 test("renaming a measure sends its id with the new name", async () => {
   openEditor({ ingredient: { ...MILK, measures: [{ id: "m1", name: "medium", amount: 150 }] } });
-  setField(query(".measure-name"), "mediana");
+  typeInto(window, query(".measure-name"), "mediana");
 
   query(".done").click();
 
@@ -664,25 +629,28 @@ test("renaming a measure sends its id with the new name", async () => {
     unit: "g",
     measures: [{ id: "m1", name: "mediana", amount: 150 }],
   });
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 describe("ingredient editor", () => {
   test("sends only the name with Done when only the name changed", async () => {
     openEditor({ ingredient: SIZED_MILK });
-    setName("Oat milk");
+    typeInto(window, query(".name-field"), "Oat milk");
 
     query(".done").click();
 
     assert.deepEqual(await sentBody(), { name: "Oat milk" });
-    await respondToPatch(200, { ...SIZED_MILK, name: "Oat milk" });
+    await respondTo(server, "PATCH", "/api/ingredients/milk", 200, {
+      ...SIZED_MILK,
+      name: "Oat milk",
+    });
   });
 
   test("sends all measures, new ones without an id, when one was added", async () => {
     openEditor({ ingredient: SIZED_MILK });
     query(".add-measure").click();
-    setField(query(".measure-row:last-child .measure-name"), "  extra   large ");
-    setField(query(".measure-row:last-child .measure-amount"), "300");
+    typeInto(window, query(".measure-row:last-child .measure-name"), "  extra   large ");
+    typeInto(window, query(".measure-row:last-child .measure-amount"), "300");
 
     query(".done").click();
 
@@ -694,30 +662,30 @@ describe("ingredient editor", () => {
         { name: "extra large", amount: 300 },
       ],
     });
-    await respondToPatch(200, SIZED_MILK);
+    await respondTo(server, "PATCH", "/api/ingredients/milk", 200, SIZED_MILK);
   });
 });
 
 test("Done sends the unit with the measures, so the server rejects them if the unit changed since", async () => {
   openEditor({ ingredient: SIZED_MILK });
-  setField(measureRows()[0].querySelector(".measure-amount"), "160");
+  typeInto(window, measureRows()[0].querySelector(".measure-amount"), "160");
 
   query(".done").click();
 
   assert.equal((await sentBody()).unit, "g");
   const error = '"Milk" has measures or recipes in ml. Reload the page to change its unit.';
-  await respondToPatch(400, { error });
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 400, { error });
   assert.equal(dialog.open, true);
   assert.equal(query(".save-message").textContent, error);
 });
 
 test("a new ingredient sends its measures with the POST", async () => {
   openNewEditor();
-  setName("Onion");
+  typeInto(window, query(".name-field"), "Onion");
   setUnit("g");
   query(".add-measure").click();
-  setField(query(".measure-name"), "medium");
-  setField(query(".measure-amount"), "150");
+  typeInto(window, query(".measure-name"), "medium");
+  typeInto(window, query(".measure-amount"), "150");
 
   query(".done").click();
   await waitFor(() => server.requestFor("POST", "/api/ingredients") !== undefined);
@@ -727,18 +695,18 @@ test("a new ingredient sends its measures with the POST", async () => {
     unit: "g",
     measures: [{ name: "medium", amount: 150 }],
   });
-  await respondToPost(201, { ...MILK, name: "Onion" });
+  await respondTo(server, "POST", "/api/ingredients", 201, { ...MILK, name: "Onion" });
 });
 
 test("Enter in a measure field confirms, the same as Done", async () => {
   openEditor({ ingredient: SIZED_MILK });
-  setField(measureRows()[0].querySelector(".measure-amount"), "160");
+  typeInto(window, measureRows()[0].querySelector(".measure-amount"), "160");
 
-  const event = pressEnter(measureRows()[0].querySelector(".measure-amount"));
+  const event = pressKey(window, measureRows()[0].querySelector(".measure-amount"), "Enter");
 
   assert.equal(event.defaultPrevented, true);
   assert.deepEqual((await sentBody()).measures[0], { id: "m1", name: "medium", amount: 160 });
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 test("a measure in use (409 without an ingredient) shows the server's message", async () => {
@@ -746,7 +714,9 @@ test("a measure in use (409 without an ingredient) shows the server's message", 
   query(".remove").click();
 
   query(".done").click();
-  await respondToPatch(409, { error: '"medium" is used in recipes.' });
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 409, {
+    error: '"medium" is used in recipes.',
+  });
 
   assert.equal(query(".save-message").textContent, '"medium" is used in recipes.');
   assert.equal(measureRows().length, 1);
@@ -756,9 +726,9 @@ test("hasChanges is true after editing, adding, or removing a measure", () => {
   openEditor({ ingredient: SIZED_MILK });
   assert.equal(editor.hasChanges(), false);
 
-  setField(measureRows()[0].querySelector(".measure-amount"), "151");
+  typeInto(window, measureRows()[0].querySelector(".measure-amount"), "151");
   assert.equal(editor.hasChanges(), true);
-  setField(measureRows()[0].querySelector(".measure-amount"), "150");
+  typeInto(window, measureRows()[0].querySelector(".measure-amount"), "150");
   assert.equal(editor.hasChanges(), false);
 
   query(".add-measure").click();
@@ -777,8 +747,8 @@ function conversion() {
 }
 
 function setConversion(from, to) {
-  setField(query(".conversion-from"), from);
-  setField(query(".conversion-to"), to);
+  typeInto(window, query(".conversion-from"), from);
+  typeInto(window, query(".conversion-to"), to);
 }
 
 describe("ingredient editor", () => {
@@ -875,7 +845,7 @@ describe("ingredient editor", () => {
 
 test("picking a unit that needs a conversion with unsaved measure changes keeps the old unit and explains why", () => {
   openEditor({ ingredient: SIZED_MILK });
-  setField(measureRows()[0].querySelector(".measure-amount"), "160");
+  typeInto(window, measureRows()[0].querySelector(".measure-amount"), "160");
 
   setUnit("ml");
 
@@ -892,7 +862,7 @@ test("Done sends unit and conversion, without measures", async () => {
   openEditor({ ingredient: SIZED_MILK, usage: unitsUsed });
   setUnit("ml");
   setConversion("1", "120");
-  setField(query(".conversion-measure-name"), "piece");
+  typeInto(window, query(".conversion-measure-name"), "piece");
 
   query(".done").click();
 
@@ -900,7 +870,7 @@ test("Done sends unit and conversion, without measures", async () => {
     unit: "ml",
     conversion: { from: 1, to: 120, measureName: "piece" },
   });
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 test("Done sends no measureName when recipes don't use the unit", async () => {
@@ -911,7 +881,7 @@ test("Done sends no measureName when recipes don't use the unit", async () => {
   query(".done").click();
 
   assert.deepEqual(await sentBody(), { unit: "ml", conversion: { from: 1, to: 2 } });
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 test("a conversion typed as 1,5 is sent as 1.5", async () => {
@@ -922,7 +892,7 @@ test("a conversion typed as 1,5 is sent as 1.5", async () => {
   query(".done").click();
 
   assert.deepEqual((await sentBody()).conversion, { from: 1.5, to: 120.25 });
-  await respondToPatch(200, MILK);
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 200, MILK);
 });
 
 describe("ingredient editor", () => {
@@ -958,7 +928,7 @@ describe("ingredient editor", () => {
   test("shows a message and focuses the measure name when it's empty", () => {
     openConversion();
     setConversion("1", "5");
-    setField(query(".conversion-measure-name"), "  ");
+    typeInto(window, query(".conversion-measure-name"), "  ");
 
     query(".done").click();
 
@@ -988,8 +958,8 @@ test("going back to the old unit hides the conversion row and makes measure rows
 test("another new unit keeps the conversion numbers, and going back to the old unit resets them", () => {
   openEditor({ usage: unitsUsed });
   setUnit("ml");
-  setField(query(".conversion-to"), "2");
-  setField(query(".conversion-measure-name"), "piece");
+  typeInto(window, query(".conversion-to"), "2");
+  typeInto(window, query(".conversion-measure-name"), "piece");
 
   setUnit("pcs");
 
@@ -1014,7 +984,9 @@ test("a 400 from the server shows its message", async () => {
   setConversion("1", "9999");
 
   query(".done").click();
-  await respondToPatch(400, { error: 'The amount of "large" is out of limits.' });
+  await respondTo(server, "PATCH", "/api/ingredients/milk", 400, {
+    error: 'The amount of "large" is out of limits.',
+  });
 
   assert.equal(dialog.open, true);
   assert.equal(query(".save-message").textContent, 'The amount of "large" is out of limits.');
@@ -1035,7 +1007,7 @@ describe("ingredient editor", () => {
 
     assert.equal(query(".unit-field").disabled, true);
     // Answer the save: a request that stays open times out, and logs an error.
-    await respondToPatch(200, { ...SIZED_MILK, unit: "ml" });
+    await respondTo(server, "PATCH", "/api/ingredients/milk", 200, { ...SIZED_MILK, unit: "ml" });
   });
 
   test("keeps the conversion row and enables Unit after a failed save", async () => {
@@ -1070,7 +1042,7 @@ describe("ingredient editor", () => {
   // Changes the name, and selects Archive, which asks first.
   async function archiveWithChanges() {
     const opened = openEditor();
-    setName("Changed, but not saved");
+    typeInto(window, query(".name-field"), "Changed, but not saved");
     query(".archive").click();
     await tick();
     return { ...opened, alert: document.querySelector('[role="alertdialog"]') };
@@ -1087,7 +1059,7 @@ describe("ingredient editor", () => {
     const { alert, saved } = await archiveWithChanges();
 
     alert.querySelector(".lose").click();
-    await respondToPatch(200, { ...MILK, archived: true });
+    await respondTo(server, "PATCH", "/api/ingredients/milk", 200, { ...MILK, archived: true });
 
     assert.deepEqual(server.requestFor("PATCH", "/api/ingredients/milk").body, { archived: true });
     assert.equal(dialog.open, false);
@@ -1112,7 +1084,7 @@ test("a measure amount that isn't valid is marked as you type, and Done stays en
   openEditor({ ingredient: SIZED_MILK });
   const amount = measureRows()[0].querySelector(".measure-amount");
 
-  setField(amount, "0");
+  typeInto(window, amount, "0");
   assert.equal(amount.getAttribute("aria-invalid"), "true");
   assert.equal(
     measureRows()[0].querySelector(".row-message") === null,
@@ -1121,7 +1093,7 @@ test("a measure amount that isn't valid is marked as you type, and Done stays en
   );
   assert.equal(query(".done").disabled, false);
 
-  setField(amount, "160");
+  typeInto(window, amount, "160");
   assert.equal(amount.hasAttribute("aria-invalid"), false);
 });
 
@@ -1133,12 +1105,12 @@ test("a name that another ingredient has shows its message as you type, and Done
     ],
   });
 
-  setName("flour");
+  typeInto(window, query(".name-field"), "flour");
   assert.equal(query(".name-message").textContent, '"Flour" already exists.');
   query(".done").click();
   assert.equal(server.requests.length, 0);
   assertFocus(document, query(".name-field"));
 
-  setName("Milk");
+  typeInto(window, query(".name-field"), "Milk");
   assert.equal(query(".name-message").textContent, "");
 });

@@ -40,14 +40,45 @@ let nextInstanceId = 0;
 
 /**
  * Waits a tick for pending promise callbacks and happy-dom's own timers to
- * run. Uses a real (zero-delay) timer rather than `setImmediate`: app.js
- * chains `requestAnimationFrame` into a `setTimeout`, and happy-dom's
- * `requestAnimationFrame` schedules through the "check" phase too, so a
- * `setImmediate`-only tick can keep re-entering "check" without ever letting
- * Node's "timers" phase turn -- a zero-delay `setTimeout` always crosses it.
+ * run. Uses a real (zero-delay) timer rather than `setImmediate`: a
+ * zero-delay `setTimeout` always lets Node's "timers" phase turn, which a
+ * `setImmediate`-only tick can keep from happening.
  */
 export function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * `text` with every space, such as the thin spaces that `Intl` puts around
+ * the dash of a date range, replaced by a plain space.
+ *
+ * @param {string} text
+ */
+export function plain(text) {
+  return text.replace(/\s/g, " ");
+}
+
+/**
+ * Waits for `promise` and returns its value. Rejects with an error that has
+ * `message` if `promise` doesn't settle within `ms` milliseconds, so a
+ * regression fails the test at once instead of waiting for the test timeout.
+ * The timer never outlives the wait.
+ *
+ * @param {Promise<any>} promise
+ * @param {string} message
+ * @param {number} [ms]
+ */
+export async function within(promise, message, ms = 2000) {
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -141,7 +172,6 @@ function installGlobals(window, fetch) {
     CSS: window.CSS,
     location: window.location,
     history: window.history,
-    requestAnimationFrame: window.requestAnimationFrame.bind(window),
     fetch: fetch ?? NO_FETCH_STUB,
   };
   const previous = {};
@@ -325,6 +355,147 @@ export function fakeFetch() {
   fetch.pending = () => requests.filter((request) => !request.settled);
 
   return { fetch, requests, requestFor };
+}
+
+/**
+ * Sets the value of `element` and dispatches the `input` event that typing
+ * sends, so the page reacts as it does to a person typing.
+ *
+ * @param {any} window The window of the page.
+ * @param {any} element
+ * @param {string} value
+ */
+export function typeInto(window, element, value) {
+  element.value = value;
+  element.dispatchEvent(new window.Event("input", { bubbles: true }));
+}
+
+/**
+ * Dispatches a `keydown` of `key` on `element`, and returns the event, so a
+ * test can check whether the page prevented its default.
+ *
+ * @param {any} window The window of the page.
+ * @param {any} element
+ * @param {string} key
+ */
+export function pressKey(window, element, key) {
+  const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+  element.dispatchEvent(event);
+  return event;
+}
+
+/**
+ * Dispatches a `pointerdown` on `element`, which the dialogs read to tell a
+ * click outside from a click inside.
+ *
+ * @param {any} window The window of the page.
+ * @param {any} element
+ */
+export function pointerdown(window, element) {
+  element.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true }));
+}
+
+/**
+ * Dispatches a `beforeunload` on `window`, and returns the event. A page that
+ * asks before it closes calls `preventDefault()` on it.
+ *
+ * @param {any} window The window of the page.
+ */
+export function dispatchBeforeUnload(window) {
+  const event = new window.Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  return event;
+}
+
+/**
+ * Waits until the page has sent `method` to `url`, answers it with `status`
+ * and `body`, and waits a tick for the page to react.
+ *
+ * @param {ReturnType<typeof fakeFetch>} server
+ * @param {string} method
+ * @param {string} url
+ * @param {number} status
+ * @param {unknown} [body]
+ */
+export async function respondTo(server, method, url, status, body) {
+  await waitFor(() => server.requestFor(method, url) !== undefined, {
+    message: () => `no ${method} ${url}; the page sent ${requestList(server)}`,
+  });
+  server.requestFor(method, url).respond(status, body);
+  await tick();
+}
+
+/** The requests that the page sent, as `METHOD url` joined by commas. */
+function requestList(server) {
+  return server.requests.map((request) => `${request.method} ${request.url}`).join(", ") || "none";
+}
+
+/**
+ * The setup of a catalog page, the recipe book and the ingredient catalog,
+ * which load two lists and, before an editor opens, load them again. The
+ * `collections` are the names of the two lists, the page's own first, as in
+ * `["recipes", "ingredients"]`: each is both the path of its request,
+ * `/api/recipes`, and the key of its answer, `{ recipes }`.
+ *
+ * `open(t, lists)` loads the page and answers its two requests with `lists`,
+ * an object that holds an array for each collection. It resolves to `{ page,
+ * server, served }`, where `served` is `lists`. `clickAndReload(button,
+ * fresh)` clicks New or Edit and answers the reload with `fresh`, by default
+ * with `served`. `reloadRequests()` waits for the reload and returns its
+ * requests by collection, and `requestUrls()` lists the requests so far.
+ *
+ * @param {{ html: string, script: string, collections: [string, string] }} options
+ */
+export function catalogPage({ html, script, collections }) {
+  const [own, other] = collections;
+  /** @type {ReturnType<typeof fakeFetch>} */
+  let server;
+  /** @type {Record<string, unknown[]>} */
+  let served;
+
+  const requestUrls = () => server.requests.map((request) => request.url).join(", ");
+
+  function answer(requests, lists) {
+    for (const name of collections) requests[name].respond(200, { [name]: lists[name] });
+  }
+
+  async function open(t, lists) {
+    server = fakeFetch();
+    served = lists;
+    const page = await openPage(t, { html, script, fetch: server.fetch });
+    await tick();
+    answer(
+      Object.fromEntries(
+        collections.map((name) => [name, server.requestFor("GET", `/api/${name}`)]),
+      ),
+      lists,
+    );
+    await tick();
+    return { page, server, served };
+  }
+
+  // Waits for the reload that New and Edit send before the editor opens.
+  async function reloadRequests() {
+    await waitFor(
+      () => server.requests.filter((request) => request.url === `/api/${own}`).length === 2,
+      {
+        message: () => `the page sent ${requestUrls()}, not a load and a reload of the ${own}`,
+      },
+    );
+    return Object.fromEntries(
+      [own, other].map((name) => [name, server.requestFor("GET", `/api/${name}`)]),
+    );
+  }
+
+  // Clicks New or Edit, and answers the reload with `fresh`, or else with the
+  // data that the page loaded with.
+  async function clickAndReload(button, fresh = served) {
+    button.click();
+    answer(await reloadRequests(), fresh);
+    await tick();
+  }
+
+  return { open, clickAndReload, reloadRequests, requestUrls };
 }
 
 /**

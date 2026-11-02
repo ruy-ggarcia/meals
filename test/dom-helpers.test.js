@@ -10,6 +10,7 @@ import {
   loadDialog,
   loadPage,
   openPage,
+  respondTo,
   waitFor,
 } from "./dom-helpers.js";
 
@@ -180,5 +181,34 @@ describe("waitFor", () => {
         message: "waitFor: condition not met after 2 ticks: now 1 reload",
       },
     );
+  });
+});
+
+describe("respondTo", () => {
+  test("answers the request that the page sent", async () => {
+    const server = fakeFetch();
+    const sent = server.fetch("/api/recipes");
+
+    await respondTo(server, "GET", "/api/recipes", 200, { recipes: [] });
+
+    assert.equal((await sent).status, 200);
+  });
+
+  test("lists the sent requests when the awaited request never comes", async () => {
+    const server = fakeFetch();
+    const sent = server.fetch("/api/recipes");
+
+    await assert.rejects(respondTo(server, "POST", "/api/recipes", 201, {}), {
+      message: /no POST \/api\/recipes; the page sent GET \/api\/recipes$/,
+    });
+
+    server.requestFor("GET", "/api/recipes").respond(200);
+    await sent;
+  });
+
+  test("says that the page sent nothing when it sent no request", async () => {
+    await assert.rejects(respondTo(fakeFetch(), "GET", "/api/recipes", 200), {
+      message: /the page sent none$/,
+    });
   });
 });
