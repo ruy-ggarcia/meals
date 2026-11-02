@@ -4,7 +4,7 @@
 // tests in test/recipe-editor.test.js.
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
 
 const quiet = useQuietConsole();
@@ -102,20 +102,121 @@ async function respondTo(method, url, status, body) {
   await tick();
 }
 
-test("New recipe opens the editor, and the saved recipe appears in its sorted place with focus on Edit", async (t) => {
+// Opens the editor with New recipe, names the recipe Apple pie, and answers
+// the save of the new recipe. The book held Green salad.
+async function saveNewRecipe(t) {
   await openRecipesPage(t, [recipe("1", "Green salad", false, WITH_ONION)]);
-
   await clickAndReload(document.getElementById("new-recipe"));
-
-  assert.equal(editorDialog().open, true);
-  assert.equal(editorDialog().querySelector(".dialog-title").textContent, "New recipe");
   setValue(document.getElementById("recipe-name"), "Apple pie");
   editorDialog().querySelector(".done").click();
   await respondTo("POST", "/api/recipes", 201, recipe("2", "Apple pie"));
+}
 
-  assert.equal(editorDialog().open, false);
-  assert.deepEqual(activeNames(), ["Apple pie", "Green salad"]);
-  assertFocus(document, buttonLabeled("Edit Apple pie"));
+// Opens the editor with Edit on Soup, renames the recipe Onion soup, and
+// answers the save.
+async function saveEditedRecipe(t) {
+  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
+  await clickAndReload(buttonLabeled("Edit Soup"));
+  setValue(document.getElementById("recipe-name"), "Onion soup");
+  editorDialog().querySelector(".done").click();
+  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Onion soup", false, WITH_ONION));
+}
+
+// Archives Omelette in the editor, in a book where Pancakes follows it and
+// Café is archived already.
+async function archiveOmelette(t) {
+  await openRecipesPage(t, [
+    recipe("1", "Omelette"),
+    recipe("2", "Pancakes"),
+    recipe("3", "Café", true),
+  ]);
+  await archiveWithEditor("1", "Omelette");
+}
+
+// Restores Café, in a book where Omelette is archived too.
+async function restoreCafe(t) {
+  await openRecipesPage(t, [recipe("1", "Omelette", true), recipe("2", "Café", true)]);
+  buttonLabeled("Restore Café").click();
+  await respondTo("PATCH", "/api/recipes/2", 200, recipe("2", "Café", false));
+}
+
+describe("recipe book", () => {
+  test("opens the editor titled New recipe with New recipe", async (t) => {
+    await openRecipesPage(t);
+
+    await clickAndReload(document.getElementById("new-recipe"));
+
+    assert.equal(editorDialog().open, true);
+    assert.equal(editorDialog().querySelector(".dialog-title").textContent, "New recipe");
+  });
+
+  test("closes the editor after a new recipe is saved", async (t) => {
+    await saveNewRecipe(t);
+
+    assert.equal(editorDialog().open, false);
+  });
+
+  test("shows a saved new recipe in its sorted place", async (t) => {
+    await saveNewRecipe(t);
+
+    assert.deepEqual(activeNames(), ["Apple pie", "Green salad"]);
+  });
+
+  test("focuses the Edit button of a saved new recipe", async (t) => {
+    await saveNewRecipe(t);
+
+    assertFocus(document, buttonLabeled("Edit Apple pie"));
+  });
+
+  test("opens the editor with the name and the ingredients of the recipe", async (t) => {
+    await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
+
+    await clickAndReload(buttonLabeled("Edit Soup"));
+
+    assert.equal(document.getElementById("recipe-name").value, "Soup");
+    assert.equal(editorDialog().querySelector(".quantity-field").value, "100");
+  });
+
+  test("updates the row of an edited recipe after a save", async (t) => {
+    await saveEditedRecipe(t);
+
+    assert.deepEqual(activeNames(), ["Onion soup"]);
+  });
+
+  test("focuses the Edit button of an edited recipe after a save", async (t) => {
+    await saveEditedRecipe(t);
+
+    assertFocus(document, buttonLabeled("Edit Onion soup"));
+  });
+
+  test("moves a recipe to Archived with Archive in the editor", async (t) => {
+    await archiveOmelette(t);
+
+    assert.deepEqual(server.requestFor("PATCH", "/api/recipes/1").body, { archived: true });
+    assert.equal(editorDialog().open, false);
+    assert.deepEqual(activeNames(), ["Pancakes"]);
+    assert.deepEqual(archivedNames(), ["Café", "Omelette"]);
+  });
+
+  test("focuses the row in the place of an archived recipe", async (t) => {
+    await archiveOmelette(t);
+
+    assertFocus(document, buttonLabeled("Edit Pancakes"));
+  });
+
+  test("moves a recipe back to the active list with Restore", async (t) => {
+    await restoreCafe(t);
+
+    assert.deepEqual(server.requestFor("PATCH", "/api/recipes/2").body, { archived: false });
+    assert.deepEqual(activeNames(), ["Café"]);
+    assert.deepEqual(archivedNames(), ["Omelette"]);
+  });
+
+  test("focuses the row in the place of a restored recipe", async (t) => {
+    await restoreCafe(t);
+
+    assertFocus(document, buttonLabeled("Restore Omelette"));
+  });
 });
 
 test("Cancel in a new recipe returns focus to New recipe and sends nothing", async (t) => {
@@ -128,21 +229,6 @@ test("Cancel in a new recipe returns focus to New recipe and sends nothing", asy
   assert.equal(editorDialog().open, false);
   assertFocus(document, newRecipe);
   assert.equal(server.requestFor("POST", "/api/recipes"), undefined);
-});
-
-test("Edit opens the recipe with its ingredients, and a save updates its row", async (t) => {
-  await openRecipesPage(t, [recipe("1", "Soup", false, WITH_ONION)]);
-
-  await clickAndReload(buttonLabeled("Edit Soup"));
-
-  assert.equal(document.getElementById("recipe-name").value, "Soup");
-  assert.equal(editorDialog().querySelector(".quantity-field").value, "100");
-  setValue(document.getElementById("recipe-name"), "Onion soup");
-  editorDialog().querySelector(".done").click();
-  await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Onion soup", false, WITH_ONION));
-
-  assert.deepEqual(activeNames(), ["Onion soup"]);
-  assertFocus(document, buttonLabeled("Edit Onion soup"));
 });
 
 test("a save whose recipe the search hides focuses Search", async (t) => {
@@ -260,34 +346,6 @@ async function archiveWithEditor(id, name) {
   editorDialog().querySelector(".archive").click();
   await respondTo("PATCH", `/api/recipes/${id}`, 200, recipe(id, name, true));
 }
-
-test("Archive in the editor moves a recipe to Archived, and focus to the row in its place", async (t) => {
-  await openRecipesPage(t, [
-    recipe("1", "Omelette"),
-    recipe("2", "Pancakes"),
-    recipe("3", "Café", true),
-  ]);
-
-  await archiveWithEditor("1", "Omelette");
-
-  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/1").body, { archived: true });
-  assert.equal(editorDialog().open, false);
-  assert.deepEqual(activeNames(), ["Pancakes"]);
-  assert.deepEqual(archivedNames(), ["Café", "Omelette"]);
-  assertFocus(document, buttonLabeled("Edit Pancakes"));
-});
-
-test("Restore moves a recipe back to the active list, and focus to the row in its place", async (t) => {
-  await openRecipesPage(t, [recipe("1", "Omelette", true), recipe("2", "Café", true)]);
-
-  buttonLabeled("Restore Café").click();
-  await respondTo("PATCH", "/api/recipes/2", 200, recipe("2", "Café", false));
-
-  assert.deepEqual(server.requestFor("PATCH", "/api/recipes/2").body, { archived: false });
-  assert.deepEqual(activeNames(), ["Café"]);
-  assert.deepEqual(archivedNames(), ["Omelette"]);
-  assertFocus(document, buttonLabeled("Restore Omelette"));
-});
 
 test("a failed restore shows its message and leaves the recipe in Archived", async (t) => {
   quiet.expect(1);
