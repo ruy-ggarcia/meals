@@ -7,8 +7,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import { afterEach, beforeEach, test } from "node:test";
-import { setTimeout as delay } from "node:timers/promises";
+import { afterEach, beforeEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { silentLogger } from "../server/logger.js";
 import { start } from "../server/start.js";
@@ -102,13 +101,20 @@ test("start() rejects when it can't create the data directory", async (t) => {
   await assert.rejects(started, { code: "ENOTDIR" });
 });
 
-test("stop() waits for a request in progress, and then closes its keep-alive connection", async (t) => {
-  // The server emits "request" once it has parsed the headers. A keep-alive
-  // timeout of a minute outlasts the time limit of the test, so a stop() that
-  // waits for the timeout instead of closing the connection hangs the test.
+/**
+ * Starts a server and sends the headers of a POST that adds the ingredient
+ * "Onion", without its body. Resolves once the server has parsed the headers.
+ * The keep-alive timeout of a minute outlasts the time limit of a test, so a
+ * stop() that waits for the timeout instead of closing the connection fails
+ * the test.
+ * @param {import("node:test").TestContext} t
+ * @param {"close" | "keep-alive"} connection The Connection header of the request.
+ */
+async function startPostInProgress(t, connection) {
   /** @type {PromiseWithResolvers<void>} */
   const requestReceived = Promise.withResolvers();
   const emit = http.Server.prototype.emit;
+  // The server emits "request" once it has parsed the headers.
   t.mock.method(http.Server.prototype, "emit", function (event, ...args) {
     if (event === "request") {
       this.keepAliveTimeout = 60_000;
@@ -118,41 +124,74 @@ test("stop() waits for a request in progress, and then closes its keep-alive con
   });
   const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
   const socket = net.connect(server.port, "127.0.0.1");
-  let stopping;
+  const post = {
+    body: JSON.stringify({ name: "Onion", unit: "g" }),
+    port: server.port,
+    response: "",
+    socketClosed: once(socket, "close"),
+    /** @type {Promise<void> | undefined} */
+    stopping: undefined,
+    sendBody() {
+      socket.write(post.body);
+    },
+    stop() {
+      post.stopping = server.stop();
+      return post.stopping;
+    },
+  };
   t.after(async () => {
     socket.destroy();
-    await (stopping ?? server.stop()).catch(() => {});
+    await (post.stopping ?? server.stop()).catch(() => {});
   });
   await once(socket, "connect");
-  const socketClosed = once(socket, "close");
-  let response = "";
   socket.on("data", (chunk) => {
-    response += chunk;
+    post.response += chunk;
   });
-  const body = JSON.stringify({ name: "Onion", unit: "g" });
   socket.write(
     "POST /api/ingredients HTTP/1.1\r\nHost: localhost\r\n" +
-      `Content-Type: application/json\r\nContent-Length: ${body.length}\r\n\r\n`,
+      `Connection: ${connection}\r\n` +
+      `Content-Type: application/json\r\nContent-Length: ${post.body.length}\r\n\r\n`,
   );
   await within(requestReceived.promise, "The server never received the request");
+  return post;
+}
 
-  let stopped = false;
-  stopping = server.stop().then(() => {
-    stopped = true;
+describe("stop", () => {
+  test("waits for a request in progress", async (t) => {
+    const post = await startPostInProgress(t, "close");
+    let stopped = false;
+    const stopping = post.stop().then(() => {
+      stopped = true;
+    });
+    // stop() closes the listening socket as soon as it starts, so a refused
+    // connection means that stop() ran. A stop() that doesn't wait for the
+    // request has resolved by the time the event loop reports the refusal, with
+    // no timer: it needs only promise ticks. The request still waits for its
+    // body, so a correct stop() is still pending.
+    await assert.rejects(once(net.connect(post.port, "127.0.0.1"), "connect"), {
+      code: "ECONNREFUSED",
+    });
+    assert.equal(stopped, false, "stop() resolved before the request finished");
+
+    post.sendBody();
+    await stopping;
+    // stop() can resolve before the client reads the response, so wait for the
+    // server to close the connection.
+    await post.socketClosed;
+
+    assert.match(post.response, /^HTTP\/1\.1 201 /);
+    assert.deepEqual(await savedIngredients(), ["Onion"]);
   });
-  // The request is still waiting for its body, so stop() must stay pending. A
-  // wait can only miss a bug here, never fail a correct server.
-  await delay(100);
-  assert.equal(stopped, false, "stop() resolved before the request finished");
 
-  socket.write(body);
-  await stopping;
-  // stop() can resolve before the client reads the response, so wait for the
-  // server to close the connection.
-  await socketClosed;
+  test("closes the keep-alive connection of a request in progress", async (t) => {
+    const post = await startPostInProgress(t, "keep-alive");
+    const stopping = post.stop();
 
-  assert.match(response, /^HTTP\/1\.1 201 /);
-  assert.deepEqual(await savedIngredients(), ["Onion"]);
+    post.sendBody();
+
+    await within(stopping, "stop() didn't resolve after the request finished");
+    await within(post.socketClosed, "The server didn't close the keep-alive connection");
+  });
 });
 
 test("stop() rejects with the error of the server when it can't close", async () => {
@@ -163,57 +202,36 @@ test("stop() rejects with the error of the server when it can't close", async ()
   await assert.rejects(server.stop(), { code: "ERR_SERVER_NOT_RUNNING" });
 });
 
-test("node server/index.js logs one error line and exits with 1 when the port is in use", async () => {
-  const taken = net.createServer().listen(0, "0.0.0.0");
-  await once(taken, "listening");
-  try {
-    const child = spawn(process.execPath, [INDEX], {
-      env: {
-        ...process.env,
-        DATA_DIR: dataDir,
-        PORT: String(/** @type {net.AddressInfo} */ (taken.address()).port),
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-
-    const [code] = await once(child, "close");
-
-    assert.equal(code, 1);
-    assert.equal(stderr, "");
-    const lines = stdout.trim().split("\n");
-    assert.equal(lines.length, 1);
-    const entry = JSON.parse(lines[0]);
-    assert.equal(entry.level, "error");
-    assert.equal(entry.msg, "server failed to start");
-    assert.match(entry.error, /EADDRINUSE/);
-  } finally {
-    taken.close();
-  }
-});
-
-test("node server/index.js logs its start, and on SIGTERM stops and exits with 0", async (t) => {
-  const child = spawn(process.execPath, [INDEX], {
-    env: { ...process.env, DATA_DIR: dataDir, PORT: "0" },
+/**
+ * Runs `node server/index.js` in the data directory of the test, with the
+ * environment variables ENV, and kills it when the test ends. `entries` holds
+ * the lines of its standard output parsed as JSON, and a line that isn't JSON
+ * as `{ notJson: line }`.
+ * @param {import("node:test").TestContext} t
+ * @param {Record<string, string>} env
+ * @param {string[]} [nodeArgs] The options of `node`, before the script.
+ */
+function runIndex(t, env, nodeArgs = []) {
+  const child = spawn(process.execPath, [...nodeArgs, INDEX], {
+    env: { ...process.env, DATA_DIR: dataDir, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(() => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   });
   let stderr = "";
+  let stdout = "";
   child.stderr.on("data", (chunk) => {
     stderr += chunk;
   });
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  /** @type {any[]} */
   const entries = [];
   const lines = createInterface({ input: child.stdout });
-  const started = new Promise((resolve, reject) => {
+  /** The first entry that the process writes. */
+  const first = new Promise((resolve, reject) => {
     lines.on("line", (line) => {
       let entry;
       try {
@@ -227,53 +245,113 @@ test("node server/index.js logs its start, and on SIGTERM stops and exits with 0
       if (entries.length === 1) resolve(entry);
     });
   });
-  const { port } = await started;
+  // Listen from the start: readline can close before the exit event's handlers run.
+  /** The exit code, once the process has exited and its output has ended. */
+  const exited = Promise.all([
+    once(child, "exit"),
+    once(lines, "close"),
+    once(child.stderr, "close"),
+  ]).then(([[code]]) => code);
+  // A test that never reads `exited` must not report its rejection as unhandled.
+  exited.catch(() => {});
+  // The same for `first`, which rejects when the first line isn't JSON.
+  first.catch(() => {});
+  return {
+    child,
+    entries,
+    exited,
+    first,
+    get stderr() {
+      return stderr;
+    },
+    get stdout() {
+      return stdout;
+    },
+  };
+}
 
-  const health = await fetch(`http://127.0.0.1:${port}/api/health`);
-  assert.equal(health.status, 200);
-  // Listen first: readline can close before the exit event's handlers run.
-  const closed = once(lines, "close");
-  child.kill("SIGTERM");
-  const [code] = await once(child, "exit");
-  await closed;
+/** A port that another server listens on until the test ends. */
+async function takenPort(t) {
+  const taken = net.createServer().listen(0, "0.0.0.0");
+  t.after(() => taken.close());
+  await once(taken, "listening");
+  return /** @type {net.AddressInfo} */ (taken.address()).port;
+}
 
-  assert.equal(code, 0, stderr);
-  assert.deepEqual(
-    entries.map((entry) => ({ ...entry, time: typeof entry.time })),
-    [
+describe("server/index.js", () => {
+  test("exits with 1 when the port is in use", async (t) => {
+    const { exited } = runIndex(t, { PORT: String(await takenPort(t)) });
+
+    assert.equal(await exited, 1);
+  });
+
+  test("logs one error line, and nothing else, when the port is in use", async (t) => {
+    const server = runIndex(t, { PORT: String(await takenPort(t)) });
+
+    await server.exited;
+
+    assert.equal(server.stderr, "");
+    const lines = server.stdout.trim().split("\n");
+    assert.equal(lines.length, 1);
+    const entry = JSON.parse(lines[0]);
+    assert.equal(entry.level, "error");
+    assert.equal(entry.msg, "server failed to start");
+    assert.match(entry.error, /EADDRINUSE/);
+  });
+
+  test("logs the version, the data directory, and the port that it listens on", async (t) => {
+    const server = runIndex(t, { PORT: "0" });
+
+    const entry = await server.first;
+
+    assert.deepEqual(
+      { ...entry, time: typeof entry.time },
       {
         time: "string",
         level: "info",
         msg: "server started",
         version: PACKAGE_VERSION,
-        port,
+        port: entry.port,
         dataDir,
       },
-      { time: "string", level: "info", msg: "server stopping", signal: "SIGTERM" },
-      { time: "string", level: "info", msg: "server stopped" },
-    ],
-  );
-});
+    );
+    // The logged port is the one that answers.
+    const health = await fetch(`http://127.0.0.1:${entry.port}/api/health`);
+    assert.equal(health.status, 200);
+  });
 
-test("node server/index.js registers the SIGINT and SIGTERM handlers before it logs its start", async (t) => {
-  const child = spawn(process.execPath, ["--import", SIGNAL_LISTENERS_HOOK, INDEX], {
-    env: { ...process.env, DATA_DIR: dataDir, PORT: "0" },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  t.after(() => {
-    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-  });
-  let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk;
-  });
-  const lines = createInterface({ input: child.stdout });
-  await once(lines, "line");
-  // Listen first: the streams can close before the exit event's handlers run.
-  const closed = Promise.all([once(lines, "close"), once(child.stderr, "close")]);
-  child.kill("SIGTERM");
-  await once(child, "exit");
-  await closed;
+  test("registers the SIGINT and SIGTERM handlers before it logs its start", async (t) => {
+    const server = runIndex(t, { PORT: "0" }, ["--import", SIGNAL_LISTENERS_HOOK]);
+    await server.first;
+    server.child.kill("SIGTERM");
 
-  assert.deepEqual(JSON.parse(stderr), { listeners: { SIGINT: 1, SIGTERM: 1 } });
+    await server.exited;
+
+    assert.deepEqual(JSON.parse(server.stderr), { listeners: { SIGINT: 1, SIGTERM: 1 } });
+  });
+
+  test("exits with 0 on SIGTERM", async (t) => {
+    const server = runIndex(t, { PORT: "0" });
+    await server.first;
+
+    server.child.kill("SIGTERM");
+
+    assert.equal(await server.exited, 0, server.stderr);
+  });
+
+  test("logs the signal and the stop on SIGTERM", async (t) => {
+    const server = runIndex(t, { PORT: "0" });
+    await server.first;
+
+    server.child.kill("SIGTERM");
+    await server.exited;
+
+    assert.deepEqual(
+      server.entries.slice(1).map((entry) => ({ ...entry, time: typeof entry.time })),
+      [
+        { time: "string", level: "info", msg: "server stopping", signal: "SIGTERM" },
+        { time: "string", level: "info", msg: "server stopped" },
+      ],
+    );
+  });
 });
