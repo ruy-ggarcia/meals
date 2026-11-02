@@ -4,7 +4,6 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { addWeeks, weekIdOf } from "../public/dates.js";
 import { assertFocus, fakeFetch, openPage, tick, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
 import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
@@ -123,30 +122,34 @@ test("the day heading names the selected day and its date", async (t) => {
   assert.equal(heading.querySelector(".today-mark").hidden, true);
 });
 
+// Wednesday of the week of WEEK, at noon, in the time zone of the test run.
+function setToday(t) {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 8, 23, 12) });
+}
+
 test("the day heading marks today", async (t) => {
-  await openWeek(t, { week: weekIdOf(new Date()) });
+  setToday(t);
+  await openWeek(t);
 
   const heading = page.document.getElementById("day-heading");
-  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
-  assert.equal(heading.querySelector(".day-title").textContent, weekday);
+  assert.equal(heading.querySelector(".day-title").textContent, "Wednesday");
   assert.equal(heading.querySelector(".today-mark").hidden, false);
 });
 
 test("the grid names today's column only in the week that contains today", async (t) => {
-  await openWeek(t, { week: weekIdOf(new Date()) });
-  const todayDay = DAYS[(new Date().getDay() + 6) % 7];
+  setToday(t);
+  await openWeek(t);
   const grid = page.document.getElementById("grid");
-  assert.equal(grid.dataset.todayColumn, todayDay);
+  assert.equal(grid.dataset.todayColumn, "wed");
 
-  const nextWeek = addWeeks(weekIdOf(new Date()), 1);
   page.document.getElementById("next-week").click();
-  await waitFor(() => server.requestFor("GET", `/api/weeks/${nextWeek}`) !== undefined);
-  server.requestFor("GET", `/api/weeks/${nextWeek}`).respond(200, blankWeek(DAYS, MEALS));
+  await waitFor(() => server.requestFor("GET", "/api/weeks/2026-09-28") !== undefined);
+  server.requestFor("GET", "/api/weeks/2026-09-28").respond(200, blankWeek(DAYS, MEALS));
   server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
   server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
   await tick();
 
-  assert.equal(grid.dataset.week, nextWeek);
+  assert.equal(grid.dataset.week, "2026-09-28");
   assert.equal(grid.dataset.todayColumn, undefined);
 });
 
@@ -487,40 +490,17 @@ test("a click with a modifier key or another button on a page link keeps the bro
 // Kept in sync with SAVED_BADGE_MS in public/app.js.
 const SAVED_BADGE_MS = 3000;
 
-test("the saved badge's timer is canceled by cleanup, so it never fires against a closed page", async (t) => {
+test("the saved badge's timer is scheduled on the page's window, so closing the page cancels it", async (t) => {
   await openWeek(t, { recipes: [{ id: "soup", name: "Soup", archived: false }] });
+  const windowSetTimeout = mock.method(page.window, "setTimeout");
   slotButton("mon", "lunch").click();
   const search = page.document.querySelector("#slot-editor .option-search");
   search.value = "soup";
   search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
   page.document.querySelector("#slot-editor .option").click();
   page.document.querySelector("#slot-editor .done").click();
-
   const saveUrl = `/api/weeks/${WEEK}/mon/lunch`;
   await waitFor(() => server.requestFor("PUT", saveUrl) !== undefined);
-
-  // Catches setStatus() in app.js scheduling the "saved" badge's timer with
-  // the bare setTimeout instead of window.setTimeout: unlike window.setTimeout,
-  // a bare timer isn't tied to the page's window, so it survives the window's
-  // close and later runs against a torn-down DOM. Any other delay -- such as
-  // the harness's own tick(), or app.js's own hashchange debounce -- passes
-  // straight through to the real setTimeout, so this never blocks the test or
-  // waits in real time.
-  //
-  // This interception relies on window.setTimeout going through a reference
-  // to the real setTimeout that happy-dom's BrowserWindow module captures
-  // from globalThis when it's first loaded, before this mock is installed --
-  // an internal detail of the pinned happy-dom version. Re-check this test
-  // against a happy-dom upgrade.
-  const realSetTimeout = globalThis.setTimeout;
-  let bareBadgeCallback;
-  mock.method(globalThis, "setTimeout", (callback, delay, ...args) => {
-    if (delay === SAVED_BADGE_MS) {
-      bareBadgeCallback = callback;
-      return 0;
-    }
-    return realSetTimeout(callback, delay, ...args);
-  });
 
   server.requestFor("PUT", saveUrl).respond(200, {
     week: WEEK,
@@ -532,15 +512,12 @@ test("the saved badge's timer is canceled by cleanup, so it never fires against 
 
   const status = slotButton("mon", "lunch").closest(".slot").querySelector(".status");
   assert.equal(status.dataset.state, "saved");
-
-  await page.cleanup(); // closes the page's window, canceling any timer tied to it
-
-  assert.equal(
-    bareBadgeCallback,
-    undefined,
-    "setStatus scheduled the saved badge's timer with the bare setTimeout, not " +
-      "window.setTimeout, so it would survive the page's close and later run " +
-      "against a torn-down DOM",
+  const delays = windowSetTimeout.mock.calls.map((call) => call.arguments[1]);
+  assert.ok(
+    delays.includes(SAVED_BADGE_MS),
+    `window.setTimeout got the delays ${JSON.stringify(delays)}, none of ${SAVED_BADGE_MS} ms: ` +
+      "a timer from the bare setTimeout isn't tied to the page's window, so it would survive " +
+      "the page's close and later run against a torn-down DOM",
   );
 });
 
