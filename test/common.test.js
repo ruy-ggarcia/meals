@@ -34,34 +34,36 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-test("MEALS_SCRIPTS is the directory of a script run by a relative path", async () => {
-  await writeFile(
-    path.join(dir, "probe"),
-    `#!/usr/bin/env bash\nsource "${COMMON}"\nprintf '%s\\n' "$MEALS_SCRIPTS"\n`,
-  );
-  await chmod(path.join(dir, "probe"), 0o755);
+describe("MEALS_SCRIPTS", () => {
+  test("is the directory of a script run by a relative path", async () => {
+    await writeFile(
+      path.join(dir, "probe"),
+      `#!/usr/bin/env bash\nsource "${COMMON}"\nprintf '%s\\n' "$MEALS_SCRIPTS"\n`,
+    );
+    await chmod(path.join(dir, "probe"), 0o755);
 
-  const result = spawnSync("./probe", {
-    cwd: dir,
-    encoding: "utf8",
-    env: { ...process.env, MEALS_ROOT: host.root },
+    const result = spawnSync("./probe", {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...process.env, MEALS_ROOT: host.root },
+    });
+
+    assertExit(result, 0);
+    assert.equal(result.stdout, `${dir}\n`);
   });
-
-  assertExit(result, 0);
-  assert.equal(result.stdout, `${dir}\n`);
-});
-
-test("validate_data fails when it can't read a directory under the data", () => {
-  // As find does for an unreadable directory: it lists the other files, and fails.
-  const result = runWithCommon(
-    'find() { command find "$@"; return 1; }\nvalidate_data "$MEALS_ROOT/data"',
-  );
-
-  assertExit(result, 1);
-  assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
 });
 
 describe("validate_data", () => {
+  test("fails when it can't read a directory under the data", () => {
+    // As find does for an unreadable directory: it lists the other files, and fails.
+    const result = runWithCommon(
+      'find() { command find "$@"; return 1; }\nvalidate_data "$MEALS_ROOT/data"',
+    );
+
+    assertExit(result, 1);
+    assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
+  });
+
   test("fails with its message when find fails before it lists a file", () => {
     // The scripts run with set -e, which ends the subshell of find before it
     // prints the status of find.
@@ -70,14 +72,14 @@ describe("validate_data", () => {
     assertExit(result, 1);
     assert.equal(result.stdout, `Couldn't read every file in ${host.root}/data.\n`);
   });
-});
 
-test("validate_data says so when jq isn't installed", () => {
-  // A PATH with find but without jq.
-  const result = runWithCommon(
-    `ln -s "$(command -v find)" "${dir}/find"\nPATH="${dir}" validate_data "$MEALS_ROOT/data"`,
-  );
+  test("fails with jq: command not found when jq isn't installed", () => {
+    // A PATH with find but without jq.
+    const result = runWithCommon(
+      `ln -s "$(command -v find)" "${dir}/find"\nPATH="${dir}" validate_data "$MEALS_ROOT/data"`,
+    );
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /jq: command not found/);
+    assertExit(result, 1);
+    assert.match(result.stderr, /jq: command not found/);
+  });
 });
