@@ -167,9 +167,13 @@ test("an ingredients file with invalid JSON or the wrong shape makes reads and w
   ]) {
     await writeFile(ingredientsFile(), content);
 
-    await assert.rejects(ingredients.list(), Error);
-    await assert.rejects(ingredients.create({ name: "Onion", unit: "g" }), Error);
-    assert.equal(await readFile(ingredientsFile(), "utf8"), content);
+    await assert.rejects(ingredients.list(), Error, `list with ${content}`);
+    await assert.rejects(
+      ingredients.create({ name: "Onion", unit: "g" }),
+      Error,
+      `create with ${content}`,
+    );
+    assert.equal(await readFile(ingredientsFile(), "utf8"), content, `the file ${content}`);
   }
 });
 

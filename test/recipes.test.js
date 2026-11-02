@@ -148,9 +148,9 @@ test("a recipes file that is valid JSON but the wrong shape makes reads and writ
   for (const content of ['[{"id":"a","name":"Soup","archived":false}]', '{"recipes":"Soup"}']) {
     await writeFile(recipesFile(), content);
 
-    await assert.rejects(recipes.list(), Error);
-    await assert.rejects(recipes.create({ name: "Soup" }), Error);
-    assert.equal(await readFile(recipesFile(), "utf8"), content);
+    await assert.rejects(recipes.list(), Error, `list with ${content}`);
+    await assert.rejects(recipes.create({ name: "Soup" }), Error, `create with ${content}`);
+    assert.equal(await readFile(recipesFile(), "utf8"), content, `the file ${content}`);
   }
 });
 

@@ -24,17 +24,17 @@ import {
 } from "../server/weeks.js";
 
 test("the client's menu limits equal the server's", () => {
-  assert.equal(CLIENT_MAX_ITEMS, SERVER_MAX_ITEMS);
-  assert.equal(CLIENT_MIN_SERVINGS, SERVER_MIN_SERVINGS);
-  assert.equal(CLIENT_MAX_SERVINGS, SERVER_MAX_SERVINGS);
+  assert.equal(CLIENT_MAX_ITEMS, SERVER_MAX_ITEMS, "MAX_ITEMS");
+  assert.equal(CLIENT_MIN_SERVINGS, SERVER_MIN_SERVINGS, "MIN_SERVINGS");
+  assert.equal(CLIENT_MAX_SERVINGS, SERVER_MAX_SERVINGS, "MAX_SERVINGS");
 });
 
 test("the client's recipe limits equal the server's", () => {
-  assert.equal(CLIENT_MAX_INGREDIENTS, SERVER_MAX_INGREDIENTS);
-  assert.equal(CLIENT_MIN_QUANTITY, SERVER_MIN_QUANTITY);
-  assert.equal(CLIENT_MAX_QUANTITY, SERVER_MAX_QUANTITY);
+  assert.equal(CLIENT_MAX_INGREDIENTS, SERVER_MAX_INGREDIENTS, "MAX_INGREDIENTS");
+  assert.equal(CLIENT_MIN_QUANTITY, SERVER_MIN_QUANTITY, "MIN_QUANTITY");
+  assert.equal(CLIENT_MAX_QUANTITY, SERVER_MAX_QUANTITY, "MAX_QUANTITY");
 });
 
 test("the client's measure limit equals the server's", () => {
-  assert.equal(CLIENT_MAX_MEASURES, SERVER_MAX_MEASURES);
+  assert.equal(CLIENT_MAX_MEASURES, SERVER_MAX_MEASURES, "MAX_MEASURES");
 });

@@ -194,7 +194,11 @@ describe("saveSlot", () => {
 
     await assert.rejects(weeks.saveSlot(WEEK, "mon", "brunch", items), RangeError);
 
-    assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
+    assert.deepEqual(
+      await readdir(path.join(dataDir, "v2")),
+      ["recipes.json"],
+      "only the recipe book is on disk, so no week file was written",
+    );
   });
 
   test("rejects invalid items, and writes no file", async () => {
@@ -202,7 +206,11 @@ describe("saveSlot", () => {
       name: "ValidationError",
     });
 
-    assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
+    assert.deepEqual(
+      await readdir(path.join(dataDir, "v2")),
+      ["recipes.json"],
+      "only the recipe book is on disk, so no week file was written",
+    );
   });
 
   test("rejects a recipe that doesn't exist, and writes no file", async () => {
@@ -211,7 +219,11 @@ describe("saveSlot", () => {
       { name: "ValidationError", message: "Unknown recipe: no-such-recipe" },
     );
 
-    assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
+    assert.deepEqual(
+      await readdir(path.join(dataDir, "v2")),
+      ["recipes.json"],
+      "only the recipe book is on disk, so no week file was written",
+    );
   });
 });
 

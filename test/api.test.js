@@ -88,7 +88,11 @@ test("each /api request is logged with its method, path, status, and duration", 
       },
     ],
   );
-  assert.ok(entries.every(({ ms }) => Number.isInteger(ms) && ms >= 0));
+  assert.deepEqual(
+    entries.filter(({ ms }) => !(Number.isInteger(ms) && ms >= 0)),
+    [],
+    "the entries whose ms isn't a whole number of milliseconds from 0",
+  );
 });
 
 test("errors that map to a 4xx status are logged as requests, and not as failures", async () => {
@@ -417,7 +421,7 @@ describe("createApp", () => {
       const res = await request(appThrowing(error)).get("/api/recipes");
 
       assertJsonError(res, 409, kind);
-      assert.deepEqual(res.body, { error: "Taken", [kind]: { id: "x1", name: "Soup" } });
+      assert.deepEqual(res.body, { error: "Taken", [kind]: { id: "x1", name: "Soup" } }, kind);
     }
   });
 
@@ -632,7 +636,7 @@ test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes
   for (const url of ["/api/ingredients", "/api/recipes"]) {
     const res = await request(app).get(url);
     assert.equal(res.status, 500, url);
-    assert.deepEqual(res.body, { error: "Internal server error" });
+    assert.deepEqual(res.body, { error: "Internal server error" }, url);
   }
 });
 
