@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { once } from "node:events";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -51,10 +53,15 @@ test("healthcheck.js exits with 1 when the health check returns 503", async (t) 
   assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });
 });
 
-test("healthcheck.js exits with 1 when nothing listens on the port", async () => {
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
-  await server.stop();
+test("healthcheck.js exits with 1 when the connection closes without an answer", async (t) => {
+  const closer = net.createServer((socket) => socket.destroy());
+  closer.listen(0, "127.0.0.1");
+  await once(closer, "listening");
+  t.after(() => closer.close());
 
   // An empty stderr shows a failed check, and not a crash that also exits with 1.
-  assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });
+  assert.deepEqual(await healthcheck(/** @type {net.AddressInfo} */ (closer.address()).port), {
+    code: 1,
+    stderr: "",
+  });
 });
