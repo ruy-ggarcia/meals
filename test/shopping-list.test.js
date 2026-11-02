@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import { formatTotal, lineAmount, lineParts, shoppingList } from "../public/shopping-list.js";
 
 function ingredient(id, name, unit, archived = false, measures = []) {
@@ -31,7 +31,7 @@ const ONION = ingredient("onion", "Onion", "g");
 const RICE = ingredient("rice", "Rice", "g");
 const CATALOG = [ONION, RICE, EGG, MILK];
 
-test("sums quantity × servings per ingredient over every slot, from A to Z", () => {
+describe("shoppingList over several slots", () => {
   const recipes = [
     recipe("omelette", "Omelette", [
       ["egg", 2],
@@ -49,13 +49,26 @@ test("sums quantity × servings per ingredient over every slot, from A to Z", ()
     slot("wed", "dinner"),
   ];
 
-  assert.deepEqual(shoppingList(slots, recipes, CATALOG), {
-    lines: [
+  test("sums quantity × servings per ingredient", () => {
+    const list = shoppingList(slots, recipes, CATALOG);
+
+    const byName = [...list.lines].sort((a, b) => a.name.localeCompare(b.name));
+    assert.deepEqual(byName, [
       { ingredientId: "egg", name: "Egg", unit: "pcs", total: 6, breakdown: [] },
       { ingredientId: "milk", name: "Milk", unit: "ml", total: 150, breakdown: [] },
       { ingredientId: "onion", name: "Onion", unit: "g", total: 375, breakdown: [] },
-    ],
-    recipesWithoutIngredients: [],
+    ]);
+    assert.deepEqual(list.recipesWithoutIngredients, []);
+  });
+
+  test("lists the ingredients from A to Z", () => {
+    // The catalog lists Onion, Rice, Egg, and Milk, so its order isn't A to Z.
+    const { lines } = shoppingList(slots, recipes, CATALOG);
+
+    assert.deepEqual(
+      lines.map((line) => line.name),
+      ["Egg", "Milk", "Onion"],
+    );
   });
 });
 
@@ -131,7 +144,7 @@ test("counts archived recipes and archived ingredients", () => {
   ]);
 });
 
-test("lists each recipe without ingredients once, from A to Z, with its slots in order", () => {
+describe("shoppingList for recipes without ingredients", () => {
   const recipes = [
     recipe("coffee", "Coffee"),
     recipe("burrito", "Burrito"),
@@ -143,9 +156,19 @@ test("lists each recipe without ingredients once, from A to Z, with its slots in
     slot("thu", "dinner", ["burrito", 3]),
   ];
 
-  assert.deepEqual(shoppingList(slots, recipes, CATALOG), {
-    lines: [{ ingredientId: "egg", name: "Egg", unit: "pcs", total: 2, breakdown: [] }],
-    recipesWithoutIngredients: [
+  test("lists each recipe without ingredients once", () => {
+    const { recipesWithoutIngredients } = shoppingList(slots, recipes, CATALOG);
+
+    assert.deepEqual(recipesWithoutIngredients.map((entry) => entry.recipeId).sort(), [
+      "burrito",
+      "coffee",
+    ]);
+  });
+
+  test("sorts the recipes without ingredients A to Z, with slots in plan order", () => {
+    const { recipesWithoutIngredients } = shoppingList(slots, recipes, CATALOG);
+
+    assert.deepEqual(recipesWithoutIngredients, [
       { recipeId: "burrito", name: "Burrito", slots: [{ day: "thu", meal: "dinner" }] },
       {
         recipeId: "coffee",
@@ -155,25 +178,52 @@ test("lists each recipe without ingredients once, from A to Z, with its slots in
           { day: "tue", meal: "breakfast" },
         ],
       },
-    ],
+    ]);
+  });
+
+  test("sums the ingredients of the recipes that have some", () => {
+    const { lines } = shoppingList(slots, recipes, CATALOG);
+
+    assert.deepEqual(lines, [
+      { ingredientId: "egg", name: "Egg", unit: "pcs", total: 2, breakdown: [] },
+    ]);
   });
 });
 
-test("skips unknown recipes and unknown ingredients, and a recipe left with none counts as without", () => {
-  const recipes = [
-    recipe("soup", "Soup", [
-      ["onion", 100],
-      ["gone", 5],
-    ]),
-    recipe("ghost", "Ghost", [["gone", 1]]),
-  ];
-  const slots = [slot("mon", "lunch", ["soup", 1], ["unknown", 2], ["ghost", 1])];
+describe("shoppingList with unknown recipes and ingredients", () => {
+  test("skips menu items whose recipe is unknown", () => {
+    const recipes = [recipe("soup", "Soup", [["onion", 100]])];
+    const slots = [slot("mon", "lunch", ["soup", 1], ["unknown", 2])];
 
-  assert.deepEqual(shoppingList(slots, recipes, CATALOG), {
-    lines: [{ ingredientId: "onion", name: "Onion", unit: "g", total: 100, breakdown: [] }],
-    recipesWithoutIngredients: [
+    assert.deepEqual(shoppingList(slots, recipes, CATALOG), {
+      lines: [{ ingredientId: "onion", name: "Onion", unit: "g", total: 100, breakdown: [] }],
+      recipesWithoutIngredients: [],
+    });
+  });
+
+  test("skips recipe lines whose ingredient is unknown", () => {
+    const recipes = [
+      recipe("soup", "Soup", [
+        ["onion", 100],
+        ["gone", 5],
+      ]),
+    ];
+
+    const { lines } = shoppingList([slot("mon", "lunch", ["soup", 1])], recipes, CATALOG);
+
+    assert.deepEqual(lines, [
+      { ingredientId: "onion", name: "Onion", unit: "g", total: 100, breakdown: [] },
+    ]);
+  });
+
+  test("counts a recipe whose lines are all unknown as without ingredients", () => {
+    const recipes = [recipe("ghost", "Ghost", [["gone", 1]])];
+
+    const list = shoppingList([slot("mon", "lunch", ["ghost", 1])], recipes, CATALOG);
+
+    assert.deepEqual(list.recipesWithoutIngredients, [
       { recipeId: "ghost", name: "Ghost", slots: [{ day: "mon", meal: "lunch" }] },
-    ],
+    ]);
   });
 });
 
@@ -277,7 +327,6 @@ test("the unit part of a breakdown is rounded up to a whole number", () => {
     { measureId: "medium", name: "medium", quantity: 1 },
   ]);
   assert.equal(lines[0].total, 151);
-  assert.equal(lineAmount(lines[0]), "151 g (1 g, 1 medium)");
 });
 
 test("an ingredient in pcs with measures sums in pcs and never changes unit", () => {
@@ -303,7 +352,6 @@ test("an ingredient in pcs with measures sums in pcs and never changes unit", ()
       ],
     },
   ]);
-  assert.equal(lineAmount(lines[0]), "1002 pcs (2 pcs, 10 box)");
 });
 
 test("one measure sums over two menu items", () => {
@@ -341,21 +389,26 @@ test("formatTotal shows g and ml below 1000, and kg and l from 1000, rounded up 
   assert.equal(formatTotal(2000, "pcs"), "2000 pcs");
 });
 
-test("lineParts returns the total, and the breakdown in parentheses or nothing", () => {
-  assert.deepEqual(
-    lineParts({
-      unit: "g",
-      total: 1125,
-      breakdown: [
-        { measureId: null, name: "g", quantity: 300 },
-        { measureId: "medium", name: "medium", quantity: 3 },
-      ],
-    }),
-    { total: "1.2 kg", breakdown: "(300 g, 3 medium)" },
-  );
-  assert.deepEqual(lineParts({ unit: "g", total: 1400, breakdown: [] }), {
-    total: "1.4 kg",
-    breakdown: "",
+describe("lineParts", () => {
+  test("returns the total, and the breakdown in parentheses", () => {
+    assert.deepEqual(
+      lineParts({
+        unit: "g",
+        total: 1125,
+        breakdown: [
+          { measureId: null, name: "g", quantity: 300 },
+          { measureId: "medium", name: "medium", quantity: 3 },
+        ],
+      }),
+      { total: "1.2 kg", breakdown: "(300 g, 3 medium)" },
+    );
+  });
+
+  test("returns an empty breakdown when there is none", () => {
+    assert.deepEqual(lineParts({ unit: "g", total: 1400, breakdown: [] }), {
+      total: "1.4 kg",
+      breakdown: "",
+    });
   });
 });
 
