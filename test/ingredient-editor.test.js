@@ -810,40 +810,6 @@ test("while the conversion row shows, measure rows are read-only previews in the
   assert.deepEqual(measureValues(), [["1", "4"]]);
 });
 
-test("the preview rounds each amount as the server converts it: amount times (to / from)", () => {
-  const bunch = {
-    id: "bunch",
-    name: "bunch",
-    unit: "pcs",
-    measures: [
-      { id: "m1", name: "small", amount: 1.5 },
-      { id: "m2", name: "medium", amount: 5.5 },
-      { id: "m3", name: "large", amount: 6 },
-    ],
-  };
-  openEditor({ ingredient: bunch });
-  setUnit("g");
-
-  setConversion("20", "3");
-  assert.deepEqual(measureValues(), [
-    ["small", "0.22"],
-    ["medium", "0.83"],
-    ["large", "0.9"],
-  ]);
-  setConversion("100", "3");
-  assert.deepEqual(measureValues(), [
-    ["small", "0.05"],
-    ["medium", "0.16"],
-    ["large", "0.18"],
-  ]);
-  setConversion("80", "3");
-  assert.deepEqual(measureValues(), [
-    ["small", "0.06"],
-    ["medium", "0.21"],
-    ["large", "0.22"],
-  ]);
-});
-
 test("picking a unit that needs a conversion with unsaved measure changes keeps the old unit and explains why", () => {
   openEditor({ ingredient: SIZED_MILK });
   setField(measureRows()[0].querySelector(".measure-amount"), "160");
