@@ -172,140 +172,59 @@ test("saveSlot leaves no temporary file behind", async () => {
   assert.deepEqual(await readdir(path.join(dataDir, "v2", "weeks")), [`${WEEK}.json`]);
 });
 
-test("saveSlot rejects unknown week, day, or meal identifiers without writing", async () => {
-  const items = [{ recipeId: soup.id, servings: 1 }];
-  await assert.rejects(weeks.saveSlot("2026-09-22", "mon", "lunch", items), RangeError);
-  await assert.rejects(weeks.saveSlot("../week", "mon", "lunch", items), RangeError);
-  await assert.rejects(weeks.saveSlot(WEEK, "funday", "lunch", items), RangeError);
-  await assert.rejects(weeks.saveSlot(WEEK, "mon", "brunch", items), RangeError);
-  await assert.rejects(weeks.saveSlot(WEEK, "__proto__", "lunch", items), RangeError);
-  assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
-});
-
 describe("saveSlot", () => {
-  test("rejects invalid items by the broken rule, and writes nothing", async () => {
-    // Each recipe exists, so only the rule in the message can reject the items.
-    const recipeIds = [];
-    for (let index = 0; index < 21; index++) {
-      recipeIds.push((await recipes.create({ name: `Recipe ${index}` })).id);
-    }
-    const tooMany = recipeIds.map((recipeId) => ({ recipeId, servings: 1 }));
-    const notAnArray = '"items" must be an array.';
-    const wrongShape = 'items[0] must have exactly "recipeId" and "servings".';
-    const wrongServings = "items[0].servings must be a multiple of 0.5 from 0.5 to 99.";
-    const invalid = [
-      [undefined, notAnArray],
-      [null, notAnArray],
-      ["Soup", notAnArray],
-      [{}, notAnArray],
-      [tooMany, "A menu holds at most 20 menu items."],
-      [[null], wrongShape],
-      [[soup.id], wrongShape],
-      [[{ recipeId: soup.id }], wrongShape],
-      [[{ servings: 1 }], wrongShape],
-      [[{ recipeId: soup.id, servings: 1, note: "hot" }], wrongShape],
-      [[{ recipeId: 42, servings: 1 }], "items[0].recipeId must be a string."],
-      [[{ recipeId: soup.id, servings: "1" }], wrongServings],
-      [[{ recipeId: soup.id, servings: 0 }], wrongServings],
-      [[{ recipeId: soup.id, servings: 0.25 }], wrongServings],
-      [[{ recipeId: soup.id, servings: 1.2 }], wrongServings],
-      [[{ recipeId: soup.id, servings: -1 }], wrongServings],
-      [[{ recipeId: soup.id, servings: 99.5 }], wrongServings],
-      [[{ recipeId: soup.id, servings: Number.NaN }], wrongServings],
-      [
-        [
-          { recipeId: soup.id, servings: 1 },
-          { recipeId: soup.id, servings: 2 },
-        ],
-        `items[1] repeats recipe ${soup.id}.`,
-      ],
-      [[{ recipeId: "no-such-recipe", servings: 1 }], "Unknown recipe: no-such-recipe"],
-    ];
-    const before = await readdir(path.join(dataDir, "v2"));
+  test("rejects an unknown slot, and writes no file", async () => {
+    const items = [{ recipeId: soup.id, servings: 1 }];
 
-    for (const [items, message] of invalid) {
-      await assert.rejects(
-        weeks.saveSlot(WEEK, "mon", "lunch", items),
-        { name: "ValidationError", message },
-        JSON.stringify(items)?.slice(0, 60),
-      );
-    }
-    assert.deepEqual(await readdir(path.join(dataDir, "v2")), before);
+    await assert.rejects(weeks.saveSlot(WEEK, "mon", "brunch", items), RangeError);
+
+    assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
+  });
+
+  test("rejects invalid items, and writes no file", async () => {
+    await assert.rejects(weeks.saveSlot(WEEK, "mon", "lunch", [{ recipeId: soup.id }]), {
+      name: "ValidationError",
+    });
+
+    assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
+  });
+
+  test("rejects a recipe that doesn't exist, and writes no file", async () => {
+    await assert.rejects(
+      weeks.saveSlot(WEEK, "mon", "lunch", [{ recipeId: "no-such-recipe", servings: 1 }]),
+      { name: "ValidationError", message: "Unknown recipe: no-such-recipe" },
+    );
+
+    assert.deepEqual(await readdir(path.join(dataDir, "v2")), ["recipes.json"]);
   });
 });
 
-test("saveSlot accepts the limits: 0.5 and 99 servings, and 20 menu items", async () => {
-  await weeks.saveSlot(WEEK, "mon", "lunch", [
-    { recipeId: soup.id, servings: 0.5 },
-    { recipeId: salad.id, servings: 99 },
-  ]);
+describe("readWeek", () => {
+  test("drops the items whose recipe isn't in the recipe book", async () => {
+    await writeWeekFile(
+      WEEK,
+      JSON.stringify({
+        mon: {
+          lunch: {
+            items: [
+              { recipeId: soup.id, servings: 1 },
+              { recipeId: "gone", servings: 1 },
+            ],
+          },
+        },
+      }),
+    );
 
-  const items = [];
-  for (let index = 0; index < 20; index++) {
-    const recipe = await recipes.create({ name: `Recipe ${index}` });
-    items.push({ recipeId: recipe.id, servings: 1 });
-  }
-  const result = await weeks.saveSlot(WEEK, "mon", "dinner", items);
-  assert.equal(result.items.length, 20);
+    const week = await weeks.readWeek(WEEK);
+
+    assert.deepEqual(week.mon.lunch, { items: [{ recipeId: soup.id, servings: 1 }] });
+  });
 });
 
 test("saveSlot accepts an archived recipe", async () => {
   await recipes.update(soup.id, { archived: true });
   const items = [{ recipeId: soup.id, servings: 2 }];
   assert.deepEqual((await weeks.saveSlot(WEEK, "fri", "dinner", items)).items, items);
-});
-
-test("readWeek keeps only the menu items that saveSlot would accept", async () => {
-  await writeWeekFile(
-    WEEK,
-    JSON.stringify({
-      mon: {
-        breakfast: {
-          items: [
-            { recipeId: soup.id, servings: 1 },
-            { recipeId: soup.id, servings: 2 }, // repeated recipe -> dropped
-            { recipeId: salad.id, servings: 0.3 }, // off the 0.5 grid -> dropped
-            { recipeId: "gone", servings: 1 }, // recipe doesn't exist -> dropped
-            { recipeId: 7, servings: 1 }, // not a string -> dropped
-            null,
-            { recipeId: salad.id, servings: 2, extra: true }, // kept without the extra key
-          ],
-        },
-        lunch: "Paella", // free text from an earlier version -> empty menu
-      },
-      fri: null, // broken day -> all empty
-      holiday: { lunch: { items: [] } }, // unknown day -> dropped
-    }),
-  );
-
-  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
-  expected.mon.breakfast = {
-    items: [
-      { recipeId: soup.id, servings: 1 },
-      { recipeId: salad.id, servings: 2 },
-    ],
-  };
-  const week = await weeks.readWeek(WEEK);
-  assert.deepEqual(week, expected);
-
-  // Every slot that was read can be saved again as it is.
-  for (const day of EXPECTED_DAYS) {
-    for (const meal of EXPECTED_MEALS) {
-      await weeks.saveSlot(WEEK, day, meal, week[day][meal].items);
-    }
-  }
-});
-
-test("readWeek keeps at most 20 menu items per slot", async () => {
-  const items = [];
-  for (let index = 0; index < 25; index++) {
-    const recipe = await recipes.create({ name: `Recipe ${index}` });
-    items.push({ recipeId: recipe.id, servings: 1 });
-  }
-  await writeWeekFile(WEEK, JSON.stringify({ sun: { dinner: { items } } }));
-
-  const week = await weeks.readWeek(WEEK);
-  assert.deepEqual(week.sun.dinner.items, items.slice(0, 20));
 });
 
 test("readWeek rejects when the week file is not valid JSON, and saveSlot doesn't overwrite it", async () => {

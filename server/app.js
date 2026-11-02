@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { ConflictError, NameConflictError, NotFoundError, ValidationError } from "./errors.js";
 import { silentLogger } from "./logger.js";
-import { DAYS, isWeekId, MEALS } from "./weeks.js";
+import { isSlot, isWeekId } from "./weeks.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
@@ -101,7 +101,7 @@ export function createApp(
 
   app.put("/api/weeks/:week/:day/:meal", async (req, res) => {
     const { week, day, meal } = req.params;
-    if (!isWeekId(week) || !DAYS.includes(day) || !MEALS.includes(meal)) {
+    if (!isSlot(week, day, meal)) {
       res.status(404).json({ error: `Unknown week, day, or meal: ${week}/${day}/${meal}` });
       return;
     }
