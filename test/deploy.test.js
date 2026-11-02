@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("meals-deploy", () => {
-  test("deploys a newer release: pull, stop, backup, and start", async () => {
+  test("deploys a newer release", async () => {
     await host.addRelease("0.3.0");
     // date, which names the backup, marks where the backup starts.
     await host.logCommand("date");
@@ -46,228 +46,228 @@ describe("meals-deploy", () => {
     const up = calls.findIndex((call) => composeCall("up --wait").test(call));
     assert.ok(pull >= 0 && stop > pull && backup > stop && up > backup, calls.join("\n"));
   });
-});
 
-test("meals-deploy only checks that the deployed version runs when it's the latest release", async () => {
-  await host.addRelease("0.2.0");
+  test("checks only that the deployed version runs when it's the latest", async () => {
+    await host.addRelease("0.2.0");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  assert.match(result.stdout, /Version 0\.2\.0 is deployed already\./);
-  assert.deepEqual(
-    (await host.dockerCalls()).map((call) => call.replace(/ --project-directory .* ps /, " ps ")),
-    ["docker compose ps --quiet app"],
-  );
-});
+    assertExit(result, 0);
+    assert.match(result.stdout, /Version 0\.2\.0 is deployed already\./);
+    assert.deepEqual(
+      (await host.dockerCalls()).map((call) => call.replace(/ --project-directory .* ps /, " ps ")),
+      ["docker compose ps --quiet app"],
+    );
+  });
 
-test("meals-deploy starts the deployed version when it isn't running", async () => {
-  await host.addRelease("0.2.0");
-  await rm(path.join(host.stubDir, "running"));
+  test("starts the deployed version when it isn't running", async () => {
+    await host.addRelease("0.2.0");
+    await rm(path.join(host.stubDir, "running"));
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  assert.match(result.stdout, /Version 0\.2\.0 wasn't running\. Starting it\./);
-  assert.equal(
-    (await host.composeCalls("up --wait")).length,
-    1,
-    (await host.dockerCalls()).join("\n"),
-  );
-  assert.match((await host.calls()).at(-1), /^curl .*\/api\/health$/);
-});
+    assertExit(result, 0);
+    assert.match(result.stdout, /Version 0\.2\.0 wasn't running\. Starting it\./);
+    assert.equal(
+      (await host.composeCalls("up --wait")).length,
+      1,
+      (await host.dockerCalls()).join("\n"),
+    );
+    assert.match((await host.calls()).at(-1), /^curl .*\/api\/health$/);
+  });
 
-test("meals-deploy fails when the deployed version starts but reports another version", async () => {
-  await host.addRelease("0.2.0");
-  await rm(path.join(host.stubDir, "running"));
-  await host.stub("health-version", "0.1.0\n");
+  test("fails when the deployed version starts but reports another version", async () => {
+    await host.addRelease("0.2.0");
+    await rm(path.join(host.stubDir, "running"));
+    await host.stub("health-version", "0.1.0\n");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Version 0\.2\.0 didn't start healthy\./);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-  assert.equal(await host.exists("failed"), false);
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Version 0\.2\.0 didn't start healthy\./);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+    assert.equal(await host.exists("failed"), false);
+  });
 
-test("meals-deploy skips a latest release that's older than the deployed version", async () => {
-  await host.addRelease("0.1.0");
+  test("skips a latest release that's older than the deployed version", async () => {
+    await host.addRelease("0.1.0");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  assert.deepEqual(await host.dockerCalls(), []);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-});
+    assertExit(result, 0);
+    assert.deepEqual(await host.dockerCalls(), []);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+  });
 
-test("meals-deploy fails, without deploying, while the latest release is a failed version", async () => {
-  await host.addRelease("0.3.0");
-  await host.writeRootFile("failed", "0.3.0\n");
+  test("fails without deploying a latest release that failed before", async () => {
+    await host.addRelease("0.3.0");
+    await host.writeRootFile("failed", "0.3.0\n");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /The latest release, 0\.3\.0, failed before/);
-  assert.deepEqual(await host.dockerCalls(), []);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /The latest release, 0\.3\.0, failed before/);
+    assert.deepEqual(await host.dockerCalls(), []);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+  });
 
-test("meals-deploy fails with a message when the deployed version doesn't start", async () => {
-  await host.addRelease("0.2.0");
-  await rm(path.join(host.stubDir, "running"));
-  await host.stub("broken", "0.2.0\n");
+  test("fails with a message when the deployed version doesn't start", async () => {
+    await host.addRelease("0.2.0");
+    await rm(path.join(host.stubDir, "running"));
+    await host.stub("broken", "0.2.0\n");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Version 0\.2\.0 didn't start healthy\. See docker compose logs/);
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Version 0\.2\.0 didn't start healthy\. See docker compose logs/);
+  });
 
-test("meals-deploy rejects extra arguments", async () => {
-  const result = await host.run("meals-deploy", "0.1.0", "extra");
+  test("rejects extra arguments", async () => {
+    const result = await host.run("meals-deploy", "0.1.0", "extra");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Usage: meals-deploy \[VERSION \| --resume\]/);
-  assert.deepEqual(await host.calls(), []);
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Usage: meals-deploy \[VERSION \| --resume\]/);
+    assert.deepEqual(await host.calls(), []);
+  });
 
-test("meals-deploy rejects an unknown option", async () => {
-  const result = await host.run("meals-deploy", "--force");
+  test("rejects an unknown option", async () => {
+    const result = await host.run("meals-deploy", "--force");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Usage: meals-deploy \[VERSION \| --resume\]/);
-  assert.deepEqual(await host.calls(), []);
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Usage: meals-deploy \[VERSION \| --resume\]/);
+    assert.deepEqual(await host.calls(), []);
+  });
 
-test("meals-deploy waits while the latest release has no image.txt", async () => {
-  await host.addRelease("0.3.0", { withImage: false });
+  test("waits while the latest release has no image.txt", async () => {
+    await host.addRelease("0.3.0", { withImage: false });
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  assert.match(result.stdout, /Version 0\.3\.0 has no image\.txt yet\./);
-  assert.deepEqual(await host.dockerCalls(), []);
-});
+    assertExit(result, 0);
+    assert.match(result.stdout, /Version 0\.3\.0 has no image\.txt yet\./);
+    assert.deepEqual(await host.dockerCalls(), []);
+  });
 
-test("meals-deploy fails without changing anything when it can't download image.txt", async () => {
-  await host.addRelease("0.3.0");
-  await rm(path.join(host.stubDir, "downloads"), { recursive: true });
+  test("fails without changing anything when it can't download image.txt", async () => {
+    await host.addRelease("0.3.0");
+    await rm(path.join(host.stubDir, "downloads"), { recursive: true });
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Error: Couldn't download the image\.txt of version 0\.3\.0\./);
-  assert.deepEqual(await host.dockerCalls(), []);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Error: Couldn't download the image\.txt of version 0\.3\.0\./);
+    assert.deepEqual(await host.dockerCalls(), []);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+  });
 
-test("meals-deploy does nothing on hold, without asking GitHub", async () => {
-  await host.addRelease("0.3.0");
-  await host.writeRootFile("hold", "");
+  test("does nothing while the host is on hold, without asking GitHub", async () => {
+    await host.addRelease("0.3.0");
+    await host.writeRootFile("hold", "");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  assert.match(result.stdout, /on hold/);
-  assert.deepEqual(await host.calls(), []);
-});
+    assertExit(result, 0);
+    assert.match(result.stdout, /on hold/);
+    assert.deepEqual(await host.calls(), []);
+  });
 
-test("meals-deploy fails without changing anything when GitHub doesn't answer", async () => {
-  const result = await host.run("meals-deploy");
+  test("fails without changing anything when GitHub doesn't answer", async () => {
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Couldn't get the latest release from GitHub/);
-  assert.deepEqual(await host.dockerCalls(), []);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Couldn't get the latest release from GitHub/);
+    assert.deepEqual(await host.dockerCalls(), []);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+  });
 
-test("meals-deploy fails without changing anything when the release isn't JSON", async () => {
-  await host.stub("github/releases/latest", "<html>Unicorn!</html>\n");
+  test("fails without changing anything when the release isn't JSON", async () => {
+    await host.stub("github/releases/latest", "<html>Unicorn!</html>\n");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Error: Couldn't read the tag of the release from GitHub\./);
-  assert.deepEqual(await host.dockerCalls(), []);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Error: Couldn't read the tag of the release from GitHub\./);
+    assert.deepEqual(await host.dockerCalls(), []);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+  });
 
-test("meals-deploy fails without changing anything on a tag that isn't a version", async () => {
-  await host.stub("github/releases/latest", JSON.stringify({ tag_name: "nightly", assets: [] }));
+  test("fails without changing anything on a tag that isn't a version", async () => {
+    await host.stub("github/releases/latest", JSON.stringify({ tag_name: "nightly", assets: [] }));
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(
-    result.stderr,
-    /Error: The release from GitHub has the tag nightly, which isn't a version like v1\.2\.3\./,
-  );
-  assert.deepEqual(await host.dockerCalls(), []);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-});
+    assertExit(result, 1);
+    assert.match(
+      result.stderr,
+      /Error: The release from GitHub has the tag nightly, which isn't a version like v1\.2\.3\./,
+    );
+    assert.deepEqual(await host.dockerCalls(), []);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+  });
 
-test("meals-deploy fails without changing anything on a release without assets", async () => {
-  await host.stub("github/releases/latest", JSON.stringify({ tag_name: "v0.3.0" }));
+  test("fails without changing anything on a release without assets", async () => {
+    await host.stub("github/releases/latest", JSON.stringify({ tag_name: "v0.3.0" }));
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /Error: Couldn't read the assets of release 0\.3\.0 from GitHub\./);
-  assert.deepEqual(await host.dockerCalls(), []);
-  assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /Error: Couldn't read the assets of release 0\.3\.0 from GitHub\./);
+    assert.deepEqual(await host.dockerCalls(), []);
+    assert.equal((await host.readEnv()).MEALS_VERSION, "0.2.0");
+  });
 
-test("meals-deploy fails on an image.txt that isn't a reference by digest", async () => {
-  await host.addRelease("0.3.0", { image: "ghcr.io/ruy-ggarcia/meals:0.3.0" });
+  test("fails on an image.txt that isn't a reference by digest", async () => {
+    await host.addRelease("0.3.0", { image: "ghcr.io/ruy-ggarcia/meals:0.3.0" });
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 1);
-  assert.match(result.stderr, /isn't an image reference by digest/);
-  assert.deepEqual(await host.dockerCalls(), []);
-});
+    assertExit(result, 1);
+    assert.match(result.stderr, /isn't an image reference by digest/);
+    assert.deepEqual(await host.dockerCalls(), []);
+  });
 
-test("a deployment removes the meals images other than the current and the previous one", async () => {
-  await host.addRelease("0.3.0");
-  await host.stub(
-    "images",
-    [imageFor("0.1.0"), imageFor("0.2.0"), imageFor("0.3.0"), ""].join("\n"),
-  );
+  test("removes the meals images other than the current and the previous one", async () => {
+    await host.addRelease("0.3.0");
+    await host.stub(
+      "images",
+      [imageFor("0.1.0"), imageFor("0.2.0"), imageFor("0.3.0"), ""].join("\n"),
+    );
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  const removed = (await host.dockerCalls()).filter((call) => call.startsWith("docker image rm "));
-  assert.deepEqual(removed, [`docker image rm ${imageFor("0.1.0")}`]);
-});
+    assertExit(result, 0);
+    const removed = (await host.dockerCalls()).filter((call) =>
+      call.startsWith("docker image rm "),
+    );
+    assert.deepEqual(removed, [`docker image rm ${imageFor("0.1.0")}`]);
+  });
 
-test("a deployment succeeds, and says so, when it can't remove an old image", async () => {
-  await host.addRelease("0.3.0");
-  await host.stub("images", [imageFor("0.1.0"), imageFor("0.3.0"), ""].join("\n"));
-  await host.stub("image-rm-fails", "");
+  test("reports the deployment when it can't remove an old image", async () => {
+    await host.addRelease("0.3.0");
+    await host.stub("images", [imageFor("0.1.0"), imageFor("0.3.0"), ""].join("\n"));
+    await host.stub("image-rm-fails", "");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  assert.ok(
-    result.stdout.includes(`Couldn't remove the image ${imageFor("0.1.0")}.`),
-    result.stdout,
-  );
-  assert.match(result.stdout, /Deployed version 0\.3\.0\./);
-});
+    assertExit(result, 0);
+    assert.ok(
+      result.stdout.includes(`Couldn't remove the image ${imageFor("0.1.0")}.`),
+      result.stdout,
+    );
+    assert.match(result.stdout, /Deployed version 0\.3\.0\./);
+  });
 
-test("a deployment succeeds when it can't list the old images", async () => {
-  await host.addRelease("0.3.0");
-  await host.stub("image-ls-fails", "");
+  test("succeeds when it can't list the old images", async () => {
+    await host.addRelease("0.3.0");
+    await host.stub("image-ls-fails", "");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assertExit(result, 0);
-  assert.match(result.stdout, /Couldn't remove the old images\./);
-  assert.match(result.stdout, /Deployed version 0\.3\.0\./);
-});
+    assertExit(result, 0);
+    assert.match(result.stdout, /Couldn't remove the old images\./);
+    assert.match(result.stdout, /Deployed version 0\.3\.0\./);
+  });
 
-describe("meals-deploy", () => {
   test("waits for the lock that another script holds", async (t) => {
     await host.addRelease("0.3.0");
 
