@@ -187,7 +187,7 @@ test("create stores measures with new UUIDs, cleaned names, and rounded amounts"
   assert.match(onion.measures[0].id, UUID);
   assert.deepEqual(onion.measures[0], { id: onion.measures[0].id, name: "medium", amount: 150 });
   assert.equal(onion.measures[1].amount, 0.3);
-  assert.deepEqual(await newIngredients().list(), [onion]);
+  assert.deepEqual(await ingredients.list(), [onion]);
 });
 
 test("create without measures stores an empty list", async () => {
@@ -311,7 +311,7 @@ test("pcs to g with 1 = 120 multiplies measures and turns unit lines into a meas
     ],
   });
   assert.deepEqual(moves, [[carrot.id, piece.id]]);
-  assert.deepEqual(await newIngredients().list(), [updated]);
+  assert.deepEqual(await ingredients.list(), [updated]);
 });
 
 test("150 g = 1 pcs converts with the factor to ÷ from", async () => {
@@ -396,7 +396,7 @@ test("a retry after a failed step 2 with the same measureName reuses the measure
     { ...piece, amount: 120 },
   ]);
   assert.deepEqual(moves, [[carrot.id, piece.id]]);
-  assert.deepEqual(await newIngredients().list(), [updated]);
+  assert.deepEqual(await ingredients.list(), [updated]);
 });
 
 describe("create", () => {

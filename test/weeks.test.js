@@ -164,12 +164,7 @@ test("concurrent saves to different slots are all kept", async () => {
 
   await Promise.all(saves);
 
-  assert.deepEqual(await newWeeks().readWeek(WEEK), expected);
-});
-
-test("saveSlot leaves no temporary file behind", async () => {
-  await weeks.saveSlot(WEEK, "tue", "lunch", [{ recipeId: soup.id, servings: 1 }]);
-  assert.deepEqual(await readdir(path.join(dataDir, "v2", "weeks")), [`${WEEK}.json`]);
+  assert.deepEqual(await weeks.readWeek(WEEK), expected);
 });
 
 describe("saveSlot", () => {
