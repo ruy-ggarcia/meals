@@ -4,7 +4,7 @@
 // library choice, and test/shopping-list.test.js for the list's arithmetic.
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 import { formatWeekRange } from "../public/dates.js";
 import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
 import { blankWeek } from "./helpers.js";
@@ -42,7 +42,9 @@ function lineTexts() {
   ]);
 }
 
-test("the shopping list shows kilograms and a measure breakdown", async (t) => {
+// Opens a week whose Monday lunch has Soup, which needs 300 g of onion, 3
+// medium onions of 150 g, and 1.5 large onions of 250 g: 1.2 kg in all.
+async function openWeekWithOnionSoup(t) {
   const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "soup", servings: 1 },
   ]);
@@ -70,20 +72,11 @@ test("the shopping list shows kilograms and a measure breakdown", async (t) => {
       },
     ],
   });
+}
 
-  shoppingButton().click();
-
-  assert.deepEqual(lineTexts(), [["Onion", "1.2 kg (300 g, 3 medium, 1.5 large)"]]);
-  const amount = shoppingDialog().querySelector(".line-amount");
-  assert.equal(amount.querySelector(".line-total").textContent, "1.2 kg");
-  assert.equal(amount.querySelector(".line-breakdown").textContent, "(300 g, 3 medium, 1.5 large)");
-  assert.equal(
-    shoppingDialog().querySelector(".shopping-summary").textContent,
-    "1 ingredient · from A to Z · totals rounded up",
-  );
-});
-
-test("Shopping list shows the week's totals per ingredient, from A to Z", async (t) => {
+// Opens a week with an omelette for 2 servings on Monday and an onion soup for
+// 1.5 servings on Tuesday, so the list has Egg and Onion.
+async function openWeekWithEggAndOnion(t) {
   let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
     { recipeId: "omelette", servings: 2 },
   ]);
@@ -109,25 +102,105 @@ test("Shopping list shows the week's totals per ingredient, from A to Z", async 
     ],
     ingredients: [ONION, EGG],
   });
+}
 
-  shoppingButton().click();
+describe("shopping list", () => {
+  test("shows the total in kilograms with a breakdown by measure", async (t) => {
+    await openWeekWithOnionSoup(t);
 
-  assert.equal(shoppingDialog().open, true);
-  assert.equal(shoppingDialog().querySelector(".dialog-title").textContent, "Shopping list");
-  assert.equal(
-    shoppingDialog().querySelector(".sheet-subtitle").textContent,
-    formatWeekRange(WEEK),
-  );
-  assert.equal(
-    shoppingDialog().querySelector(".shopping-summary").textContent,
-    "2 ingredients · from A to Z · totals rounded up",
-  );
-  assert.deepEqual(lineTexts(), [
-    ["Egg", "4 pcs"],
-    ["Onion", "326 g"],
-  ]);
-  assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
-  assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
+    shoppingButton().click();
+
+    assert.deepEqual(lineTexts(), [["Onion", "1.2 kg (300 g, 3 medium, 1.5 large)"]]);
+  });
+
+  test("shows the total and the breakdown of a line in separate elements", async (t) => {
+    await openWeekWithOnionSoup(t);
+
+    shoppingButton().click();
+
+    const amount = shoppingDialog().querySelector(".line-amount");
+    assert.equal(amount.querySelector(".line-total").textContent, "1.2 kg");
+    assert.equal(
+      amount.querySelector(".line-breakdown").textContent,
+      "(300 g, 3 medium, 1.5 large)",
+    );
+  });
+
+  test("counts one ingredient in the summary", async (t) => {
+    await openWeekWithOnionSoup(t);
+
+    shoppingButton().click();
+
+    assert.equal(
+      shoppingDialog().querySelector(".shopping-summary").textContent,
+      "1 ingredient · from A to Z · totals rounded up",
+    );
+  });
+
+  test("opens a dialog titled with the week range", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.equal(shoppingDialog().open, true);
+    assert.equal(shoppingDialog().querySelector(".dialog-title").textContent, "Shopping list");
+    assert.equal(
+      shoppingDialog().querySelector(".sheet-subtitle").textContent,
+      formatWeekRange(WEEK),
+    );
+  });
+
+  test("counts the ingredients in the summary", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.equal(
+      shoppingDialog().querySelector(".shopping-summary").textContent,
+      "2 ingredients · from A to Z · totals rounded up",
+    );
+  });
+
+  test("lists the totals per ingredient from A to Z", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.deepEqual(lineTexts(), [
+      ["Egg", "4 pcs"],
+      ["Onion", "326 g"],
+    ]);
+  });
+
+  test("hides the empty-week and not-included messages", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
+    assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
+  });
+
+  test("undoes a hash change while it's open", async (t) => {
+    await openWeek(t);
+    shoppingButton().click();
+
+    page.window.location.hash = "#2026-09-28";
+    await waitFor(() => page.window.location.hash === `#${WEEK}`);
+
+    assert.equal(shoppingDialog().open, true);
+    assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
+  });
+
+  test("returns focus to Shopping list with Close", async (t) => {
+    await openWeek(t);
+    shoppingButton().click();
+
+    shoppingDialog().querySelector(".close-dialog").click();
+
+    assert.equal(shoppingDialog().open, false);
+    assertFocus(page.document, shoppingButton());
+  });
 });
 
 test("the shopping list counts a slot whose save is still pending", async (t) => {
@@ -196,20 +269,6 @@ test("an empty week says there is nothing to buy", async (t) => {
   assert.equal(empty.hidden, false);
   assert.equal(empty.textContent, "Nothing to buy. Plan some meals first.");
   assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
-});
-
-test("a hash change while the shopping list is open is undone, and Close returns focus", async (t) => {
-  await openWeek(t);
-  shoppingButton().click();
-
-  page.window.location.hash = "#2026-09-28";
-  await waitFor(() => page.window.location.hash === `#${WEEK}`);
-
-  assert.equal(shoppingDialog().open, true);
-  assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
-  shoppingDialog().querySelector(".close-dialog").click();
-  assert.equal(shoppingDialog().open, false);
-  assertFocus(page.document, shoppingButton());
 });
 
 test("a backdrop click closes the shopping list", async (t) => {
