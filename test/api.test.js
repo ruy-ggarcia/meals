@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -857,25 +857,24 @@ test("unknown /api routes return 404 JSON", async () => {
   assertJsonError(await request(app).delete("/api/recipes/x"), 404, "DELETE a recipe");
 });
 
-test("GET / serves the frontend page", async () => {
-  const res = await request(app).get("/");
+describe("GET /:file", () => {
+  test("serves the files of public/ with their media type", async () => {
+    const files = [
+      { url: "/", file: "index.html", mediaType: /^text\/html/ },
+      { url: "/recipes.html", file: "recipes.html", mediaType: /^text\/html/ },
+      { url: "/dates.js", file: "dates.js", mediaType: /^text\/javascript/ },
+      { url: "/styles.css", file: "styles.css", mediaType: /^text\/css/ },
+    ];
+    for (const { url, file, mediaType } of files) {
+      const res = await request(app).get(url);
 
-  assert.equal(res.status, 200);
-  assert.match(res.headers["content-type"], /text\/html/);
-  assert.match(res.text, /<title>Weekly meal plan<\/title>/);
-});
-
-test("GET /recipes.html serves the recipe book page", async () => {
-  const res = await request(app).get("/recipes.html");
-
-  assert.equal(res.status, 200);
-  assert.match(res.headers["content-type"], /text\/html/);
-  assert.match(res.text, /<title>Recipes<\/title>/);
-});
-
-test("GET /dates.js serves the date helpers", async () => {
-  const res = await request(app).get("/dates.js");
-
-  assert.equal(res.status, 200);
-  assert.match(res.headers["content-type"], /javascript/);
+      assert.equal(res.status, 200, url);
+      assert.match(res.headers["content-type"], mediaType, url);
+      assert.equal(
+        res.text,
+        await readFile(new URL(`../public/${file}`, import.meta.url), "utf8"),
+        url,
+      );
+    }
+  });
 });
