@@ -53,14 +53,22 @@ export function tick() {
 /**
  * Waits until `predicate()` is true, ticking in between, for tests that drive
  * the page only through DOM events and so have no promise of their own to
- * await. Throws after `attempts` ticks (default 50) rather than hanging.
+ * await. Throws after `attempts` ticks (default 50) rather than hanging. The
+ * error ends with `message`, or with the text that it returns, so a test can
+ * say what it waited for, such as the requests it saw.
+ *
+ * @param {() => boolean} predicate
+ * @param {{ attempts?: number, message?: string | (() => string) }} [options]
  */
-export async function waitFor(predicate, { attempts = 50 } = {}) {
+export async function waitFor(predicate, { attempts = 50, message } = {}) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (predicate()) return;
     await tick();
   }
-  throw new Error(`waitFor: condition not met after ${attempts} ticks`);
+  const detail = typeof message === "function" ? message() : message;
+  throw new Error(
+    `waitFor: condition not met after ${attempts} ticks${detail ? `: ${detail}` : ""}`,
+  );
 }
 
 // The name a screen reader would announce for `element`, best-effort: an

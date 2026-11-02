@@ -4,7 +4,14 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { assertLoggedErrors, fakeFetch, loadDialog, loadPage, openPage } from "./dom-helpers.js";
+import {
+  assertLoggedErrors,
+  fakeFetch,
+  loadDialog,
+  loadPage,
+  openPage,
+  waitFor,
+} from "./dom-helpers.js";
 
 const GLOBALS = ["document", "fetch", "history", "location", "window"];
 
@@ -97,5 +104,42 @@ describe("assertLoggedErrors", () => {
     assert.throws(() => assertLoggedErrors([], 1), {
       message: "Expected 1 console.error call(s), got 0",
     });
+  });
+});
+
+describe("waitFor", () => {
+  test("returns when the predicate holds", async () => {
+    let calls = 0;
+
+    await waitFor(() => {
+      calls += 1;
+      return calls === 3;
+    });
+
+    assert.equal(calls, 3);
+  });
+
+  test("fails when the condition isn't met after the attempts", async () => {
+    await assert.rejects(
+      waitFor(() => false, { attempts: 2 }),
+      {
+        message: "waitFor: condition not met after 2 ticks",
+      },
+    );
+  });
+
+  test("adds the message of the caller, text or function, to the failure", async () => {
+    await assert.rejects(
+      waitFor(() => false, { attempts: 2, message: "two reloads" }),
+      {
+        message: "waitFor: condition not met after 2 ticks: two reloads",
+      },
+    );
+    await assert.rejects(
+      waitFor(() => false, { attempts: 2, message: () => "now 1 reload" }),
+      {
+        message: "waitFor: condition not met after 2 ticks: now 1 reload",
+      },
+    );
   });
 });
