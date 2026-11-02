@@ -299,7 +299,11 @@ test("archived recipes have Edit and Restore", async (t) => {
 
   assert.notEqual(buttonLabeled("Edit Café"), null, "the Edit Café button");
   assert.notEqual(buttonLabeled("Restore Café"), null, "the Restore Café button");
-  assert.equal(buttonLabeled("Archive Café"), null);
+  assert.equal(
+    buttonLabeled("Archive Café") === null,
+    true,
+    "an archived recipe has no Archive Café button",
+  );
 });
 
 test("each row shows the recipe's ingredients, or a warning when it has none", async (t) => {
@@ -313,7 +317,11 @@ test("each row shows the recipe's ingredients, or a warning when it has none", a
     "the warning icon of the recipe without ingredients",
   );
   assert.equal(detail("2").textContent, "Onion");
-  assert.equal(detail("2").querySelector(".warning-icon"), null);
+  assert.equal(
+    detail("2").querySelector(".warning-icon") === null,
+    true,
+    "the recipe with ingredients has no warning icon",
+  );
   // A screen reader reads the detail after the row's name.
   assert.equal(buttonLabeled("Edit Coffee").getAttribute("aria-describedby"), detail("1").id);
 });
@@ -329,7 +337,11 @@ test("saving ingredients for a recipe removes its warning icon", async (t) => {
   editorDialog().querySelector(".done").click();
   await respondTo("PATCH", "/api/recipes/1", 200, recipe("1", "Soup", false, WITH_ONION));
 
-  assert.equal(rowById("1").querySelector(".warning-icon"), null);
+  assert.equal(
+    rowById("1").querySelector(".warning-icon") === null,
+    true,
+    "the recipe lost its warning icon",
+  );
 });
 
 test("beforeunload prevents leaving only while the editor has changes", async (t) => {

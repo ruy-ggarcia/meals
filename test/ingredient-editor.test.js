@@ -120,7 +120,7 @@ test("Unit is enabled even when recipes use the ingredient", () => {
   openEditor({ usage: { ...noUsage(), inUnit: true } });
 
   assert.equal(query(".unit-field").disabled, false);
-  assert.equal(query(".unit-hint"), null);
+  assert.equal(query(".unit-hint") === null, true, "there is no Unit hint");
 });
 
 test("Done with no changes closes without a request and returns focus to the opener", () => {
@@ -625,7 +625,11 @@ test('Done with two names that share a name key shows "medium" is already a meas
 
   query(".done").click();
 
-  assert.equal(measureRows()[0].querySelector(".row-message"), null);
+  assert.equal(
+    measureRows()[0].querySelector(".row-message") === null,
+    true,
+    "the first measure row has no message",
+  );
   assert.equal(
     measureRows()[1].querySelector(".row-message").textContent,
     '"MÉDIUM" is already a measure.',
@@ -1110,7 +1114,11 @@ test("a measure amount that isn't valid is marked as you type, and Done stays en
 
   setField(amount, "0");
   assert.equal(amount.getAttribute("aria-invalid"), "true");
-  assert.equal(measureRows()[0].querySelector(".row-message"), null);
+  assert.equal(
+    measureRows()[0].querySelector(".row-message") === null,
+    true,
+    "the first measure row has no message",
+  );
   assert.equal(query(".done").disabled, false);
 
   setField(amount, "160");

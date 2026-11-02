@@ -226,7 +226,11 @@ test("Done with an invalid quantity shows a message under its row, focuses it, a
 
   const rows = [...document.querySelectorAll(".ingredient-row")];
   assert.equal(dialog.open, true);
-  assert.equal(rows[0].querySelector(".row-message"), null);
+  assert.equal(
+    rows[0].querySelector(".row-message") === null,
+    true,
+    "the first row has no message",
+  );
   assert.equal(
     rows[1].querySelector(".row-message").textContent,
     "Enter a quantity from 0.01 to 10000, with up to two decimals.",
@@ -271,7 +275,11 @@ test("a quantity that isn't valid is marked as you type, and Done stays enabled"
 
   setValue(field, "1.255");
   assert.equal(field.getAttribute("aria-invalid"), "true");
-  assert.equal(field.closest(".ingredient-row").querySelector(".row-message"), null);
+  assert.equal(
+    field.closest(".ingredient-row").querySelector(".row-message") === null,
+    true,
+    "the row of the field has no message",
+  );
   assert.equal(query(".done").disabled, false);
 
   setValue(field, "1,25");
@@ -639,7 +647,7 @@ test("an ingredient name with HTML renders as text", () => {
   openEditor({ ingredients: [{ id: "b", name: "<b>Bold</b>", unit: "g", archived: false }] });
 
   assert.deepEqual(optionTexts(), ["<b>Bold</b> (g)"]);
-  assert.equal(query(".options b"), null);
+  assert.equal(query(".options b") === null, true, "the options have no bold text");
 });
 
 function measureFields() {
@@ -726,9 +734,13 @@ test("an ingredient without measures shows its unit as text", () => {
   openEditor({ recipe: SOUP });
 
   const rows = [...document.querySelectorAll(".ingredient-row")];
-  assert.equal(rows[1].querySelector("select.measure-field"), null);
+  assert.equal(
+    rows[1].querySelector("select.measure-field") === null,
+    true,
+    "the second row has no measure select",
+  );
   assert.equal(rows[1].querySelector(".unit").textContent, "g");
-  assert.equal(rows[0].querySelector(".unit"), null);
+  assert.equal(rows[0].querySelector(".unit") === null, true, "the first row has no unit text");
 });
 
 test("switching an existing measure line back to the unit is a change and drops measureId", async () => {
@@ -806,7 +818,7 @@ test("Archive without changes sends only archived: true, then closes with the ar
   assert.equal(query(".archive").disabled, true);
   await respondTo("PATCH", "/api/recipes/soup", 200, { ...SOUP, archived: true });
 
-  assert.equal(document.querySelector('[role="alertdialog"]'), null);
+  assert.equal(document.querySelector('[role="alertdialog"]') === null, true, "no alert is open");
   assert.deepEqual(server.requestFor("PATCH", "/api/recipes/soup").body, { archived: true });
   assert.equal(dialog.open, false);
   assert.deepEqual(saved, [{ ...SOUP, archived: true }]);
@@ -845,7 +857,7 @@ test("Keep Editing keeps the editor and its changes, and sends nothing", async (
   alert.querySelector(".keep").click();
   await tick();
 
-  assert.equal(document.querySelector('[role="alertdialog"]'), null);
+  assert.equal(document.querySelector('[role="alertdialog"]') === null, true, "no alert is open");
   assert.equal(dialog.open, true);
   assert.equal(nameField().value, "Changed, but not saved");
   assert.equal(server.requests.length, 0);

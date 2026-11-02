@@ -324,7 +324,7 @@ test("a recipe name with HTML renders as text, not markup", () => {
 
   const name = itemRows()[0].querySelector(".recipe-name");
   assert.equal(name.textContent, "<b>Bold</b> soup");
-  assert.equal(name.querySelector("b"), null);
+  assert.equal(name.querySelector("b") === null, true, "the recipe name has no <b> element");
 });
 
 describe("slot editor", () => {
