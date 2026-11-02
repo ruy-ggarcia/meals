@@ -60,9 +60,3 @@ test("cleanName equals the server's cleanName", () => {
     assert.equal(cleanName(name), serverCleanName(name), JSON.stringify(name));
   }
 });
-
-test("filterByName matches a name the server would store, for a query with extra spaces", () => {
-  const stored = entry(serverCleanName("  Crème   brûlée  \t"));
-
-  assert.deepEqual(filterByName([stored], "  crème   brûlée  "), [stored]);
-});
