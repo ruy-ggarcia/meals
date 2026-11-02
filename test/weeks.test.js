@@ -87,22 +87,6 @@ test("readWeek reads the week before the recipe book, so a concurrent create's i
   assert.deepEqual(second.mon.lunch, { items: [{ recipeId: newRecipeId, servings: 1 }] });
 });
 
-test("saveSlot stores the menu and it can be read back", async () => {
-  const items = [
-    { recipeId: soup.id, servings: 1.5 },
-    { recipeId: salad.id, servings: 2 },
-  ];
-
-  const result = await weeks.saveSlot(WEEK, "mon", "lunch", items);
-  assert.deepEqual(result, { week: WEEK, day: "mon", meal: "lunch", items });
-
-  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
-  expected.mon.lunch = { items };
-  assert.deepEqual(await weeks.readWeek(WEEK), expected);
-  // A brand-new store over the same directory sees it too: it really is on disk.
-  assert.deepEqual(await newWeeks().readWeek(WEEK), expected);
-});
-
 test("saveSlot doesn't drop another slot's items when the recipe book on disk is older or missing", async () => {
   await weeks.saveSlot(WEEK, "mon", "lunch", [{ recipeId: soup.id, servings: 1 }]);
   const currentRecipes = await readFile(recipesFile(), "utf8");
@@ -168,6 +152,43 @@ test("concurrent saves to different slots are all kept", async () => {
 });
 
 describe("saveSlot", () => {
+  test("returns the saved slot", async () => {
+    const items = [
+      { recipeId: soup.id, servings: 1.5 },
+      { recipeId: salad.id, servings: 2 },
+    ];
+
+    const result = await weeks.saveSlot(WEEK, "mon", "lunch", items);
+
+    assert.deepEqual(result, { week: WEEK, day: "mon", meal: "lunch", items });
+  });
+
+  test("stores the menu, and a new store reads it back", async () => {
+    const items = [
+      { recipeId: soup.id, servings: 1.5 },
+      { recipeId: salad.id, servings: 2 },
+    ];
+
+    await weeks.saveSlot(WEEK, "mon", "lunch", items);
+
+    const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+    expected.mon.lunch = { items };
+    assert.deepEqual(await weeks.readWeek(WEEK), expected);
+    // A brand-new store over the same directory sees it too: it really is on disk.
+    assert.deepEqual(await newWeeks().readWeek(WEEK), expected);
+  });
+
+  test("rejects a week file that isn't valid JSON, and keeps it", async () => {
+    await writeWeekFile(WEEK, "{ not json");
+
+    await assert.rejects(
+      weeks.saveSlot(WEEK, "mon", "lunch", [{ recipeId: soup.id, servings: 1 }]),
+      SyntaxError,
+    );
+
+    assert.equal(await readFile(weekFile(WEEK), "utf8"), "{ not json");
+  });
+
   test("rejects an unknown slot, and writes no file", async () => {
     const items = [{ recipeId: soup.id, servings: 1 }];
 
@@ -195,6 +216,12 @@ describe("saveSlot", () => {
 });
 
 describe("readWeek", () => {
+  test("rejects a week file that isn't valid JSON", async () => {
+    await writeWeekFile(WEEK, "{ not json");
+
+    await assert.rejects(weeks.readWeek(WEEK), SyntaxError);
+  });
+
   test("drops the items whose recipe isn't in the recipe book", async () => {
     await writeWeekFile(
       WEEK,
@@ -220,17 +247,6 @@ test("saveSlot accepts an archived recipe", async () => {
   await recipes.update(soup.id, { archived: true });
   const items = [{ recipeId: soup.id, servings: 2 }];
   assert.deepEqual((await weeks.saveSlot(WEEK, "fri", "dinner", items)).items, items);
-});
-
-test("readWeek rejects when the week file is not valid JSON, and saveSlot doesn't overwrite it", async () => {
-  await writeWeekFile(WEEK, "{ not json");
-
-  await assert.rejects(weeks.readWeek(WEEK), SyntaxError);
-  await assert.rejects(
-    weeks.saveSlot(WEEK, "mon", "lunch", [{ recipeId: soup.id, servings: 1 }]),
-    SyntaxError,
-  );
-  assert.equal(await readFile(weekFile(WEEK), "utf8"), "{ not json");
 });
 
 test("the free-text weeks of earlier versions are never read or changed", async () => {
