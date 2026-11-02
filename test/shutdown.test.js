@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, mock, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { createShutdown } from "../server/shutdown.js";
-import { collectingLogger } from "./helpers.js";
+import { collectingLogger } from "./backend-helpers.js";
 
 /** A stop() that resolves or rejects when the test says so. */
 function controlledStop() {

@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, readdir, readFile } from "node:fs/promises";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { beforeEach, describe, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import request from "supertest";
 import { createApp } from "../server/app.js";
@@ -15,26 +14,25 @@ import {
   ValidationError,
 } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
-import { blankWeek, collectingLogger, skipAsRoot, within } from "./helpers.js";
-
-const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
+import {
+  blankWeek,
+  collectingLogger,
+  skipAsRoot,
+  useDataDir,
+  within,
+  writeDataFile,
+} from "./backend-helpers.js";
 
 const WEEK = "2026-09-21";
 const OTHER_WEEK = "2026-09-28";
 // A Tuesday, an impossible date that JavaScript rolls over to a Monday, and non-dates.
 const INVALID_WEEKS = ["2026-09-22", "2026-02-30", "2026-9-21", "hello"];
 
-let dataDir;
+const dataDir = useDataDir("meals-api-");
 let app;
 
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-api-"));
-  app = createApp(createStores({ dataDir }));
-});
-
-afterEach(async () => {
-  await rm(dataDir, { recursive: true, force: true });
+beforeEach(() => {
+  app = createApp(createStores({ dataDir: dataDir() }));
 });
 
 async function addRecipe(name) {
@@ -53,7 +51,7 @@ function assertJsonError(res, status, label) {
 
 test("each /api request is logged with its method, path, status, and duration", async () => {
   const { entries, logger } = collectingLogger();
-  const loggedApp = createApp(createStores({ dataDir }), { logger });
+  const loggedApp = createApp(createStores({ dataDir: dataDir() }), { logger });
 
   await request(loggedApp).get("/api/recipes?ignored=1");
   await request(loggedApp).put(`/api/weeks/${WEEK}/mon/lunch`).send({ items: [] });
@@ -196,7 +194,7 @@ test("a request that the client aborts is logged once", async () => {
 
 test("static files aren't logged", async () => {
   const { entries, logger } = collectingLogger();
-  const loggedApp = createApp(createStores({ dataDir }), { logger });
+  const loggedApp = createApp(createStores({ dataDir: dataDir() }), { logger });
 
   assert.equal((await request(loggedApp).get("/")).status, 200);
   assert.equal((await request(loggedApp).get("/styles.css")).status, 200);
@@ -226,7 +224,10 @@ describe("GET /manifest.webmanifest", () => {
 // ---------- Health ----------
 
 test("GET /api/health returns 200 with the version when the data directory is writable", async () => {
-  const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });
+  const healthApp = createApp(createStores({ dataDir: dataDir() }), {
+    dataDir: dataDir(),
+    version: "1.2.3",
+  });
 
   const res = await request(healthApp).get("/api/health");
 
@@ -239,8 +240,11 @@ test("GET /api/health returns 503 when the data directory isn't writable", {
   skip: skipAsRoot("root can write to any directory"),
 }, async () => {
   // afterEach removes the directory, which is empty, so the mode can stay.
-  await chmod(dataDir, 0o500);
-  const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });
+  await chmod(dataDir(), 0o500);
+  const healthApp = createApp(createStores({ dataDir: dataDir() }), {
+    dataDir: dataDir(),
+    version: "1.2.3",
+  });
 
   const res = await request(healthApp).get("/api/health");
 
@@ -252,8 +256,11 @@ test("GET /api/health returns 503 when the data directory can't be entered", {
   skip: skipAsRoot("root can enter any directory"),
 }, async () => {
   // afterEach removes the directory, which is empty, so the mode can stay.
-  await chmod(dataDir, 0o600);
-  const healthApp = createApp(createStores({ dataDir }), { dataDir, version: "1.2.3" });
+  await chmod(dataDir(), 0o600);
+  const healthApp = createApp(createStores({ dataDir: dataDir() }), {
+    dataDir: dataDir(),
+    version: "1.2.3",
+  });
 
   const res = await request(healthApp).get("/api/health");
 
@@ -262,7 +269,7 @@ test("GET /api/health returns 503 when the data directory can't be entered", {
 });
 
 test("GET /api/health returns 503 when the data directory doesn't exist", async () => {
-  const missing = path.join(dataDir, "missing");
+  const missing = path.join(dataDir(), "missing");
   const healthApp = createApp(createStores({ dataDir: missing }), {
     dataDir: missing,
     version: "1.2.3",
@@ -278,14 +285,16 @@ describe("GET /api/health", () => {
   test("logs nothing for a successful check", async () => {
     const { entries, logger } = collectingLogger();
 
-    await request(createApp(createStores({ dataDir }), { dataDir, logger })).get("/api/health");
+    await request(
+      createApp(createStores({ dataDir: dataDir() }), { dataDir: dataDir(), logger }),
+    ).get("/api/health");
 
     assert.deepEqual(entries, []);
   });
 
   test("logs the error code of a failed check, and then the request", async () => {
     const { entries, logger } = collectingLogger();
-    const missing = path.join(dataDir, "missing");
+    const missing = path.join(dataDir(), "missing");
 
     await request(createApp(createStores({ dataDir: missing }), { dataDir: missing, logger })).get(
       "/api/health",
@@ -630,8 +639,7 @@ test("PATCH /api/ingredients/ID removing a measure that an archived recipe uses 
 });
 
 test("a corrupt ingredients file makes GET /api/ingredients and GET /api/recipes return 500", async () => {
-  await mkdir(path.join(dataDir, "v2"), { recursive: true });
-  await writeFile(path.join(dataDir, "v2", "ingredients.json"), "{ not json");
+  await writeDataFile(dataDir(), "v2/ingredients.json", "{ not json");
 
   for (const url of ["/api/ingredients", "/api/recipes"]) {
     const res = await request(app).get(url);
@@ -647,7 +655,7 @@ test("GET /api/weeks/WEEK returns 200 with a complete week of empty menus", asyn
 
   assert.equal(res.status, 200);
   assert.match(res.headers["content-type"], /application\/json/);
-  assert.deepEqual(res.body, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+  assert.deepEqual(res.body, blankWeek());
 });
 
 test("PUT a valid menu returns 200 with the saved slot and a later GET reflects it", async () => {
@@ -664,7 +672,7 @@ test("PUT a valid menu returns 200 with the saved slot and a later GET reflects 
   assert.deepEqual(put.body, { week: WEEK, day: "wed", meal: "lunch", items });
 
   const get = await request(app).get(`/api/weeks/${WEEK}`);
-  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+  const expected = blankWeek();
   expected.wed.lunch = { items };
   assert.deepEqual(get.body, expected);
 });
@@ -677,7 +685,7 @@ test("a PUT in one week doesn't change another week", async () => {
 
   const get = await request(app).get(`/api/weeks/${OTHER_WEEK}`);
   assert.equal(get.status, 200);
-  assert.deepEqual(get.body, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+  assert.deepEqual(get.body, blankWeek());
 });
 
 test("PUT accepts an empty menu (clearing a slot)", async () => {
@@ -719,7 +727,7 @@ test("PUT with an unknown week, day, or meal returns 404 JSON and saves nothing"
   for (const url of urls) {
     assertJsonError(await request(app).put(url).send({ items: [] }), 404, url);
   }
-  assert.deepEqual(await readdir(dataDir), []);
+  assert.deepEqual(await readdir(dataDir()), []);
 });
 
 describe("PUT /api/weeks/:week/:day/:meal", () => {

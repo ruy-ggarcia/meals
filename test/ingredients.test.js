@@ -1,20 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
-import {
-  ConflictError,
-  NameConflictError,
-  NotFoundError,
-  ValidationError,
-} from "../server/errors.js";
+import { beforeEach, describe, test } from "node:test";
+import { ConflictError, NotFoundError, ValidationError } from "../server/errors.js";
 import { createQueue } from "../server/files.js";
 import { createIngredients } from "../server/ingredients.js";
+import { UUID_V4, useDataDir, writeDataFile } from "./backend-helpers.js";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+// The catalog, inside the data directory.
+const INGREDIENTS = "v2/ingredients.json";
 
-let dataDir;
+const dataDir = useDataDir("meals-ingredients-");
 let ingredients;
 /** What the stubbed recipe book says about each ingredient ID. */
 let usage;
@@ -24,12 +20,12 @@ let moves;
 let failingMoves;
 
 function ingredientsFile() {
-  return path.join(dataDir, "v2", "ingredients.json");
+  return path.join(dataDir(), INGREDIENTS);
 }
 
 function newIngredients() {
   return createIngredients({
-    dataDir,
+    dataDir: dataDir(),
     enqueue: createQueue(),
     moveUnitLinesToMeasure: async (ingredientId, measureId) => {
       if (failingMoves > 0) {
@@ -43,16 +39,11 @@ function newIngredients() {
   });
 }
 
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-ingredients-"));
+beforeEach(() => {
   usage = new Map();
   moves = [];
   failingMoves = 0;
   ingredients = newIngredients();
-});
-
-afterEach(async () => {
-  await rm(dataDir, { recursive: true, force: true });
 });
 
 test("list returns an empty catalog when there is no file", async () => {
@@ -62,7 +53,7 @@ test("list returns an empty catalog when there is no file", async () => {
 test("create stores an ingredient with a UUID, the cleaned name, the unit, and archived false", async () => {
   const onion = await ingredients.create({ name: "  Red   onion ", unit: "g" });
 
-  assert.match(onion.id, UUID);
+  assert.match(onion.id, UUID_V4);
   assert.deepEqual(onion, {
     id: onion.id,
     name: "Red onion",
@@ -89,17 +80,17 @@ test("list sorts ingredients from A to Z by name key", async () => {
 test("create rejects a name whose key is taken, active or archived, and reports that ingredient", async () => {
   const onion = await ingredients.create({ name: "Onion", unit: "g" });
 
-  await assert.rejects(ingredients.create({ name: " ONION ", unit: "pcs" }), (error) => {
-    assert.ok(error instanceof NameConflictError);
-    assert.equal(error.kind, "ingredient");
-    assert.deepEqual(error.entity, onion);
-    return true;
+  await assert.rejects(ingredients.create({ name: " ONION ", unit: "pcs" }), {
+    name: "NameConflictError",
+    kind: "ingredient",
+    entity: onion,
   });
 
   const archived = await ingredients.update(onion.id, { archived: true });
-  await assert.rejects(ingredients.create({ name: "onion", unit: "g" }), (error) => {
-    assert.deepEqual(/** @type {NameConflictError} */ (error).entity, archived);
-    return true;
+  await assert.rejects(ingredients.create({ name: "onion", unit: "g" }), {
+    name: "NameConflictError",
+    kind: "ingredient",
+    entity: archived,
   });
   assert.equal((await ingredients.list()).length, 1);
 });
@@ -118,10 +109,10 @@ test("update rejects a name whose key another ingredient has", async () => {
   const onion = await ingredients.create({ name: "Onion", unit: "g" });
   const egg = await ingredients.create({ name: "Egg", unit: "pcs" });
 
-  await assert.rejects(ingredients.update(egg.id, { name: "onion" }), (error) => {
-    assert.ok(error instanceof NameConflictError);
-    assert.deepEqual(error.entity, onion);
-    return true;
+  await assert.rejects(ingredients.update(egg.id, { name: "onion" }), {
+    name: "NameConflictError",
+    kind: "ingredient",
+    entity: onion,
   });
   assert.deepEqual(await ingredients.list(), [egg, onion]);
 });
@@ -159,13 +150,12 @@ test("update rejects an unknown ID", async () => {
 });
 
 test("an ingredients file with invalid JSON or the wrong shape makes reads and writes fail without overwriting it", async () => {
-  await mkdir(path.join(dataDir, "v2"), { recursive: true });
   for (const content of [
     "{ not json",
     '[{"id":"a","name":"Onion","unit":"g"}]',
     '{"ingredients":1}',
   ]) {
-    await writeFile(ingredientsFile(), content);
+    await writeDataFile(dataDir(), INGREDIENTS, content);
 
     await assert.rejects(ingredients.list(), Error, `list with ${content}`);
     await assert.rejects(
@@ -188,7 +178,7 @@ test("create stores measures with new UUIDs, cleaned names, and rounded amounts"
   });
 
   assert.equal(onion.measures.length, 2);
-  assert.match(onion.measures[0].id, UUID);
+  assert.match(onion.measures[0].id, UUID_V4);
   assert.deepEqual(onion.measures[0], { id: onion.measures[0].id, name: "medium", amount: 150 });
   assert.equal(onion.measures[1].amount, 0.3);
   assert.deepEqual(await ingredients.list(), [onion]);
@@ -219,7 +209,7 @@ test("update replaces the measures, keeping sent IDs and giving new ones IDs", a
   });
 
   assert.deepEqual(updated.measures[0], { id: small.id, name: "tiny", amount: 70 });
-  assert.match(updated.measures[1].id, UUID);
+  assert.match(updated.measures[1].id, UUID_V4);
   assert.notEqual(updated.measures[1].id, onion.measures[1].id);
   assert.equal(updated.measures[1].name, "large");
   assert.deepEqual(await ingredients.list(), [updated]);
@@ -304,7 +294,7 @@ test("pcs to g with 1 = 120 multiplies measures and turns unit lines into a meas
   });
 
   const piece = updated.measures[1];
-  assert.match(piece.id, UUID);
+  assert.match(piece.id, UUID_V4);
   assert.deepEqual(updated, {
     ...carrot,
     name: "Orange carrot",

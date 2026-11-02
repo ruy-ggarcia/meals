@@ -1,28 +1,24 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { beforeEach, describe, test } from "node:test";
 import { NameConflictError, NotFoundError, ValidationError } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
+import { UUID_V4, useDataDir, writeDataFile } from "./backend-helpers.js";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const dataDir = useDataDir("meals-recipes-");
 
-let dataDir;
+// The recipe book, inside the data directory.
+const RECIPES = "v2/recipes.json";
 let ingredients;
 let recipes;
 
 function recipesFile() {
-  return path.join(dataDir, "v2", "recipes.json");
+  return path.join(dataDir(), RECIPES);
 }
 
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-recipes-"));
-  ({ ingredients, recipes } = createStores({ dataDir }));
-});
-
-afterEach(async () => {
-  await rm(dataDir, { recursive: true, force: true });
+beforeEach(() => {
+  ({ ingredients, recipes } = createStores({ dataDir: dataDir() }));
 });
 
 test("list returns an empty recipe book when there is no file", async () => {
@@ -32,7 +28,7 @@ test("list returns an empty recipe book when there is no file", async () => {
 test("create stores a recipe with a UUID, the cleaned name, and archived false", async () => {
   const recipe = await recipes.create({ name: "  Gnocchi   carbonara " });
 
-  assert.match(recipe.id, UUID);
+  assert.match(recipe.id, UUID_V4);
   assert.deepEqual(recipe, {
     id: recipe.id,
     name: "Gnocchi carbonara",
@@ -41,7 +37,7 @@ test("create stores a recipe with a UUID, the cleaned name, and archived false",
   });
   assert.deepEqual(JSON.parse(await readFile(recipesFile(), "utf8")), { recipes: [recipe] });
   // A brand-new store over the same directory sees it too: it really is on disk.
-  assert.deepEqual(await createStores({ dataDir }).recipes.list(), [recipe]);
+  assert.deepEqual(await createStores({ dataDir: dataDir() }).recipes.list(), [recipe]);
 });
 
 test("list sorts recipes from A to Z by name key", async () => {
@@ -54,19 +50,17 @@ test("list sorts recipes from A to Z by name key", async () => {
 test("create rejects a name whose key is taken, active or archived, and reports that recipe", async () => {
   const cafe = await recipes.create({ name: "Café" });
 
-  await assert.rejects(recipes.create({ name: "  cafe " }), (error) => {
-    assert.ok(error instanceof NameConflictError);
-    assert.equal(error.kind, "recipe");
-    assert.deepEqual(error.entity, cafe);
-    return true;
+  await assert.rejects(recipes.create({ name: "  cafe " }), {
+    name: "NameConflictError",
+    kind: "recipe",
+    entity: cafe,
   });
 
   const archived = await recipes.update(cafe.id, { archived: true });
-  await assert.rejects(recipes.create({ name: "CAFE" }), (error) => {
-    assert.ok(error instanceof NameConflictError);
-    assert.equal(error.kind, "recipe");
-    assert.deepEqual(error.entity, archived);
-    return true;
+  await assert.rejects(recipes.create({ name: "CAFE" }), {
+    name: "NameConflictError",
+    kind: "recipe",
+    entity: archived,
   });
   assert.equal((await recipes.list()).length, 1);
 });
@@ -113,11 +107,10 @@ test("update rejects a name whose key another recipe has", async () => {
   const soup = await recipes.create({ name: "Soup" });
   const salad = await recipes.create({ name: "Salad" });
 
-  await assert.rejects(recipes.update(salad.id, { name: "SOUP" }), (error) => {
-    assert.ok(error instanceof NameConflictError);
-    assert.equal(error.kind, "recipe");
-    assert.deepEqual(error.entity, soup);
-    return true;
+  await assert.rejects(recipes.update(salad.id, { name: "SOUP" }), {
+    name: "NameConflictError",
+    kind: "recipe",
+    entity: soup,
   });
   assert.deepEqual(await recipes.list(), [salad, soup]);
 });
@@ -135,8 +128,7 @@ test("update rejects an unknown ID", async () => {
 });
 
 test("a recipes file with invalid JSON makes reads and writes fail without overwriting it", async () => {
-  await mkdir(path.join(dataDir, "v2"), { recursive: true });
-  await writeFile(recipesFile(), "{ not json");
+  await writeDataFile(dataDir(), RECIPES, "{ not json");
 
   await assert.rejects(recipes.list(), SyntaxError);
   await assert.rejects(recipes.create({ name: "Soup" }), SyntaxError);
@@ -144,9 +136,8 @@ test("a recipes file with invalid JSON makes reads and writes fail without overw
 });
 
 test("a recipes file that is valid JSON but the wrong shape makes reads and writes fail without overwriting it", async () => {
-  await mkdir(path.join(dataDir, "v2"), { recursive: true });
   for (const content of ['[{"id":"a","name":"Soup","archived":false}]', '{"recipes":"Soup"}']) {
-    await writeFile(recipesFile(), content);
+    await writeDataFile(dataDir(), RECIPES, content);
 
     await assert.rejects(recipes.list(), Error, `list with ${content}`);
     await assert.rejects(recipes.create({ name: "Soup" }), Error, `create with ${content}`);
@@ -209,9 +200,9 @@ test("update changes the name and the ingredients together", async () => {
 });
 
 test("saving one recipe keeps another recipe's ingredients that the catalog doesn't have", async () => {
-  await mkdir(path.join(dataDir, "v2"), { recursive: true });
-  await writeFile(
-    recipesFile(),
+  await writeDataFile(
+    dataDir(),
+    RECIPES,
     JSON.stringify({
       recipes: [
         { id: "a", name: "Soup", archived: false, ingredients: [entry("gone", 5)] },
@@ -228,8 +219,9 @@ test("saving one recipe keeps another recipe's ingredients that the catalog does
 
 test("update returns the recipe without the ingredients that the catalog doesn't have", async () => {
   const onion = await ingredients.create({ name: "Onion", unit: "g" });
-  await writeFile(
-    recipesFile(),
+  await writeDataFile(
+    dataDir(),
+    RECIPES,
     JSON.stringify({
       recipes: [
         {
@@ -308,8 +300,9 @@ async function writeStaleMeasure() {
   });
   const good = { ingredientId: onion.id, measureId: onion.measures[0].id, quantity: 1 };
   const stale = { ingredientId: onion.id, measureId: "gone", quantity: 2 };
-  await writeFile(
-    recipesFile(),
+  await writeDataFile(
+    dataDir(),
+    RECIPES,
     JSON.stringify({
       recipes: [
         { id: "a", name: "Soup", archived: false, ingredients: [good] },
@@ -474,9 +467,9 @@ describe("list", () => {
 
   test("drops an ingredient that the catalog doesn't have", async () => {
     const onion = await ingredients.create({ name: "Onion", unit: "g" });
-    await mkdir(path.join(dataDir, "v2"), { recursive: true });
-    await writeFile(
-      recipesFile(),
+    await writeDataFile(
+      dataDir(),
+      RECIPES,
       JSON.stringify({
         recipes: [
           {

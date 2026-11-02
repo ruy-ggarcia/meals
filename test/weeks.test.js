@@ -1,56 +1,51 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { beforeEach, describe, test } from "node:test";
 import { createQueue } from "../server/files.js";
 import { createStores } from "../server/stores.js";
 import { createWeeks } from "../server/weeks.js";
-import { blankWeek } from "./helpers.js";
-
-// Expected values are written out literally so the tests do not trust the module under test.
-const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
+import {
+  blankWeek,
+  EXPECTED_DAYS,
+  EXPECTED_MEALS,
+  useDataDir,
+  writeDataFile,
+} from "./backend-helpers.js";
 
 const WEEK = "2026-09-21";
 const OTHER_WEEK = "2026-09-28";
 
-let dataDir;
+const dataDir = useDataDir("meals-weeks-");
 let recipes;
 let weeks;
 let soup;
 let salad;
 
 function weekFile(week) {
-  return path.join(dataDir, "v2", "weeks", `${week}.json`);
+  return path.join(dataDir(), "v2", "weeks", `${week}.json`);
 }
 
 function recipesFile() {
-  return path.join(dataDir, "v2", "recipes.json");
+  return path.join(dataDir(), "v2", "recipes.json");
 }
 
-async function writeWeekFile(week, content) {
-  await mkdir(path.dirname(weekFile(week)), { recursive: true });
-  await writeFile(weekFile(week), content);
+function writeWeekFile(week, content) {
+  return writeDataFile(dataDir(), `v2/weeks/${week}.json`, content);
 }
 
 function newWeeks() {
-  return createStores({ dataDir }).weeks;
+  return createStores({ dataDir: dataDir() }).weeks;
 }
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-weeks-"));
-  ({ recipes, weeks } = createStores({ dataDir }));
+  ({ recipes, weeks } = createStores({ dataDir: dataDir() }));
   soup = await recipes.create({ name: "Soup" });
   salad = await recipes.create({ name: "Salad" });
 });
 
-afterEach(async () => {
-  await rm(dataDir, { recursive: true, force: true });
-});
-
 test("readWeek returns a complete week of empty menus when the week has no file", async () => {
-  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek());
 });
 
 test("readWeek rejects an invalid week", async () => {
@@ -75,7 +70,11 @@ test("readWeek reads the week before the recipe book, so a concurrent create's i
       return [newRecipeId];
     },
   };
-  const stubWeeks = createWeeks({ dataDir, enqueue: createQueue(), recipes: stubRecipes });
+  const stubWeeks = createWeeks({
+    dataDir: dataDir(),
+    enqueue: createQueue(),
+    recipes: stubRecipes,
+  });
 
   // The week file didn't exist yet when readWeek read it, so the item the
   // recipe book stub wrote as a side effect of its own read isn't there.
@@ -93,18 +92,18 @@ test("saveSlot doesn't drop another slot's items when the recipe book on disk is
 
   // Simulates a recipe book restored from an older backup, or a missing
   // file, that doesn't know about `soup` yet.
-  await writeFile(recipesFile(), JSON.stringify({ recipes: [] }));
+  await writeDataFile(dataDir(), "v2/recipes.json", JSON.stringify({ recipes: [] }));
   const saladOnly = await recipes.create({ name: "Salad only" });
   await weeks.saveSlot(WEEK, "tue", "lunch", [{ recipeId: saladOnly.id, servings: 1 }]);
 
-  await writeFile(recipesFile(), currentRecipes);
+  await writeDataFile(dataDir(), "v2/recipes.json", currentRecipes);
 
   const week = await weeks.readWeek(WEEK);
   assert.deepEqual(week.mon.lunch, { items: [{ recipeId: soup.id, servings: 1 }] });
 });
 
 test("readWeek and saveSlot work when the ingredient catalog isn't valid JSON", async () => {
-  await writeFile(path.join(dataDir, "v2", "ingredients.json"), "{ not json");
+  await writeDataFile(dataDir(), "v2/ingredients.json", "{ not json");
   const items = [{ recipeId: soup.id, servings: 1 }];
 
   await weeks.saveSlot(WEEK, "mon", "lunch", items);
@@ -116,11 +115,11 @@ test("readWeek and saveSlot work when the ingredient catalog isn't valid JSON", 
 test("saveSlot with no items empties the slot", async () => {
   await weeks.saveSlot(WEEK, "tue", "dinner", [{ recipeId: soup.id, servings: 1 }]);
   await weeks.saveSlot(WEEK, "tue", "dinner", []);
-  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek());
 });
 
 test("concurrent saves to different slots are all kept", async () => {
-  const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+  const expected = blankWeek();
   const saves = [];
   for (const day of EXPECTED_DAYS) {
     for (const [index, meal] of EXPECTED_MEALS.entries()) {
@@ -143,13 +142,13 @@ describe("saveSlot", () => {
       weeks.saveSlot(OTHER_WEEK, "wed", "lunch", items),
     ]);
 
-    const first = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+    const first = blankWeek();
     first.tue.lunch = { items };
-    const second = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+    const second = blankWeek();
     second.wed.lunch = { items };
     assert.deepEqual(await weeks.readWeek(WEEK), first);
     assert.deepEqual(await weeks.readWeek(OTHER_WEEK), second);
-    assert.deepEqual(await weeks.readWeek("2026-10-05"), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+    assert.deepEqual(await weeks.readWeek("2026-10-05"), blankWeek());
   });
 
   test("returns the saved slot", async () => {
@@ -171,7 +170,7 @@ describe("saveSlot", () => {
 
     await weeks.saveSlot(WEEK, "mon", "lunch", items);
 
-    const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+    const expected = blankWeek();
     expected.mon.lunch = { items };
     assert.deepEqual(await weeks.readWeek(WEEK), expected);
     // A brand-new store over the same directory sees it too: it really is on disk.
@@ -195,7 +194,7 @@ describe("saveSlot", () => {
     await assert.rejects(weeks.saveSlot(WEEK, "mon", "brunch", items), RangeError);
 
     assert.deepEqual(
-      await readdir(path.join(dataDir, "v2")),
+      await readdir(path.join(dataDir(), "v2")),
       ["recipes.json"],
       "only the recipe book is on disk, so no week file was written",
     );
@@ -207,7 +206,7 @@ describe("saveSlot", () => {
     });
 
     assert.deepEqual(
-      await readdir(path.join(dataDir, "v2")),
+      await readdir(path.join(dataDir(), "v2")),
       ["recipes.json"],
       "only the recipe book is on disk, so no week file was written",
     );
@@ -220,7 +219,7 @@ describe("saveSlot", () => {
     );
 
     assert.deepEqual(
-      await readdir(path.join(dataDir, "v2")),
+      await readdir(path.join(dataDir(), "v2")),
       ["recipes.json"],
       "only the recipe book is on disk, so no week file was written",
     );
@@ -262,14 +261,13 @@ test("saveSlot accepts an archived recipe", async () => {
 });
 
 test("the free-text weeks of earlier versions are never read or changed", async () => {
-  const legacyWeek = path.join(dataDir, "weeks", `${WEEK}.json`);
-  const legacySingleWeek = path.join(dataDir, "week.json");
+  const legacyWeek = path.join(dataDir(), "weeks", `${WEEK}.json`);
+  const legacySingleWeek = path.join(dataDir(), "week.json");
   const legacyText = JSON.stringify({ mon: { lunch: "Paella" } });
-  await mkdir(path.dirname(legacyWeek), { recursive: true });
-  await writeFile(legacyWeek, legacyText);
-  await writeFile(legacySingleWeek, legacyText);
+  await writeDataFile(dataDir(), `weeks/${WEEK}.json`, legacyText);
+  await writeDataFile(dataDir(), "week.json", legacyText);
 
-  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+  assert.deepEqual(await weeks.readWeek(WEEK), blankWeek());
   await weeks.saveSlot(WEEK, "mon", "lunch", [{ recipeId: soup.id, servings: 1 }]);
 
   assert.equal(await readFile(legacyWeek, "utf8"), legacyText);

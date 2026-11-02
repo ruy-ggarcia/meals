@@ -1,26 +1,15 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import net from "node:net";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { silentLogger } from "../server/logger.js";
-import { start } from "../server/start.js";
+import { startTestServer, useDataDir } from "./backend-helpers.js";
 
 const HEALTHCHECK = fileURLToPath(new URL("../server/healthcheck.js", import.meta.url));
 
-let dataDir;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-healthcheck-"));
-});
-
-afterEach(async () => {
-  await rm(dataDir, { recursive: true, force: true });
-});
+const dataDir = useDataDir("meals-healthcheck-");
 
 /** Runs healthcheck.js against PORT, and resolves to its exit code and its stderr. */
 function healthcheck(port) {
@@ -33,17 +22,15 @@ function healthcheck(port) {
 }
 
 test("healthcheck.js exits with 0 when the server is healthy", async (t) => {
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
-  t.after(() => server.stop());
+  const server = await startTestServer(t, dataDir());
 
   assert.deepEqual(await healthcheck(server.port), { code: 0, stderr: "" });
 });
 
 test("healthcheck.js exits with 1 when the health check returns 503", async (t) => {
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
-  t.after(() => server.stop());
+  const server = await startTestServer(t, dataDir());
   // The server is running, and its data directory is gone.
-  await rm(dataDir, { recursive: true });
+  await rm(dataDir(), { recursive: true });
 
   // An empty stderr shows a failed check, and not a crash that also exits with 1.
   assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });

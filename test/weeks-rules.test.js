@@ -10,11 +10,7 @@ import {
   normalizeWeek,
   validItems,
 } from "../server/weeks.js";
-import { blankWeek } from "./helpers.js";
-
-// Expected values are written out literally so the tests do not trust the module under test.
-const EXPECTED_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const EXPECTED_MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
+import { blankWeek, EXPECTED_DAYS, EXPECTED_MEALS } from "./backend-helpers.js";
 
 describe("DAYS", () => {
   test("lists the stable day identifiers in order", () => {
@@ -196,11 +192,7 @@ describe("validItems", () => {
 describe("normalizeWeek", () => {
   test("returns a complete week of empty menus for data that isn't a week", () => {
     for (const raw of [undefined, null, "Paella", 7, [], {}]) {
-      assert.deepEqual(
-        normalizeWeek(raw, new Set()),
-        blankWeek(EXPECTED_DAYS, EXPECTED_MEALS),
-        JSON.stringify(raw),
-      );
+      assert.deepEqual(normalizeWeek(raw, new Set()), blankWeek(), JSON.stringify(raw));
     }
   });
 
@@ -225,7 +217,7 @@ describe("normalizeWeek", () => {
 
     const week = normalizeWeek(raw, new Set(["soup", "salad"]));
 
-    const expected = blankWeek(EXPECTED_DAYS, EXPECTED_MEALS);
+    const expected = blankWeek();
     expected.mon.breakfast = {
       items: [
         { recipeId: "soup", servings: 1 },
@@ -262,7 +254,7 @@ describe("normalizeWeek", () => {
 
     const week = normalizeWeek(raw, new Set());
 
-    assert.deepEqual(week, blankWeek(EXPECTED_DAYS, EXPECTED_MEALS));
+    assert.deepEqual(week, blankWeek());
   });
 
   test("keeps at most 20 menu items per slot", () => {

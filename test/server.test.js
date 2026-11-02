@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import net from "node:net";
-import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { silentLogger } from "../server/logger.js";
 import { start } from "../server/start.js";
 import { createStores } from "../server/stores.js";
-import { within } from "./helpers.js";
+import { startTestServer, useDataDir, within } from "./backend-helpers.js";
 
 const INDEX = fileURLToPath(new URL("../server/index.js", import.meta.url));
 const SIGNAL_LISTENERS_HOOK = fileURLToPath(
@@ -22,24 +21,16 @@ const { version: PACKAGE_VERSION } = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8"),
 );
 
-let dataDir;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-server-"));
-});
-
-afterEach(async () => {
-  await rm(dataDir, { recursive: true, force: true });
-});
+const dataDir = useDataDir("meals-server-");
 
 /** The names in the saved ingredient catalog. */
 async function savedIngredients() {
-  const text = await readFile(path.join(dataDir, "v2", "ingredients.json"), "utf8");
+  const text = await readFile(path.join(dataDir(), "v2", "ingredients.json"), "utf8");
   return JSON.parse(text).ingredients.map((ingredient) => ingredient.name);
 }
 
 test("idle() resolves after every write queued before it", async () => {
-  const stores = createStores({ dataDir });
+  const stores = createStores({ dataDir: dataDir() });
   const adding = stores.ingredients.create({ name: "Onion", unit: "g" });
 
   await stores.idle();
@@ -49,14 +40,8 @@ test("idle() resolves after every write queued before it", async () => {
 });
 
 test("start() creates a data directory that doesn't exist yet, so the health check passes", async (t) => {
-  const newDir = path.join(dataDir, "not", "yet", "created");
-  const server = await start({
-    dataDir: newDir,
-    logger: silentLogger,
-    port: 0,
-    version: "1.2.3",
-  });
-  t.after(() => server.stop());
+  const newDir = path.join(dataDir(), "not", "yet", "created");
+  const server = await startTestServer(t, newDir);
 
   const health = await fetch(`http://127.0.0.1:${server.port}/api/health`);
 
@@ -65,7 +50,12 @@ test("start() creates a data directory that doesn't exist yet, so the health che
 });
 
 test("start() listens on every interface unless it gets a host", async (t) => {
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
+  const server = await start({
+    dataDir: dataDir(),
+    logger: silentLogger,
+    port: 0,
+    version: "1.2.3",
+  });
   t.after(() => server.stop());
 
   assert.equal(server.address, "0.0.0.0");
@@ -73,7 +63,7 @@ test("start() listens on every interface unless it gets a host", async (t) => {
 
 test("start() listens only on the host that it gets", async (t) => {
   const server = await start({
-    dataDir,
+    dataDir: dataDir(),
     host: "127.0.0.1",
     logger: silentLogger,
     port: 0,
@@ -86,7 +76,7 @@ test("start() listens only on the host that it gets", async (t) => {
 
 test("start() rejects when it can't create the data directory", async (t) => {
   // A directory can't live under a regular file, whoever runs the test.
-  const file = path.join(dataDir, "file");
+  const file = path.join(dataDir(), "file");
   await writeFile(file, "");
 
   const started = start({
@@ -122,7 +112,13 @@ async function startPostInProgress(t, connection) {
     }
     return emit.call(this, event, ...args);
   });
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
+  const server = await start({
+    dataDir: dataDir(),
+    host: "127.0.0.1",
+    logger: silentLogger,
+    port: 0,
+    version: "1.2.3",
+  });
   const socket = net.connect(server.port, "127.0.0.1");
   const post = {
     body: JSON.stringify({ name: "Onion", unit: "g" }),
@@ -195,7 +191,13 @@ describe("stop", () => {
 });
 
 test("stop() rejects with the error of the server when it can't close", async () => {
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
+  const server = await start({
+    dataDir: dataDir(),
+    host: "127.0.0.1",
+    logger: silentLogger,
+    port: 0,
+    version: "1.2.3",
+  });
   await server.stop();
 
   // The server is already closed, so closing it again fails.
@@ -213,7 +215,7 @@ test("stop() rejects with the error of the server when it can't close", async ()
  */
 function runIndex(t, env, nodeArgs = []) {
   const child = spawn(process.execPath, [...nodeArgs, INDEX], {
-    env: { ...process.env, DATA_DIR: dataDir, ...env },
+    env: { ...process.env, DATA_DIR: dataDir(), ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(() => {
@@ -312,7 +314,7 @@ describe("server/index.js", () => {
         msg: "server started",
         version: PACKAGE_VERSION,
         port: entry.port,
-        dataDir,
+        dataDir: dataDir(),
       },
     );
     // The logged port is the one that answers.
