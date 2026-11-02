@@ -15,26 +15,31 @@ afterEach(async () => {
   await host.cleanup();
 });
 
-test("meals-deploy deploys a newer release: pull, stop, backup, start, and verify", async () => {
-  await host.addRelease("0.3.0");
+describe("meals-deploy", () => {
+  test("deploys a newer release: pull, stop, backup, and start", async () => {
+    await host.addRelease("0.3.0");
+    // date, which names the backup, marks where the backup starts.
+    await host.logCommand("date");
 
-  const result = await host.run("meals-deploy");
+    const result = await host.run("meals-deploy");
 
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Deployed version 0\.3\.0\./);
-  const env = await host.readEnv();
-  assert.equal(env.MEALS_IMAGE, imageFor("0.3.0"));
-  assert.equal(env.MEALS_VERSION, "0.3.0");
-  assert.equal(env.MEALS_PORT, "3000");
-  assert.equal((await host.readEnv(".env.previous")).MEALS_VERSION, "0.2.0");
-  const backups = await host.backups();
-  assert.equal(backups.length, 1);
-  assert.match(backups[0], /-pre-deploy-v0\.2\.0\.tar\.gz$/);
-  const calls = await dockerCalls(host);
-  const pull = calls.indexOf(`docker pull --quiet ${imageFor("0.3.0")}`);
-  const stop = calls.findIndex((call) => / compose .* stop$/.test(call));
-  const up = calls.findIndex((call) => / compose .* up --detach --wait /.test(call));
-  assert.ok(pull >= 0 && stop > pull && up > stop, calls.join("\n"));
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Deployed version 0\.3\.0\./);
+    const env = await host.readEnv();
+    assert.equal(env.MEALS_IMAGE, imageFor("0.3.0"));
+    assert.equal(env.MEALS_VERSION, "0.3.0");
+    assert.equal(env.MEALS_PORT, "3000");
+    assert.equal((await host.readEnv(".env.previous")).MEALS_VERSION, "0.2.0");
+    const backups = await host.backups();
+    assert.equal(backups.length, 1);
+    assert.match(backups[0], /-pre-deploy-v0\.2\.0\.tar\.gz$/);
+    const calls = await host.calls();
+    const pull = calls.indexOf(`docker pull --quiet ${imageFor("0.3.0")}`);
+    const stop = calls.findIndex((call) => / compose .* stop$/.test(call));
+    const backup = calls.findIndex((call) => call.startsWith("date "));
+    const up = calls.findIndex((call) => / compose .* up --detach --wait /.test(call));
+    assert.ok(pull >= 0 && stop > pull && backup > stop && up > backup, calls.join("\n"));
+  });
 });
 
 test("meals-deploy only checks that the deployed version runs when it's the latest release", async () => {

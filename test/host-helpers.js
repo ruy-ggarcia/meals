@@ -306,6 +306,21 @@ class Host {
   }
 
   /**
+   * Replaces COMMAND with a stub that logs each call as "COMMAND ARGS" in the
+   * calls, and then runs COMMAND.
+   */
+  logCommand(command) {
+    const lines = [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      `echo "${command} $*" >>"$STUB_DIR/calls"`,
+      `command -p ${command} "$@"`,
+      "",
+    ];
+    return this.stub(`bin/${command}`, lines.join("\n"), { executable: true });
+  }
+
+  /**
    * Publishes release VERSION on the stub GitHub: as the latest release
    * unless LATEST is false, and with image.txt holding IMAGE unless
    * WITHIMAGE is false.

@@ -242,14 +242,7 @@ describe("meals-backup", () => {
   test("waits for the lock that another script holds", async (t) => {
     // meals-backup calls no docker or curl, so date, which names the backup
     // right after the lock, logs its calls too.
-    const date = [
-      "#!/usr/bin/env bash",
-      "set -euo pipefail",
-      'echo "date $*" >>"$STUB_DIR/calls"',
-      'command -p date "$@"',
-      "",
-    ];
-    await host.stub("bin/date", date.join("\n"), { executable: true });
+    await host.logCommand("date");
 
     const calls = await assertWaitsForLock(t, host, "meals-backup", ["daily"]);
 
