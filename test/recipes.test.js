@@ -51,37 +51,6 @@ test("list sorts recipes from A to Z by name key", async () => {
   assert.deepEqual(names, ["banana", "Café", "Ñoquis", "omelette"]);
 });
 
-test("create rejects a name that isn't a string, is blank, or is too long", async () => {
-  for (const name of [undefined, null, 42, ["Soup"], "", "   \n "]) {
-    await assert.rejects(recipes.create({ name }), ValidationError, String(name));
-  }
-  await assert.rejects(recipes.create({ name: "x".repeat(101) }), ValidationError);
-
-  // The limit counts the cleaned name.
-  assert.equal((await recipes.create({ name: ` ${"x".repeat(100)} ` })).name, "x".repeat(100));
-  assert.equal((await recipes.list()).length, 1);
-});
-
-test("create reports blank and too long names with readable messages", async () => {
-  await assert.rejects(recipes.create({ name: " " }), { message: "The name can't be empty." });
-  await assert.rejects(recipes.create({ name: "x".repeat(101) }), {
-    message: "The name must be at most 100 characters.",
-  });
-});
-
-test("create counts the name length in UTF-16 code units, so a surrogate pair counts as 2", async () => {
-  // U+1F600 is a surrogate pair in UTF-16, so its .length is 2, not 1.
-  const tooLong = `${"x".repeat(99)}😀`;
-  assert.equal(tooLong.length, 101);
-  await assert.rejects(recipes.create({ name: tooLong }), {
-    message: "The name must be at most 100 characters.",
-  });
-
-  const justRight = `${"x".repeat(98)}😀`;
-  assert.equal(justRight.length, 100);
-  assert.equal((await recipes.create({ name: justRight })).name, justRight);
-});
-
 test("create rejects a name whose key is taken, active or archived, and reports that recipe", async () => {
   const cafe = await recipes.create({ name: "Café" });
 

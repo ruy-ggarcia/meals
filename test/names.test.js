@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
-import { ValidationError } from "../server/errors.js";
+import { describe, test } from "node:test";
 import { byNameKey, cleanName, holderOf, nameKey, validName } from "../server/names.js";
 
 test("cleanName trims the name and collapses runs of whitespace", () => {
@@ -22,20 +21,57 @@ test("byNameKey sorts entries from A to Z by name key", () => {
   );
 });
 
-test("validName returns the cleaned name", () => {
-  assert.equal(validName("  Onion   soup "), "Onion soup");
-});
-
-test("validName rejects a name that isn't a string, is blank, or is too long", () => {
-  for (const name of [undefined, null, 42, ["Soup"], "", "   \n "]) {
-    assert.throws(() => validName(name), ValidationError, String(name));
-  }
-  assert.throws(() => validName(" "), { message: "The name can't be empty." });
-  assert.throws(() => validName("x".repeat(101)), {
-    message: "The name must be at most 100 characters.",
+describe("validName", () => {
+  test("returns the cleaned name", () => {
+    assert.equal(validName("  Onion   soup "), "Onion soup");
   });
-  // The limit counts the cleaned name.
-  assert.equal(validName(` ${"x".repeat(100)} `), "x".repeat(100));
+
+  test("rejects a name that isn't a string", () => {
+    for (const name of [undefined, null, 42, ["Soup"]]) {
+      assert.throws(() => validName(name), {
+        name: "ValidationError",
+        message: '"name" must be a string.',
+      });
+    }
+  });
+
+  test("rejects a blank name", () => {
+    for (const name of ["", " ", "   \n "]) {
+      assert.throws(() => validName(name), {
+        name: "ValidationError",
+        message: "The name can't be empty.",
+      });
+    }
+  });
+
+  test("rejects a name of more than 100 characters", () => {
+    assert.throws(() => validName("x".repeat(101)), {
+      name: "ValidationError",
+      message: "The name must be at most 100 characters.",
+    });
+  });
+
+  test("accepts a name of 100 characters after the cleanup", () => {
+    assert.equal(validName(` ${"x".repeat(100)} `), "x".repeat(100));
+  });
+
+  test("counts a surrogate pair as 2 characters when it rejects a name", () => {
+    // U+1F600 is a surrogate pair in UTF-16, so its .length is 2, not 1.
+    const tooLong = `${"x".repeat(99)}😀`;
+    assert.equal(tooLong.length, 101);
+
+    assert.throws(() => validName(tooLong), {
+      name: "ValidationError",
+      message: "The name must be at most 100 characters.",
+    });
+  });
+
+  test("counts a surrogate pair as 2 characters when it accepts a name", () => {
+    const justRight = `${"x".repeat(98)}😀`;
+    assert.equal(justRight.length, 100);
+
+    assert.equal(validName(justRight), justRight);
+  });
 });
 
 test("holderOf finds the entry with the same name key, except the given ID", () => {
