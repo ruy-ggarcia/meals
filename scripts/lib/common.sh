@@ -52,10 +52,12 @@ deployed_version() {
 validate_data() {
   local dir=$1 file files status
   # The last entry is the status of find, which a process substitution
-  # otherwise hides.
+  # otherwise hides. Under set -e, a failing find would end the substitution
+  # before it prints the status.
   mapfile -d '' files < <(
-    find "$dir" -type f -name '*.json' -print0
-    printf '%d\0' "$?"
+    status=0
+    find "$dir" -type f -name '*.json' -print0 || status=$?
+    printf '%d\0' "$status"
   )
   status=${files[-1]}
   unset 'files[-1]'

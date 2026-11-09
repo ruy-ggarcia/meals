@@ -1,24 +1,15 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { once } from "node:events";
+import { rm } from "node:fs/promises";
+import net from "node:net";
+import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { silentLogger } from "../server/logger.js";
-import { start } from "../server/start.js";
+import { startTestServer, useDataDir } from "./backend-helpers.js";
 
 const HEALTHCHECK = fileURLToPath(new URL("../server/healthcheck.js", import.meta.url));
 
-let dataDir;
-
-beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(os.tmpdir(), "meals-healthcheck-"));
-});
-
-afterEach(async () => {
-  await rm(dataDir, { recursive: true, force: true });
-});
+const dataDir = useDataDir("meals-healthcheck-");
 
 /** Runs healthcheck.js against PORT, and resolves to its exit code and its stderr. */
 function healthcheck(port) {
@@ -30,31 +21,32 @@ function healthcheck(port) {
   });
 }
 
-test("healthcheck.js exits with 0 when the server is healthy", async (t) => {
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
-  t.after(() => server.stop());
+describe("server/healthcheck.js", () => {
+  test("exits with 0 when the server is healthy", async (t) => {
+    const server = await startTestServer(t, dataDir());
 
-  assert.deepEqual(await healthcheck(server.port), { code: 0, stderr: "" });
-});
+    assert.deepEqual(await healthcheck(server.port), { code: 0, stderr: "" });
+  });
 
-test("healthcheck.js exits with 1 when the health check returns 503", async (t) => {
-  if (process.getuid?.() === 0) {
-    t.skip("root can write to any directory");
-    return;
-  }
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
-  t.after(() => server.stop());
-  // afterEach removes the directory, which is empty, so the mode can stay.
-  await chmod(dataDir, 0o500);
+  test("exits with 1 when the health check returns 503", async (t) => {
+    const server = await startTestServer(t, dataDir());
+    // The server is running, and its data directory is gone.
+    await rm(dataDir(), { recursive: true });
 
-  // An empty stderr shows a failed check, and not a crash that also exits with 1.
-  assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });
-});
+    // An empty stderr shows a failed check, and not a crash that also exits with 1.
+    assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });
+  });
 
-test("healthcheck.js exits with 1 when nothing listens on the port", async () => {
-  const server = await start({ dataDir, logger: silentLogger, port: 0, version: "1.2.3" });
-  await server.stop();
+  test("exits with 1 when the connection closes without an answer", async (t) => {
+    const closer = net.createServer((socket) => socket.destroy());
+    closer.listen(0, "127.0.0.1");
+    await once(closer, "listening");
+    t.after(() => closer.close());
 
-  // An empty stderr shows a failed check, and not a crash that also exits with 1.
-  assert.deepEqual(await healthcheck(server.port), { code: 1, stderr: "" });
+    // An empty stderr shows a failed check, and not a crash that also exits with 1.
+    assert.deepEqual(await healthcheck(/** @type {net.AddressInfo} */ (closer.address()).port), {
+      code: 1,
+      stderr: "",
+    });
+  });
 });

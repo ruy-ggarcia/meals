@@ -35,6 +35,7 @@ export function setUpShell() {
 /**
  * Shows how many active recipes and active ingredients there are, next to
  * their links and their page's title. Either list can be left out.
+ * @param {{ recipes?: any[], ingredients?: any[] }} lists
  */
 export function showCounts({ recipes, ingredients }) {
   const show = (key, entries) => {

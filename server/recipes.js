@@ -15,7 +15,7 @@ export const MAX_INGREDIENTS = 50;
 // Checks the ingredients of a request, except that their ingredients exist.
 // Returns clean copies with only ingredientId, quantity, and, for a line in a
 // measure, measureId.
-function validIngredients(ingredients) {
+export function validIngredients(ingredients) {
   if (!Array.isArray(ingredients)) throw new ValidationError('"ingredients" must be an array.');
   if (ingredients.length > MAX_INGREDIENTS) {
     throw new ValidationError(`A recipe holds at most ${MAX_INGREDIENTS} ingredients.`);
@@ -48,7 +48,7 @@ function validIngredients(ingredients) {
 }
 
 // A POST body: { name }, with optional ingredients, and nothing else.
-function validNewRecipe(fields) {
+export function validNewRecipe(fields) {
   if (
     !isPlainObject(fields) ||
     Object.keys(fields).some((key) => key !== "name" && key !== "ingredients")
@@ -62,7 +62,7 @@ function validNewRecipe(fields) {
 }
 
 // A PATCH body: { name }, { ingredients }, or both, or { archived } alone.
-function validChanges(changes) {
+export function validChanges(changes) {
   const keys = isPlainObject(changes) ? Object.keys(changes) : [];
   if (keys.length === 1 && keys[0] === "archived") {
     if (typeof changes.archived !== "boolean") {
@@ -84,7 +84,7 @@ function validChanges(changes) {
 // repeats, at most MAX_INGREDIENTS. Doesn't check the catalog, so a write
 // never drops another recipe's ingredients just because the catalog on disk
 // is older or missing.
-function normalizeIngredients(raw) {
+export function normalizeIngredients(raw) {
   const clean = [];
   const seen = new Set();
   for (const entry of Array.isArray(raw) ? raw : []) {
@@ -108,7 +108,7 @@ function normalizeIngredients(raw) {
 // `raw` is undefined when the file doesn't exist, which is an empty recipe
 // book. A file that exists but isn't shaped like { recipes: [...] } is
 // rejected instead, the same as invalid JSON, so it's never overwritten.
-function normalize(raw) {
+export function normalize(raw) {
   if (raw === undefined) return [];
   if (!isPlainObject(raw) || !Array.isArray(raw.recipes)) {
     throw new Error('recipes.json must be an object with a "recipes" array.');
@@ -123,6 +123,73 @@ function normalize(raw) {
     }));
 }
 
+// The IDs of the measures of each ingredient of the catalog `list`, by
+// ingredient ID.
+export function measureIdsByIngredient(list) {
+  return new Map(
+    list.map((ingredient) => [
+      ingredient.id,
+      new Set(ingredient.measures.map((measure) => measure.id)),
+    ]),
+  );
+}
+
+// Whether the catalog `known` has the entry's ingredient and, if it has one,
+// its measure.
+export function isKnown(known, entry) {
+  const measureIds = known.get(entry.ingredientId);
+  return (
+    measureIds !== undefined && (entry.measureId === undefined || measureIds.has(entry.measureId))
+  );
+}
+
+// A copy of `recipe` without the ingredients that `known` doesn't have, or
+// whose measure it doesn't have.
+export function withKnownIngredients(recipe, known) {
+  return { ...recipe, ingredients: recipe.ingredients.filter((entry) => isKnown(known, entry)) };
+}
+
+// Throws if any entry's ingredient or measure isn't in `known`. Called
+// inside the queue, with `known` read there, so no catalog write runs
+// between this check and the save.
+export function checkIngredientsExist(known, entries) {
+  const unknown = entries.find((entry) => !known.has(entry.ingredientId));
+  if (unknown) throw new ValidationError(`Unknown ingredient: ${unknown.ingredientId}`);
+  const unknownMeasure = entries.find((entry) => !isKnown(known, entry));
+  if (unknownMeasure) throw new ValidationError(`Unknown measure: ${unknownMeasure.measureId}`);
+}
+
+// What the recipes `all` use of the ingredient: `inUnit` is whether any line
+// has it in its unit, and `measureIds` holds the IDs of its measures that any
+// line uses.
+export function usageIn(all, ingredientId) {
+  let inUnit = false;
+  const measureIds = new Set();
+  for (const recipe of all) {
+    for (const entry of recipe.ingredients) {
+      if (entry.ingredientId !== ingredientId) continue;
+      if (entry.measureId === undefined) inUnit = true;
+      else measureIds.add(entry.measureId);
+    }
+  }
+  return { inUnit, measureIds };
+}
+
+// Points every line of the ingredient that is in its unit to the measure, in
+// every recipe of `all`, which it changes in place. Returns how many lines
+// changed.
+export function moveLines(all, ingredientId, measureId) {
+  let changed = 0;
+  for (const recipe of all) {
+    recipe.ingredients = recipe.ingredients.map((entry) => {
+      if (entry.ingredientId !== ingredientId || entry.measureId !== undefined) return entry;
+      changed += 1;
+      return { ingredientId, measureId, quantity: entry.quantity };
+    });
+  }
+  return changed;
+}
+
 export function createRecipes({ dataDir, enqueue, ingredients }) {
   const file = dataPath(dataDir, "recipes.json");
 
@@ -133,37 +200,7 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
 
   // The IDs of the measures of each ingredient in the catalog.
   async function knownMeasures() {
-    return new Map(
-      (await ingredients.list()).map((ingredient) => [
-        ingredient.id,
-        new Set(ingredient.measures.map((measure) => measure.id)),
-      ]),
-    );
-  }
-
-  // Whether the catalog `known` has the entry's ingredient and, if it has one,
-  // its measure.
-  function isKnown(known, entry) {
-    const measureIds = known.get(entry.ingredientId);
-    return (
-      measureIds !== undefined && (entry.measureId === undefined || measureIds.has(entry.measureId))
-    );
-  }
-
-  // A copy of `recipe` without the ingredients that `known` doesn't have, or
-  // whose measure it doesn't have.
-  function withKnownIngredients(recipe, known) {
-    return { ...recipe, ingredients: recipe.ingredients.filter((entry) => isKnown(known, entry)) };
-  }
-
-  // Throws if any entry's ingredient or measure isn't in `known`. Called
-  // inside the queue, with `known` read there, so no catalog write runs
-  // between this check and the save.
-  function checkIngredientsExist(known, entries) {
-    const unknown = entries.find((entry) => !known.has(entry.ingredientId));
-    if (unknown) throw new ValidationError(`Unknown ingredient: ${unknown.ingredientId}`);
-    const unknownMeasure = entries.find((entry) => !isKnown(known, entry));
-    if (unknownMeasure) throw new ValidationError(`Unknown measure: ${unknownMeasure.measureId}`);
+    return measureIdsByIngredient(await ingredients.list());
   }
 
   function conflict(recipe) {
@@ -237,16 +274,7 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
    * its measures that any line uses. Never waits for the queue.
    */
   async function usageOf(ingredientId) {
-    let inUnit = false;
-    const measureIds = new Set();
-    for (const recipe of await readAll()) {
-      for (const entry of recipe.ingredients) {
-        if (entry.ingredientId !== ingredientId) continue;
-        if (entry.measureId === undefined) inUnit = true;
-        else measureIds.add(entry.measureId);
-      }
-    }
-    return { inUnit, measureIds };
+    return usageIn(await readAll(), ingredientId);
   }
 
   /**
@@ -257,14 +285,7 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
    */
   async function moveUnitLinesToMeasure(ingredientId, measureId) {
     const all = await readAll();
-    let changed = 0;
-    for (const recipe of all) {
-      recipe.ingredients = recipe.ingredients.map((entry) => {
-        if (entry.ingredientId !== ingredientId || entry.measureId !== undefined) return entry;
-        changed += 1;
-        return { ingredientId, measureId, quantity: entry.quantity };
-      });
-    }
+    const changed = moveLines(all, ingredientId, measureId);
     if (changed > 0) await writeJson(file, { recipes: all });
     return changed;
   }

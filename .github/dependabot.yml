@@ -38,6 +38,14 @@ updates:
     # One group per dependency type, so a development update never shares a
     # fix commit with a production update and never cuts a release.
     groups:
+      # Before npm-development, because a dependency joins the first group
+      # that matches. The browser test tools bring new browsers and new axe
+      # rules, so an update that breaks the browser tests doesn't hold back
+      # the other development updates.
+      browser-tests:
+        dependency-type: development
+        patterns: ["@axe-core/playwright", "@playwright/test"]
+        update-types: [minor, patch]
       npm-development:
         dependency-type: development
         update-types: [minor, patch]

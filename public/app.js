@@ -82,10 +82,10 @@ const weekRange = document.getElementById("week-range");
 const weekShort = document.getElementById("week-short");
 const saveSummaries = document.querySelectorAll(".save-summary");
 const saveAnnouncement = document.getElementById("save-announcement");
-const leaveAlert = document.getElementById("leave-alert");
+const leaveAlert = /** @type {HTMLDialogElement} */ (document.getElementById("leave-alert"));
 const editor = createSlotEditor(document.getElementById("slot-editor"));
 const shopping = createShoppingDialog(document.getElementById("shopping-dialog"));
-const shoppingButton = document.getElementById("shopping-list");
+const shoppingButton = /** @type {HTMLButtonElement} */ (document.getElementById("shopping-list"));
 
 /** Timer that hides the "✓" badge, per slot element: it acts on what is on screen, whatever the week. */
 const savedTimers = new Map();
@@ -108,6 +108,11 @@ let failedMarks = [];
 // Keys include the week, so the same slot in two weeks never shares save state.
 function slotKey(week, day, meal) {
   return `${week}/${day}/${meal}`;
+}
+
+// Every slot element on screen.
+function slotElements() {
+  return /** @type {NodeListOf<HTMLElement>} */ (grid.querySelectorAll(".slot"));
 }
 
 // The slot element of `key`, or null when its week isn't on screen.
@@ -321,7 +326,7 @@ function showDayHeading() {
   const date = addDays(weekStart(week), index);
   dayHeading.querySelector(".day-title").textContent = DAYS[index].label;
   dayHeading.querySelector(".day-date").textContent = formatFullDate(date);
-  dayHeading.querySelector(".today-mark").hidden =
+  /** @type {HTMLElement} */ (dayHeading.querySelector(".today-mark")).hidden =
     week !== weekIdOf(new Date()) || selectedDay !== todayId();
 }
 
@@ -329,7 +334,7 @@ function fillWeek(week, weekData) {
   grid.dataset.week = week;
   menus.clear();
   const entries = [];
-  for (const slot of grid.querySelectorAll(".slot")) {
+  for (const slot of slotElements()) {
     const { day, meal } = slot.dataset;
     const key = slotKey(week, day, meal);
     const menu = weekData[day][meal];
@@ -360,7 +365,9 @@ function showDayDates(week) {
 // Marks today's header, slots, and day bar button when the loaded week contains today.
 function markToday() {
   const todayDay = weekIdOf(new Date()) === grid.dataset.week ? todayId() : null;
-  for (const element of document.querySelectorAll("[data-day]")) {
+  for (const element of /** @type {NodeListOf<HTMLElement>} */ (
+    document.querySelectorAll("[data-day]")
+  )) {
     element.toggleAttribute("data-today", element.dataset.day === todayDay);
   }
   // Wide screens shade today's column, from its header to its last slot.
@@ -372,9 +379,7 @@ function markToday() {
 // The keys of the slots on screen.
 function shownKeys() {
   const { week } = grid.dataset;
-  return [...grid.querySelectorAll(".slot")].map((slot) =>
-    slotKey(week, slot.dataset.day, slot.dataset.meal),
-  );
+  return [...slotElements()].map((slot) => slotKey(week, slot.dataset.day, slot.dataset.meal));
 }
 
 // Shows a slot's save status. The status itself comes from saves.js.
@@ -411,7 +416,7 @@ function setStatus(slot, state) {
 function showWeekStatus() {
   const count = { idle: 0, saving: 0, saved: 0, error: 0 };
   const failedDays = new Set();
-  for (const status of grid.querySelectorAll(".status")) {
+  for (const status of /** @type {NodeListOf<HTMLElement>} */ (grid.querySelectorAll(".status"))) {
     const { state } = status.dataset;
     count[state] += 1;
     if (state === "error") failedDays.add(status.parentElement.dataset.day);
@@ -454,7 +459,9 @@ function showSaveSummary(count) {
 
 function retryFailedSlots() {
   const { week } = grid.dataset;
-  for (const slot of grid.querySelectorAll('.slot:has(.status[data-state="error"])')) {
+  for (const slot of /** @type {NodeListOf<HTMLElement>} */ (
+    grid.querySelectorAll('.slot:has(.status[data-state="error"])')
+  )) {
     saves.queueSave(slotKey(week, slot.dataset.day, slot.dataset.meal));
   }
 }
@@ -498,13 +505,15 @@ function setChangingWeek(changing) {
 
 // Waits for pending saves, then returns true if the loaded week can be left:
 // every slot is saved, or the user agreed to discard what couldn't be saved.
-async function leaveLoadedWeek() {
+// `place` is what the question calls the place the user leaves, "this week"
+// or "this page".
+async function leaveLoadedWeek(place) {
   await saves.settle();
   const unsaved = saves.unsaved(shownKeys());
   if (unsaved.length === 0) return true;
-  if (!(await askToLeave(unsaved))) return false;
-  // Put the saved menu back, so no later page-hide save can send the
-  // discarded menu.
+  if (!(await askToLeave(unsaved, place))) return false;
+  // Put the saved menu back, so no later save, and no question of the browser
+  // when the page closes, involves the discarded menu.
   for (const key of unsaved) {
     const menu = saves.discard(key);
     menus.set(key, menu);
@@ -514,10 +523,10 @@ async function leaveLoadedWeek() {
   return true;
 }
 
-// Asks whether to leave the week although the slots of `keys` weren't saved,
+// Asks whether to leave `place` although the slots of `keys` weren't saved,
 // naming them day by day. Resolves to true for Leave Without Saving, and to
 // false for Stay, Escape, or Android's Back.
-function askToLeave(keys) {
+function askToLeave(keys, place) {
   const order = (key) => {
     const [, day, meal] = key.split("/");
     return (
@@ -527,13 +536,13 @@ function askToLeave(keys) {
   };
   const names = [...keys].sort((a, b) => order(a) - order(b)).map(slotName);
   leaveAlert.querySelector(".alert-title").textContent = unsavedTitle(names.length);
-  leaveAlert.querySelector(".alert-message").textContent = unsavedMessage(names);
+  leaveAlert.querySelector(".alert-message").textContent = unsavedMessage(names, place);
   leaveChosen = false;
   return new Promise((resolve) => {
     leaveAlert.addEventListener("close", () => resolve(leaveChosen), { once: true });
     leaveAlert.showModal();
     // Stay, the choice that keeps the changes.
-    leaveAlert.querySelector(".stay").focus();
+    /** @type {HTMLElement} */ (leaveAlert.querySelector(".stay")).focus();
   });
 }
 
@@ -543,11 +552,11 @@ async function goToWeek(week, { selectToday = false } = {}) {
   if (changingWeek || editor.isOpen() || shopping.isOpen()) return;
   // Disabling the clicked button (a week bar button or Retry) moves focus to
   // <body>; remember it so it can be refocused afterward.
-  const focused = document.activeElement;
+  const focused = /** @type {HTMLElement} */ (document.activeElement);
   setChangingWeek(true);
   try {
     if (week !== grid.dataset.week || grid.hidden) {
-      if (!(await leaveLoadedWeek())) return;
+      if (!(await leaveLoadedWeek("this week"))) return;
       requestedWeek = week;
       syncHash();
       weekRange.textContent = formatWeekRange(week);
@@ -595,14 +604,39 @@ leaveAlert.querySelector(".leave").addEventListener("click", () => {
   leaveChosen = true;
   leaveAlert.close();
 });
-window.addEventListener("pagehide", () => saves.flush(shownKeys(), { skipInFlight: false }));
-// Unconfirmed changes in the editor would be lost: ask before leaving.
+// A plain click on a link to another page asks first, like a week change,
+// because the browser's own question comes too late to name the slots and
+// phones never show it. A click that opens a new tab or window, or that
+// another handler took, keeps the browser's default and asks nothing.
+for (const link of /** @type {NodeListOf<HTMLAnchorElement>} */ (
+  document.querySelectorAll(".page-link")
+)) {
+  link.addEventListener("click", async (event) => {
+    const plain =
+      event.button === 0 &&
+      !(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) &&
+      !event.defaultPrevented;
+    if (!plain) return;
+    event.preventDefault();
+    if (changingWeek || editor.isOpen() || shopping.isOpen()) return;
+    setChangingWeek(true);
+    try {
+      if (await leaveLoadedWeek("this page")) location.assign(link.href);
+    } finally {
+      setChangingWeek(false);
+    }
+  });
+}
+// Changes that the server hasn't confirmed would be lost: on a computer, the
+// browser asks before it closes or reloads the page. Phones don't show this
+// question: iPhone Safari never does, and Android Chrome doesn't when you
+// close the tab. A hidden page still tries to save (see below).
 window.addEventListener("beforeunload", (event) => {
-  if (!editor.hasChanges()) return;
+  if (!editor.hasChanges() && saves.unconfirmed(shownKeys()).length === 0) return;
   event.preventDefault();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") saves.flush(shownKeys(), { skipInFlight: true });
+  if (document.visibilityState === "hidden") saves.flush(shownKeys());
   else markToday(); // the day may have changed while the page was hidden
 });
 

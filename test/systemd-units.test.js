@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { constants } from "node:fs";
 import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { test } from "node:test";
+import { describe, test } from "node:test";
 
 const REPO = path.resolve(import.meta.dirname, "..");
 const UNITS = path.join(REPO, "deploy", "systemd");
@@ -48,40 +48,48 @@ const TIMERS = {
   "meals-restore-check": { OnCalendar: ["Sun *-*-* 04:00:00"], Persistent: ["true"] },
 };
 
-test("deploy/systemd has a service and a timer for each host script that runs on a schedule", async () => {
-  const expected = Object.keys(SERVICES).flatMap((name) => [`${name}.service`, `${name}.timer`]);
+describe("deploy/systemd", () => {
+  test("has a service and a timer for each host script that runs on a schedule", async () => {
+    const expected = Object.keys(SERVICES).flatMap((name) => [`${name}.service`, `${name}.timer`]);
 
-  assert.deepEqual((await readdir(UNITS)).sort(), expected.sort());
+    assert.deepEqual((await readdir(UNITS)).sort(), expected.sort());
+  });
 });
 
 for (const [name, { args, docker, timeout }] of Object.entries(SERVICES)) {
-  test(`${name}.service runs the installed script once as deployer, with a start timeout`, async () => {
-    const { Service, Unit } = await readUnit(`${name}.service`);
+  describe(`${name}.service`, () => {
+    test("runs the installed script once as deployer, with a start timeout", async () => {
+      const { Service, Unit } = await readUnit(`${name}.service`);
 
-    assert.deepEqual(Service, {
-      ExecStart: [`${await installRoot()}/scripts/${name}${args}`],
-      Group: ["docker"],
-      TimeoutStartSec: [timeout],
-      Type: ["oneshot"],
-      UMask: ["0002"],
-      User: ["deployer"],
+      assert.deepEqual(Service, {
+        ExecStart: [`${await installRoot()}/scripts/${name}${args}`],
+        Group: ["docker"],
+        TimeoutStartSec: [timeout],
+        Type: ["oneshot"],
+        UMask: ["0002"],
+        User: ["deployer"],
+      });
+      const after = (Unit.After ?? []).flatMap((value) => value.split(/\s+/));
+      assert.equal(after.includes("docker.service"), docker, "After=docker.service");
     });
-    const after = (Unit.After ?? []).flatMap((value) => value.split(/\s+/));
-    assert.equal(after.includes("docker.service"), docker, "After=docker.service");
   });
 
-  test(`${name}.service starts a script that scripts/install.sh installs and can run`, async () => {
-    // install.sh installs scripts/meals-* with mode 0775, whatever the mode
-    // in the checkout, so a script that isn't executable here is a mistake.
-    await access(path.join(REPO, "scripts", name), constants.X_OK);
+  describe(name, () => {
+    test("is executable", async () => {
+      // install.sh installs scripts/meals-* with mode 0775, whatever the mode
+      // in the checkout, so a script that isn't executable here is a mistake.
+      await access(path.join(REPO, "scripts", name), constants.X_OK);
+    });
   });
 }
 
 for (const [name, schedule] of Object.entries(TIMERS)) {
-  test(`${name}.timer starts its service on schedule once install.sh enables it`, async () => {
-    const { Install, Timer } = await readUnit(`${name}.timer`);
+  describe(`${name}.timer`, () => {
+    test("runs on its schedule and is wanted by timers.target", async () => {
+      const { Install, Timer } = await readUnit(`${name}.timer`);
 
-    assert.deepEqual(Timer, schedule);
-    assert.deepEqual(Install, { WantedBy: ["timers.target"] });
+      assert.deepEqual(Timer, schedule);
+      assert.deepEqual(Install, { WantedBy: ["timers.target"] });
+    });
   });
 }

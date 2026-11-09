@@ -4,32 +4,20 @@
 // library choice, and test/shopping-list.test.js for the list's arithmetic.
 
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, mock, test } from "node:test";
+import { describe, test } from "node:test";
 import { formatWeekRange } from "../public/dates.js";
-import { assertFocus, fakeFetch, loadPage, tick, waitFor } from "./dom-helpers.js";
-import { blankWeek } from "./helpers.js";
-import { DAYS, MEALS, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
+import { assertFocus, fakeFetch, openPage, tick, useQuietConsole, waitFor } from "./dom-helpers.js";
+import { addWithEditor, blankWeek, openMealPlan, WEEK, withSlot } from "./meal-plan-helpers.js";
+
+const quiet = useQuietConsole();
 
 let page;
 let server;
 
-async function openWeek(options) {
-  ({ page, server } = await openMealPlan(options));
+async function openWeek(t, options) {
+  ({ page, server } = await openMealPlan(t, options));
   return page;
 }
-
-function slotButton(day, meal) {
-  return page.document.querySelector(`.slot[data-day="${day}"][data-meal="${meal}"] .slot-menu`);
-}
-
-beforeEach(() => {
-  mock.method(console, "error", () => {}); // some tests simulate a failed load or save on purpose
-});
-
-afterEach(async () => {
-  await page.cleanup();
-  mock.restoreAll();
-});
 
 const EGG = { id: "egg", name: "Egg", unit: "pcs", measures: [], archived: false };
 const ONION = { id: "onion", name: "Onion", unit: "g", measures: [], archived: false };
@@ -49,11 +37,11 @@ function lineTexts() {
   ]);
 }
 
-test("the shopping list shows kilograms and a measure breakdown", async () => {
-  const weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
-    { recipeId: "soup", servings: 1 },
-  ]);
-  await openWeek({
+// Opens a week whose Monday lunch has Soup, which needs 300 g of onion, 3
+// medium onions of 150 g, and 1.5 large onions of 250 g: 1.2 kg in all.
+async function openWeekWithOnionSoup(t) {
+  const weekData = withSlot(blankWeek(), "mon", "lunch", [{ recipeId: "soup", servings: 1 }]);
+  await openWeek(t, {
     weekData,
     recipes: [
       {
@@ -77,25 +65,14 @@ test("the shopping list shows kilograms and a measure breakdown", async () => {
       },
     ],
   });
+}
 
-  shoppingButton().click();
-
-  assert.deepEqual(lineTexts(), [["Onion", "1.2 kg (300 g, 3 medium, 1.5 large)"]]);
-  const amount = shoppingDialog().querySelector(".line-amount");
-  assert.equal(amount.querySelector(".line-total").textContent, "1.2 kg");
-  assert.equal(amount.querySelector(".line-breakdown").textContent, "(300 g, 3 medium, 1.5 large)");
-  assert.equal(
-    shoppingDialog().querySelector(".shopping-summary").textContent,
-    "1 ingredient · from A to Z · totals rounded up",
-  );
-});
-
-test("Shopping list shows the week's totals per ingredient, from A to Z", async () => {
-  let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "lunch", [
-    { recipeId: "omelette", servings: 2 },
-  ]);
+// Opens a week with an omelette for 2 servings on Monday and an onion soup for
+// 1.5 servings on Tuesday, so the list has Egg and Onion.
+async function openWeekWithEggAndOnion(t) {
+  let weekData = withSlot(blankWeek(), "mon", "lunch", [{ recipeId: "omelette", servings: 2 }]);
   weekData = withSlot(weekData, "tue", "dinner", [{ recipeId: "soup", servings: 1.5 }]);
-  await openWeek({
+  await openWeek(t, {
     weekData,
     recipes: [
       {
@@ -116,146 +93,210 @@ test("Shopping list shows the week's totals per ingredient, from A to Z", async 
     ],
     ingredients: [ONION, EGG],
   });
+}
 
-  shoppingButton().click();
+describe("shopping list", () => {
+  test("shows the total in kilograms with a breakdown by measure", async (t) => {
+    await openWeekWithOnionSoup(t);
 
-  assert.equal(shoppingDialog().open, true);
-  assert.equal(shoppingDialog().querySelector(".dialog-title").textContent, "Shopping list");
-  assert.equal(
-    shoppingDialog().querySelector(".sheet-subtitle").textContent,
-    formatWeekRange(WEEK),
-  );
-  assert.equal(
-    shoppingDialog().querySelector(".shopping-summary").textContent,
-    "2 ingredients · from A to Z · totals rounded up",
-  );
-  assert.deepEqual(lineTexts(), [
-    ["Egg", "4 pcs"],
-    ["Onion", "326 g"],
-  ]);
-  assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
-  assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
-});
+    shoppingButton().click();
 
-test("the shopping list counts a slot whose save is still pending", async () => {
-  await openWeek({
-    recipes: [
+    assert.deepEqual(lineTexts(), [["Onion", "1.2 kg (300 g, 3 medium, 1.5 large)"]]);
+  });
+
+  test("shows the total and the breakdown of a line in separate elements", async (t) => {
+    await openWeekWithOnionSoup(t);
+
+    shoppingButton().click();
+
+    const amount = shoppingDialog().querySelector(".line-amount");
+    assert.equal(amount.querySelector(".line-total").textContent, "1.2 kg");
+    assert.equal(
+      amount.querySelector(".line-breakdown").textContent,
+      "(300 g, 3 medium, 1.5 large)",
+    );
+  });
+
+  test("words the summary in the singular for one ingredient", async (t) => {
+    await openWeekWithOnionSoup(t);
+
+    shoppingButton().click();
+
+    assert.equal(
+      shoppingDialog().querySelector(".shopping-summary").textContent,
+      "1 ingredient · from A to Z · totals rounded up",
+    );
+  });
+
+  test("opens a dialog titled with the week range", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.equal(shoppingDialog().open, true);
+    assert.equal(shoppingDialog().querySelector(".dialog-title").textContent, "Shopping list");
+    assert.equal(
+      shoppingDialog().querySelector(".sheet-subtitle").textContent,
+      formatWeekRange(WEEK),
+    );
+  });
+
+  test("words the summary in the plural for two ingredients", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.equal(
+      shoppingDialog().querySelector(".shopping-summary").textContent,
+      "2 ingredients · from A to Z · totals rounded up",
+    );
+  });
+
+  test("lists the totals per ingredient from A to Z", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.deepEqual(lineTexts(), [
+      ["Egg", "4 pcs"],
+      ["Onion", "326 g"],
+    ]);
+  });
+
+  test("hides the empty-week and not-included messages", async (t) => {
+    await openWeekWithEggAndOnion(t);
+
+    shoppingButton().click();
+
+    assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
+    assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
+  });
+
+  test("undoes a hash change while it's open", async (t) => {
+    await openWeek(t);
+    shoppingButton().click();
+
+    page.window.location.hash = "#2026-09-28";
+    await waitFor(() => page.window.location.hash === `#${WEEK}`);
+
+    assert.equal(shoppingDialog().open, true);
+    assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
+  });
+
+  test("returns focus to Shopping list with Close", async (t) => {
+    await openWeek(t);
+    shoppingButton().click();
+
+    shoppingDialog().querySelector(".close-dialog").click();
+
+    assert.equal(shoppingDialog().open, false);
+    assertFocus(page.document, shoppingButton());
+  });
+
+  test("counts a slot whose save is still pending", async (t) => {
+    await openWeek(t, {
+      recipes: [
+        {
+          id: "omelette",
+          name: "Omelette",
+          archived: false,
+          ingredients: [{ ingredientId: "egg", quantity: 2 }],
+        },
+      ],
+      ingredients: [EGG],
+    });
+    const save = await addWithEditor(page, server, "mon", "lunch", "omel");
+
+    shoppingButton().click();
+
+    assert.deepEqual(lineTexts(), [["Egg", "2 pcs"]]);
+    save.respond(200, { week: WEEK, day: "mon", meal: "lunch", items: [] });
+    await tick();
+  });
+
+  test("lists recipes without ingredients as not included, with their slots", async (t) => {
+    let weekData = withSlot(blankWeek(), "mon", "dinner", [{ recipeId: "burrito", servings: 2 }]);
+    weekData = withSlot(weekData, "thu", "snack_am", [{ recipeId: "burrito", servings: 1 }]);
+    await openWeek(t, {
+      weekData,
+      recipes: [{ id: "burrito", name: "Burrito", archived: false, ingredients: [] }],
+    });
+
+    shoppingButton().click();
+
+    const block = shoppingDialog().querySelector(".not-included");
+    assert.equal(block.hidden, false);
+    assert.equal(
+      block.querySelector(".not-included-title").textContent,
+      "Not included: these recipes have no ingredients.",
+    );
+    assert.notEqual(
+      block.querySelector(".not-included-title .warning-icon"),
+      null,
+      "the warning icon in the title of the block",
+    );
+    assert.deepEqual(
+      [...block.querySelectorAll("li")].map((item) => item.textContent),
+      ["Burrito · Mon dinner, Thu morning snack"],
+    );
+    assert.deepEqual(lineTexts(), []);
+    assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
+  });
+
+  test("says there is nothing to buy for an empty week", async (t) => {
+    await openWeek(t);
+
+    shoppingButton().click();
+
+    const empty = shoppingDialog().querySelector(".empty-week");
+    assert.equal(empty.hidden, false);
+    assert.equal(empty.textContent, "Nothing to buy. Plan some meals first.");
+    assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
+  });
+
+  test("closes with a backdrop click", async (t) => {
+    await openWeek(t);
+    shoppingButton().click();
+
+    shoppingDialog().dispatchEvent(new page.window.PointerEvent("pointerdown", { bubbles: true }));
+    shoppingDialog().click();
+
+    assert.equal(shoppingDialog().open, false);
+    assertFocus(page.document, shoppingButton());
+  });
+
+  test("disables Shopping list until a week is shown", async (t) => {
+    quiet.expect(1);
+    server = fakeFetch();
+    page = await openPage(t, {
+      html: "index.html",
+      script: "app.js",
+      fetch: server.fetch,
+      url: `http://localhost/#${WEEK}`,
+    });
+    await tick();
+    server.requestFor("GET", `/api/weeks/${WEEK}`).fail();
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
+    server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
+    await tick();
+
+    assert.equal(page.document.getElementById("grid").hidden, true);
+    assert.equal(shoppingButton().disabled, true);
+
+    page.document.getElementById("retry-load").click();
+    await waitFor(
+      () => server.requests.filter((request) => request.url === `/api/weeks/${WEEK}`).length === 2,
       {
-        id: "omelette",
-        name: "Omelette",
-        archived: false,
-        ingredients: [{ ingredientId: "egg", quantity: 2 }],
+        message: () =>
+          `Retry sent a second load of the week, but the page has ${server.requests.map((request) => request.url).join(", ")}`,
       },
-    ],
-    ingredients: [EGG],
+    );
+    server.requestFor("GET", `/api/weeks/${WEEK}`).respond(200, blankWeek());
+    server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
+    server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
+    await tick();
+
+    assert.equal(page.document.getElementById("grid").hidden, false);
+    assert.equal(shoppingButton().disabled, false);
   });
-  slotButton("mon", "lunch").click();
-  const search = page.document.querySelector("#slot-editor .option-search");
-  search.value = "omel";
-  search.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  page.document.querySelector("#slot-editor .option").click();
-  page.document.querySelector("#slot-editor .done").click();
-  const saveUrl = `/api/weeks/${WEEK}/mon/lunch`;
-  await waitFor(() => server.requestFor("PUT", saveUrl) !== undefined);
-
-  shoppingButton().click();
-
-  assert.deepEqual(lineTexts(), [["Egg", "2 pcs"]]);
-  server
-    .requestFor("PUT", saveUrl)
-    .respond(200, { week: WEEK, day: "mon", meal: "lunch", items: [] });
-  await tick();
-});
-
-test("recipes without ingredients are listed as not included, with their slots", async () => {
-  let weekData = withSlot(blankWeek(DAYS, MEALS), "mon", "dinner", [
-    { recipeId: "burrito", servings: 2 },
-  ]);
-  weekData = withSlot(weekData, "thu", "snack_am", [{ recipeId: "burrito", servings: 1 }]);
-  await openWeek({
-    weekData,
-    recipes: [{ id: "burrito", name: "Burrito", archived: false, ingredients: [] }],
-  });
-
-  shoppingButton().click();
-
-  const block = shoppingDialog().querySelector(".not-included");
-  assert.equal(block.hidden, false);
-  assert.equal(
-    block.querySelector(".not-included-title").textContent,
-    "Not included: these recipes have no ingredients.",
-  );
-  assert.ok(block.querySelector(".not-included-title .warning-icon"));
-  assert.deepEqual(
-    [...block.querySelectorAll("li")].map((item) => item.textContent),
-    ["Burrito · Mon dinner, Thu morning snack"],
-  );
-  assert.deepEqual(lineTexts(), []);
-  assert.equal(shoppingDialog().querySelector(".empty-week").hidden, true);
-});
-
-test("an empty week says there is nothing to buy", async () => {
-  await openWeek();
-
-  shoppingButton().click();
-
-  const empty = shoppingDialog().querySelector(".empty-week");
-  assert.equal(empty.hidden, false);
-  assert.equal(empty.textContent, "Nothing to buy. Plan some meals first.");
-  assert.equal(shoppingDialog().querySelector(".not-included").hidden, true);
-});
-
-test("a hash change while the shopping list is open is undone, and Close returns focus", async () => {
-  await openWeek();
-  shoppingButton().click();
-
-  page.window.location.hash = "#2026-09-28";
-  await waitFor(() => page.window.location.hash === `#${WEEK}`);
-
-  assert.equal(shoppingDialog().open, true);
-  assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
-  shoppingDialog().querySelector(".close-dialog").click();
-  assert.equal(shoppingDialog().open, false);
-  assertFocus(page.document, shoppingButton());
-});
-
-test("a backdrop click closes the shopping list", async () => {
-  await openWeek();
-  shoppingButton().click();
-
-  shoppingDialog().dispatchEvent(new page.window.PointerEvent("pointerdown", { bubbles: true }));
-  shoppingDialog().click();
-
-  assert.equal(shoppingDialog().open, false);
-  assertFocus(page.document, shoppingButton());
-});
-
-test("Shopping list is disabled while no week is shown, and enabled when a week loads", async () => {
-  server = fakeFetch();
-  page = await loadPage({
-    html: "index.html",
-    script: "app.js",
-    fetch: server.fetch,
-    url: `http://localhost/#${WEEK}`,
-  });
-  await tick();
-  server.requestFor("GET", `/api/weeks/${WEEK}`).fail();
-  server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
-  server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
-  await tick();
-
-  assert.equal(page.document.getElementById("grid").hidden, true);
-  assert.equal(shoppingButton().disabled, true);
-
-  page.document.getElementById("retry-load").click();
-  await waitFor(
-    () => server.requests.filter((request) => request.url === `/api/weeks/${WEEK}`).length === 2,
-  );
-  server.requestFor("GET", `/api/weeks/${WEEK}`).respond(200, blankWeek(DAYS, MEALS));
-  server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
-  server.requestFor("GET", "/api/ingredients").respond(200, { ingredients: [] });
-  await tick();
-
-  assert.equal(page.document.getElementById("grid").hidden, false);
-  assert.equal(shoppingButton().disabled, false);
 });

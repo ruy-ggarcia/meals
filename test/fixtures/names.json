@@ -1,0 +1,15 @@
+{
+  "cleanNames": [
+    { "name": "Tea", "clean": "Tea" },
+    { "name": "  Crème   brûlée  \t", "clean": "Crème brûlée" },
+    { "name": "a\n\nb", "clean": "a b" },
+    { "name": "   ", "clean": "" }
+  ],
+  "nameKeys": [
+    { "name": "Café", "key": "cafe" },
+    { "name": "ÑOQUIS", "key": "noquis" },
+    { "name": "  Crème  brûlée ", "key": "  creme  brulee " },
+    { "name": "Ǆ", "key": "ǆ" },
+    { "name": "🍲", "key": "🍲" }
+  ]
+}

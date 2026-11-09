@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { describe, mock, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { createShutdown } from "../server/shutdown.js";
-import { collectingLogger } from "./helpers.js";
+import { collectingLogger } from "./backend-helpers.js";
 
 /** A stop() that resolves or rejects when the test says so. */
 function controlledStop() {
@@ -17,75 +17,105 @@ function controlledStop() {
   return control;
 }
 
-test("shutdown logs the signal, waits for stop(), logs the stop, and exits with 0", async () => {
-  const { entries, logger } = collectingLogger();
-  const exit = mock.fn();
-  const control = controlledStop();
-  const shutdown = createShutdown({ exit, logger, stop: control.stop });
+describe("createShutdown", () => {
+  test("doesn't exit before stop() resolves", async (t) => {
+    // Mock timers, so the 10-second deadline doesn't keep the test file running.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const exit = mock.fn();
+    const control = controlledStop();
+    const shutdown = createShutdown({
+      exit,
+      logger: collectingLogger().logger,
+      stop: control.stop,
+    });
 
-  shutdown("SIGTERM");
-  await setImmediate();
-  assert.equal(control.stop.mock.callCount(), 1);
-  assert.equal(exit.mock.callCount(), 0);
+    shutdown("SIGTERM");
+    await setImmediate();
 
-  control.resolve();
-  await setImmediate();
+    assert.equal(control.stop.mock.callCount(), 1);
+    assert.equal(exit.mock.callCount(), 0);
+  });
 
-  assert.deepEqual(
-    exit.mock.calls.map((call) => call.arguments),
-    [[0]],
-  );
-  assert.deepEqual(entries, [
-    { level: "info", msg: "server stopping", signal: "SIGTERM" },
-    { level: "info", msg: "server stopped" },
-  ]);
-});
+  test("logs the signal and the stop", async () => {
+    const { entries, logger } = collectingLogger();
+    const control = controlledStop();
+    const shutdown = createShutdown({ exit: mock.fn(), logger, stop: control.stop });
 
-test("a second signal doesn't stop the server again", (t) => {
-  // Mock timers, so the 10-second deadline doesn't keep the test file running.
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { logger } = collectingLogger();
-  const control = controlledStop();
-  const shutdown = createShutdown({ exit: mock.fn(), logger, stop: control.stop });
+    shutdown("SIGTERM");
+    control.resolve();
+    await setImmediate();
 
-  shutdown("SIGTERM");
-  shutdown("SIGINT");
+    assert.deepEqual(entries, [
+      { level: "info", msg: "server stopping", signal: "SIGTERM" },
+      { level: "info", msg: "server stopped" },
+    ]);
+  });
 
-  assert.equal(control.stop.mock.callCount(), 1);
-});
+  test("exits with 0 after stop() resolves", async () => {
+    const exit = mock.fn();
+    const control = controlledStop();
+    const shutdown = createShutdown({
+      exit,
+      logger: collectingLogger().logger,
+      stop: control.stop,
+    });
 
-test("shutdown exits with 1 when stop() takes longer than the deadline", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const { entries, logger } = collectingLogger();
-  const exit = mock.fn();
-  const shutdown = createShutdown({ exit, logger, stop: controlledStop().stop });
+    shutdown("SIGTERM");
+    control.resolve();
+    await setImmediate();
 
-  shutdown("SIGTERM");
-  t.mock.timers.tick(9_999);
-  assert.equal(exit.mock.callCount(), 0);
-  t.mock.timers.tick(1);
+    assert.deepEqual(
+      exit.mock.calls.map((call) => call.arguments),
+      [[0]],
+    );
+  });
 
-  assert.deepEqual(
-    exit.mock.calls.map((call) => call.arguments),
-    [[1]],
-  );
-  assert.deepEqual(entries.at(-1), { level: "error", msg: "shutdown timed out" });
-});
+  test("doesn't stop the server again on a second signal", (t) => {
+    // Mock timers, so the 10-second deadline doesn't keep the test file running.
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { logger } = collectingLogger();
+    const control = controlledStop();
+    const shutdown = createShutdown({ exit: mock.fn(), logger, stop: control.stop });
 
-test("shutdown logs the error and exits with 1 when stop() fails", async () => {
-  const { entries, logger } = collectingLogger();
-  const exit = mock.fn();
-  const control = controlledStop();
-  const shutdown = createShutdown({ exit, logger, stop: control.stop });
+    shutdown("SIGTERM");
+    shutdown("SIGINT");
 
-  shutdown("SIGTERM");
-  control.reject(new Error("disk gone"));
-  await setImmediate();
+    assert.equal(control.stop.mock.callCount(), 1);
+  });
 
-  assert.deepEqual(
-    exit.mock.calls.map((call) => call.arguments),
-    [[1]],
-  );
-  assert.equal(entries.at(-1).msg, "shutdown failed");
-  assert.match(entries.at(-1).error, /disk gone/);
+  test("exits with 1 when stop() takes longer than the deadline", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { entries, logger } = collectingLogger();
+    const exit = mock.fn();
+    const shutdown = createShutdown({ exit, logger, stop: controlledStop().stop });
+
+    shutdown("SIGTERM");
+    t.mock.timers.tick(9_999);
+    assert.equal(exit.mock.callCount(), 0);
+    t.mock.timers.tick(1);
+
+    assert.deepEqual(
+      exit.mock.calls.map((call) => call.arguments),
+      [[1]],
+    );
+    assert.deepEqual(entries.at(-1), { level: "error", msg: "shutdown timed out" });
+  });
+
+  test("logs the error and exits with 1 when stop() fails", async () => {
+    const { entries, logger } = collectingLogger();
+    const exit = mock.fn();
+    const control = controlledStop();
+    const shutdown = createShutdown({ exit, logger, stop: control.stop });
+
+    shutdown("SIGTERM");
+    control.reject(new Error("disk gone"));
+    await setImmediate();
+
+    assert.deepEqual(
+      exit.mock.calls.map((call) => call.arguments),
+      [[1]],
+    );
+    assert.equal(entries.at(-1).msg, "shutdown failed");
+    assert.match(entries.at(-1).error, /disk gone/);
+  });
 });

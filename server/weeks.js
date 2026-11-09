@@ -27,8 +27,13 @@ export function isWeekId(week) {
   );
 }
 
+// A slot is one meal of one day of a valid week.
+export function isSlot(week, day, meal) {
+  return isWeekId(week) && DAYS.includes(day) && MEALS.includes(meal);
+}
+
 // Multiples of 0.5 are exact in binary floating point, so this check is exact.
-function isValidServings(servings) {
+export function isValidServings(servings) {
   return (
     typeof servings === "number" &&
     Number.isInteger(servings * 2) &&
@@ -76,7 +81,7 @@ function normalizeMenu(raw, knownRecipeIds) {
 
 // Builds a complete 7 x 5 week from whatever was parsed: unknown keys are
 // dropped, and missing or broken menus become empty.
-function normalize(raw, knownRecipeIds) {
+export function normalizeWeek(raw, knownRecipeIds) {
   const week = emptyWeek();
   for (const day of DAYS) {
     for (const meal of MEALS) {
@@ -86,7 +91,7 @@ function normalize(raw, knownRecipeIds) {
   return week;
 }
 
-// Same shape as normalize, but for the save path: keeps only the item shape,
+// Same shape as normalizeWeek, but for the save path: keeps only the item shape,
 // never the recipe-book filter, so saving one slot can't erase another
 // slot's items just because the recipe book on disk is older, missing, or
 // the wrong shape.
@@ -102,7 +107,7 @@ function normalizeStructure(raw) {
 
 // Checks the items of a PUT body, except that their recipes exist. Returns
 // clean copies with only recipeId and servings.
-function validItems(items) {
+export function validItems(items) {
   if (!Array.isArray(items)) throw new ValidationError('"items" must be an array.');
   if (items.length > MAX_ITEMS) {
     throw new ValidationError(`A menu holds at most ${MAX_ITEMS} menu items.`);
@@ -145,11 +150,11 @@ export function createWeeks({ dataDir, enqueue, recipes }) {
     // created (the reverse order could, if that save's new recipe reaches
     // disk between the two reads).
     const raw = await readJson(weekFile(week));
-    return normalize(raw, await knownRecipeIds());
+    return normalizeWeek(raw, await knownRecipeIds());
   }
 
   async function saveSlot(week, day, meal, items) {
-    if (!isWeekId(week) || !DAYS.includes(day) || !MEALS.includes(meal)) {
+    if (!isSlot(week, day, meal)) {
       throw new RangeError(`Unknown slot: ${week}/${day}/${meal}`);
     }
     const clean = validItems(items);

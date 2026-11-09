@@ -6,17 +6,26 @@ import { createApp } from "./app.js";
 import { createStores } from "./stores.js";
 
 /**
- * Listens on `port` on every interface, where 0 picks a free port, and
- * resolves to `{ port, stop }`. `stop()` stops accepting connections, waits
- * for the requests in progress and the queued writes, and then resolves.
+ * Listens on `port` of `host`, by default every interface, where port 0
+ * picks a free port, and resolves to `{ address, port, stop }`, with the
+ * address and the port that the server listens on. `stop()` stops accepting
+ * connections, waits for the requests in progress and the queued writes, and
+ * then resolves.
  * Creates `dataDir` first if it doesn't exist, and rejects if it can't.
+ * @param {{
+ *   dataDir: string,
+ *   host?: string,
+ *   logger?: import("./logger.js").Logger,
+ *   port: number,
+ *   version?: string,
+ * }} options
  */
-export async function start({ dataDir, logger, port, version }) {
+export async function start({ dataDir, host = "0.0.0.0", logger, port, version }) {
   await mkdir(dataDir, { recursive: true });
   const stores = createStores({ dataDir });
   const app = createApp(stores, { dataDir, logger, version });
   const server = await new Promise((resolve, reject) => {
-    const listening = app.listen(port, "0.0.0.0", (error) =>
+    const listening = app.listen(port, host, (error) =>
       error ? reject(error) : resolve(listening),
     );
   });
@@ -31,9 +40,11 @@ export async function start({ dataDir, logger, port, version }) {
   });
 
   return {
+    address: server.address().address,
     port: server.address().port,
     async stop() {
       stopping = true;
+      /** @type {Promise<void>} */
       const closed = new Promise((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );

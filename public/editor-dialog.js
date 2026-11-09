@@ -53,6 +53,15 @@ export async function sendArchive(url, noun, message) {
  * - submit(send) runs `send()`, which returns the saved entry, or undefined
  *   after showing why the save failed. The editor closes only after a save.
  * - close() closes the editor without a save.
+ *
+ * @param {{
+ *   dialog: any,
+ *   hasChanges: () => boolean,
+ *   onDone: () => unknown,
+ *   onArchive: () => unknown,
+ *   onBusy: (busy: boolean) => unknown,
+ *   confirms?: (target: any) => boolean,
+ * }} options
  */
 export function createEditorDialog({
   dialog,
