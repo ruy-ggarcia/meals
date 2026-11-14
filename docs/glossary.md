@@ -10,6 +10,8 @@ interface, and the documentation. Don't use synonyms, such as *cell* for
 | Active recipe | A recipe that isn't archived. Only active recipes can be added to a menu. |
 | Archived ingredient | An ingredient that the recipe editor no longer offers, but that stays in the recipes that already use it. You can restore it. |
 | Archived recipe | A recipe that the slot editor no longer offers, but that stays in the menus that already use it. You can restore it. |
+| Assistant | The chat that suggests menus and changes to recipes and ingredients, and saves them only when you apply them. |
+| Conversation | The messages between you and the assistant on one device, with their attachments and pending changes. It ends when you start a new one, after 24 hours without activity, or when the server restarts. |
 | Day | One of the seven days of a week: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, or `sun`. |
 | Family preferences | Free text that the assistant reads in every conversation, such as dietary rules and who eats away from home. |
 | Ingredient | Something you buy and use in recipes. The ingredient catalog holds it with a stable ID, a unique name, a unit, and its measures. In a recipe, it has a quantity. |
@@ -20,6 +22,7 @@ interface, and the documentation. Don't use synonyms, such as *cell* for
 | Menu | The content of a slot: an ordered list of menu items, possibly empty. |
 | Menu item | A recipe in a menu, with its servings. |
 | Name key | The form of a name that decides uniqueness, and the order of recipes and ingredients: without accents and in lowercase. `Café` and `cafe` have the same name key. |
+| Pending change | A change that the assistant proposes and that isn't saved: the menu of a slot, or a recipe or an ingredient to create, change, archive, or restore. |
 | Quantity | How much of an ingredient one serving of a recipe needs, in the ingredient's unit or in one of its measures: a number from 0.01 to 10000 with at most two decimals. |
 | Recipe | An entry of the recipe book, with a stable ID and a unique name. |
 | Recipe book | All the recipes, active and archived. |
