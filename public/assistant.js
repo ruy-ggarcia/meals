@@ -166,10 +166,15 @@ function createWindow() {
   };
 }
 
+/** What a message shows, without its failed mark, which changes in place. */
+function contentKey({ role, text, attachments }) {
+  return JSON.stringify({ role, text, attachments });
+}
+
 /** One message of the conversation: its text, and the names of its attachments. */
 function messageElement(message) {
   const element = createElement("div", `message from-${message.role}`);
-  if (message.failed) element.classList.add("failed");
+  element.classList.toggle("failed", Boolean(message.failed));
   const text = createElement("p", "message-text");
   text.append(
     createElement("span", "visually-hidden", message.role === "user" ? "You: " : "Assistant: "),
@@ -236,6 +241,8 @@ export async function setUpAssistant() {
   /** The control of the card or the log whose request runs, or null. */
   let actionControl = null;
   let detailsOpen = false;
+  /** True once the window opened or collapsed. */
+  let toggled = false;
   /** The timer of the next read, while the assistant answers. */
   let timer;
   /** True when the page was hidden while the window waited to read again. */
@@ -247,8 +254,10 @@ export async function setUpAssistant() {
   let answering = false;
   /** Counts the reads, so only the answer of the latest one shows. */
   let reads = 0;
-  /** What the log shows: one key per message, and the state of the answer. */
+  /** What the log shows: the node of each message with its content key. */
   let shownMessages = [];
+  /** The row that ends the log, "Thinking…" or a failure, and its state. */
+  let stateRow = null;
   let shownState = "";
 
   const urlOf = (id) => `${CONVERSATIONS_URL}/${encodeURIComponent(id)}`;
@@ -347,27 +356,34 @@ export async function setUpAssistant() {
     return element;
   }
 
-  // Changes only what's new at the end of the log, so screen readers
-  // announce only new messages.
+  // Changes only what changed in the log, so screen readers announce only
+  // new messages: a message whose failed mark changes keeps its node, and a
+  // new one goes before the row of the answer's state.
   function renderLog() {
-    const keys = view.messages.map((message) => JSON.stringify(message));
+    const { messages } = view;
     const state = `${view.status}:${view.error ?? ""}`;
-    let same = 0;
-    while (
-      same < keys.length &&
-      same < shownMessages.length &&
-      keys[same] === shownMessages[same]
-    ) {
-      same += 1;
+    let changed = state !== shownState || shownMessages.length > messages.length;
+    for (const { node } of shownMessages.slice(messages.length)) node.remove();
+    shownMessages = messages.map((message, index) => {
+      const key = contentKey(message);
+      const shown = shownMessages[index];
+      if (shown?.key === key) {
+        shown.node.classList.toggle("failed", Boolean(message.failed));
+        return shown;
+      }
+      changed = true;
+      const node = messageElement(message);
+      if (shown) shown.node.replaceWith(node);
+      else log.insertBefore(node, stateRow);
+      return { key, node };
+    });
+    if (state !== shownState) {
+      stateRow?.remove();
+      stateRow = stateElement();
+      if (stateRow) log.append(stateRow);
+      shownState = state;
     }
-    if (same === keys.length && same === shownMessages.length && state === shownState) return;
-    for (const element of [...log.children].slice(same)) element.remove();
-    log.append(...view.messages.slice(same).map(messageElement));
-    const stateRow = stateElement();
-    if (stateRow) log.append(stateRow);
-    shownMessages = keys;
-    shownState = state;
-    log.scrollTop = log.scrollHeight;
+    if (changed) log.scrollTop = log.scrollHeight;
   }
 
   function renderCard() {
@@ -464,6 +480,7 @@ export async function setUpAssistant() {
   }
 
   function setOpen(value, { focus = true } = {}) {
+    toggled = true;
     open = value;
     store(OPEN_KEY, value);
     section.hidden = !value;
@@ -698,7 +715,13 @@ export async function setUpAssistant() {
     }
   });
 
-  if (readStored(OPEN_KEY) === "true") setOpen(true, { focus: false });
-  else render();
-  read();
+  // A window that starts open shows once the log holds the conversation, so
+  // screen readers don't read every message as new.
+  const startsOpen = readStored(OPEN_KEY) === "true";
+  log.setAttribute("aria-busy", "true");
+  render();
+  read().finally(() => {
+    log.removeAttribute("aria-busy");
+    if (startsOpen && !toggled) setOpen(true, { focus: false });
+  });
 }

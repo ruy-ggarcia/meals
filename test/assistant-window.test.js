@@ -296,6 +296,38 @@ describe("assistant window", () => {
     assert.equal(assistantButton().getAttribute("aria-expanded"), "true");
   });
 
+  test("fills the log before it shows the window that starts open", async (t) => {
+    await openWithAssistant(t, { stored: { ...STORED, "meals.assistant.open": "true" } });
+    assert.equal(assistantWindow().hidden, true, "the window shows before the read");
+    assert.equal(log().getAttribute("aria-busy"), "true");
+
+    await answer("GET", CONVERSATION_URL, 200, conversation({ messages: [QUESTION, REPLY] }));
+
+    assert.equal(assistantWindow().hidden, false);
+    assert.equal(log().getAttribute("aria-busy"), null);
+    assert.equal(log().querySelectorAll(".message").length, 2);
+  });
+
+  test("keeps the message nodes when only a failed mark changes", async (t) => {
+    const failed = { ...QUESTION, failed: true };
+    await openConversation(
+      t,
+      conversation({ status: "failed", error: "provider", messages: [failed] }),
+    );
+    assistantButton().click();
+    const before = log().querySelector(".message");
+
+    const message = await send("Use fish.");
+    message.respond(202, {});
+    const next = [QUESTION, { role: "user", text: "Use fish." }];
+    await answer("GET", CONVERSATION_URL, 200, conversation({ messages: next }));
+
+    const nodes = [...log().querySelectorAll(".message")];
+    assert.equal(nodes.length, 2);
+    assert.ok(nodes[0] === before, "the first message got a new node");
+    assert.equal(nodes[0].classList.contains("failed"), false);
+  });
+
   test("keeps the conversation when another page loads", async (t) => {
     await openConversation(t, conversation({ messages: [QUESTION, REPLY] }));
 

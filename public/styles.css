@@ -2585,8 +2585,10 @@ select.measure-field {
   font-size: 13px;
 }
 
+/* An empty alert stays in the accessibility tree, so screen readers announce
+   the text that it gets. It takes no space. */
 .assistant-problem:empty {
-  display: none;
+  margin: 0;
 }
 
 .attachment-chips {
@@ -2722,6 +2724,7 @@ body:has(> .assistant-button) .page {
 
 @media (prefers-reduced-transparency: reduce) {
   .assistant-button,
+  .assistant-header .glass,
   .assistant-window {
     background: var(--surface);
     -webkit-backdrop-filter: none;
