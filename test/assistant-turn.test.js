@@ -172,6 +172,19 @@ describe("runTurn", () => {
     assert.equal(provider.calls.length, 30);
   });
 
+  test("rejects with ProviderError when the final answer is blank", async () => {
+    const provider = scriptedProvider([
+      { toolCalls: [call("c1", "list_recipes")] },
+      { text: " \n" },
+    ]);
+
+    await assert.rejects(turn(provider), {
+      name: "ProviderError",
+      kind: "other",
+      message: "The model gave an empty answer.",
+    });
+  });
+
   test("rejects with the provider's error and leaves its arguments unchanged", async () => {
     const staged = await runTool(
       "propose_ingredient",

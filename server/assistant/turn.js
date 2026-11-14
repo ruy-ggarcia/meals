@@ -5,6 +5,7 @@
 // canceled changes nothing that the caller holds.
 
 import { silentLogger } from "../logger.js";
+import { ProviderError } from "./providers/errors.js";
 import { runTool, TOOLS } from "./tools.js";
 
 /** @typedef {import("../logger.js").Logger} Logger */
@@ -50,7 +51,8 @@ async function runToolCalls(toolCalls, { stores, pending, logger, signal }) {
  * Answers the last message of `messages`. It never changes its `messages` or
  * `pending` arguments.
  *
- * Rejects with the provider's error when a call to the model fails, with
+ * Rejects with the provider's error when a call to the model fails, with a
+ * `ProviderError` of kind "other" when the final answer has no text, with
  * `TurnLimitError` when `maxRounds` answers in a row call tools, and with the
  * reason of `signal` when it aborts, checked before each call to the model
  * and before each tool call.
@@ -94,6 +96,10 @@ export async function runTurn({
     usage.inputTokens += answer.usage.inputTokens;
     usage.outputTokens += answer.usage.outputTokens;
     if (answer.toolCalls.length === 0) {
+      // An answer without text would leave the user with nothing to read.
+      if (answer.text.trim() === "") {
+        throw new ProviderError("other", "The model gave an empty answer.");
+      }
       added.push({ role: "assistant", text: answer.text, toolCalls: [] });
       return { messages: added, pending: current, usage, rounds };
     }
