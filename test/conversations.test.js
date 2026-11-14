@@ -326,7 +326,10 @@ describe("server/assistant/conversations.js", () => {
     };
     const { conversations } = setup(
       t,
-      [{ toolCalls: [call("c1", "propose_ingredient", { name: "Leek", unit: "g" })] }, {}],
+      [
+        { toolCalls: [call("c1", "propose_ingredient", { name: "Leek", unit: "g" })] },
+        { text: "Leek is pending." },
+      ],
       { stores: gated },
     );
     const id = await converse(conversations, { text: "Add leeks." });
@@ -449,6 +452,15 @@ describe("server/assistant/conversations.js", () => {
 
     const view = await conversations.view(id);
     assert.deepEqual([view.status, view.error], ["failed", "limit"]);
+  });
+
+  test("fails the turn with provider when the model gives an empty answer", async (t) => {
+    const { conversations } = setup(t, [{ text: "" }]);
+
+    const id = await converse(conversations, { text: "Plan next week." });
+
+    const view = await conversations.view(id);
+    assert.deepEqual([view.status, view.error], ["failed", "provider"]);
   });
 
   test("fails the turn with too_long when the conversation is too long", async (t) => {
