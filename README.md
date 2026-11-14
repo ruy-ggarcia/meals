@@ -436,8 +436,9 @@ On the host, backups are automatic. See
 [Backups](docs/deployment.md#backups).
 
 If a week file, `preferences.json`, `recipes.json`, or `ingredients.json`
-contains invalid JSON, the app shows an error, such as `Couldn't load the meal plan.`, and doesn't
-overwrite the file. To recover, do the following:
+contains invalid JSON, the app shows an error, such as
+`Couldn't load the meal plan.`, and doesn't overwrite the file. To recover,
+do the following:
 
 1. Restore a backup copy of the file, or fix the JSON by hand.
 1. In the app, click **Retry**.
