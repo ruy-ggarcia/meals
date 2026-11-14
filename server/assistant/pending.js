@@ -84,6 +84,18 @@ export function targetOf(change) {
   return `${change.kind}:${change.id}`;
 }
 
+/**
+ * How the user interface names the slot of `day` and `meal`, such as
+ * "Tuesday dinner", or `undefined` when either is unknown.
+ * @param {string} day
+ * @param {string} meal
+ * @returns {string | undefined}
+ */
+export function slotName(day, meal) {
+  if (!Object.hasOwn(DAY_NAMES, day) || !Object.hasOwn(MEAL_NAMES, meal)) return undefined;
+  return `${DAY_NAMES[day]} ${MEAL_NAMES[meal]}`;
+}
+
 // The stored items of the slot, or an empty list when the slot is missing.
 // A week that nobody planned is still in `state.weeks`, so a missing one means
 // that the caller didn't load it: reading it as empty would let Apply report
@@ -169,9 +181,7 @@ function applyRecipe(state, all, known, change) {
 function applyMenu(state, weeks, recipeIds, change) {
   const { week, day, meal } = change;
   if (!isDeepStrictEqual(storedItems(state, week, day, meal), change.base)) {
-    throw new ConflictError(
-      `${DAY_NAMES[day]} ${MEAL_NAMES[meal]} changed after the assistant proposed this.`,
-    );
+    throw new ConflictError(`${slotName(day, meal)} changed after the assistant proposed this.`);
   }
   return { ...weeks, [week]: withSlot(weeks[week], day, meal, change.items, recipeIds) };
 }
