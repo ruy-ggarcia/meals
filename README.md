@@ -325,6 +325,24 @@ converted amounts. To change both the unit and the measures, save each change
 separately. If any converted amount falls outside `0.01` to `10000`, the app
 rejects the change and changes nothing.
 
+## Change the settings
+
+**Settings** holds the family preferences: a text of up to 10,000
+characters, such as dietary rules and who eats away from home. The
+assistant reads this text in every conversation, and a change applies from
+the next message. If the assistant isn't set up on the server, **Settings**
+says so, and you can still edit the text.
+
+To change the family preferences, do the following:
+
+1. Click the gear button in the upper right corner of any page. On a wide
+   screen, it's in the toolbar, after **Shopping list** on the meal plan. On
+   a phone, it's on the line of the page's large title.
+1. Edit the text under **Family preferences**.
+1. Click **Done**.
+
+To close **Settings** without saving, click **Cancel** or press `Escape`.
+
 ## Configure the server
 
 The server reads the following environment variables:
@@ -586,6 +604,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   recipes.html         # Recipe book page.
   recipes.js           # Recipe book page logic.
   saves.js             # Save logic.*
+  settings.js          # The Settings dialog: the family preferences.
   shopping-dialog.js   # The shopping list dialog.
   shopping-list.js     # Computes the shopping list.*
   slot-editor.js       # The slot editor dialog.

@@ -312,11 +312,20 @@ export async function loadSlotEditorDialog() {
  * `request.respond(status, body)` or rejects it with `request.fail()`, or the
  * app aborts it. The cleanup of a page fails the test when a request is still
  * pending (`fetch.pending()` lists them).
+ *
+ * Settings asks `GET /api/assistant` each time it opens. Unless `assistant`
+ * is "manual", the fake answers that request itself, with the assistant off,
+ * and doesn't record it, so a test that doesn't care sees no extra request.
+ *
+ * @param {{ assistant?: "auto" | "manual" }} [options]
  */
-export function fakeFetch() {
+export function fakeFetch({ assistant = "auto" } = {}) {
   const requests = [];
 
   function fetch(url, options = {}) {
+    if (assistant === "auto" && url === "/api/assistant" && (options.method ?? "GET") === "GET") {
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ enabled: false }) });
+    }
     return new Promise((resolve, reject) => {
       const request = {
         url,

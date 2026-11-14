@@ -114,7 +114,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
@@ -2180,4 +2181,94 @@ select.measure-field {
 
 .archive:disabled {
   opacity: 0.4;
+}
+
+/* ---------- Settings ---------- */
+
+/* The large title of a page. On phones, the Settings button sits at its end,
+   in place of the one in the toolbar, as an account button does next to a
+   large title on iPhone. */
+.title-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-line > .page-title,
+.title-line > .day-title {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (min-width: 700px) {
+  .title-line > .open-settings,
+  .title-line > .settings-message {
+    display: none;
+  }
+}
+
+@media (max-width: 699.98px) {
+  .toolbar > .open-settings,
+  .toolbar > .settings-message {
+    display: none;
+  }
+
+  .day-heading > .title-line {
+    flex-basis: 100%;
+  }
+}
+
+/* Why Settings didn't open, under its button. */
+.settings-message {
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  right: 16px;
+  max-width: min(320px, calc(100% - 32px));
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  box-shadow: var(--glass-ring);
+  color: var(--red);
+  font-size: 13px;
+}
+
+.settings-message:empty {
+  display: none;
+}
+
+.title-line > .settings-message {
+  right: 0;
+}
+
+.preferences-field {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1.35;
+  resize: vertical;
+}
+
+/* The card clips what overflows it, so the ring goes inside. */
+.preferences-field:focus-visible {
+  outline-offset: -2px;
+}
+
+.preferences-field:disabled {
+  opacity: 0.4;
+}
+
+.field-hint {
+  margin: 0;
+  padding: 7px 6px 0;
+  color: var(--label2);
+  font-size: 13px;
 }

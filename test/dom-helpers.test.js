@@ -184,6 +184,26 @@ describe("waitFor", () => {
   });
 });
 
+describe("fakeFetch", () => {
+  test("answers GET /api/assistant with the assistant off and records nothing", async () => {
+    const server = fakeFetch();
+
+    const response = await server.fetch("/api/assistant");
+
+    assert.deepEqual(await response.json(), { enabled: false });
+    assert.equal(server.requests.length, 0);
+  });
+
+  test("leaves GET /api/assistant to the test with assistant manual", async () => {
+    const server = fakeFetch({ assistant: "manual" });
+    const sent = server.fetch("/api/assistant");
+
+    await respondTo(server, "GET", "/api/assistant", 200, { enabled: true });
+
+    assert.deepEqual(await (await sent).json(), { enabled: true });
+  });
+});
+
 describe("respondTo", () => {
   test("answers the request that the page sent", async () => {
     const server = fakeFetch();

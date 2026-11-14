@@ -23,8 +23,8 @@ const DAYS = [
  * - `color-contrast`: in the light appearance, the green name of the current
  *   page in the tab bar (contrast 4.42 on the bar, and 4.5 is the minimum),
  *   and the red `Leave Without Saving` (4.21 on the gray sheet). On the
- *   meal plan and the alert, an iPhone doesn't report them, because axe
- *   can't read the background behind the glass of the bar and the alert.
+ *   alert, an iPhone doesn't report them, because axe can't read the
+ *   background behind the glass of the bar and the alert.
  * - `label-content-name-mismatch`: the accessible name of a slot (`Monday,
  *   Breakfast: empty`), of a day (`Monday, September 21`), and of a row
  *   (`Edit Egg`) doesn't contain the visible text (`Add`, `M`, `21`, `Egg`,
@@ -55,11 +55,7 @@ const KNOWN = {
  */
 function knownFor(project) {
   if (project !== "iphone") return KNOWN;
-  return {
-    ...KNOWN,
-    "meal plan": { light: MEAL_PLAN, dark: MEAL_PLAN },
-    "alert about an unsaved meal": {},
-  };
+  return { ...KNOWN, "alert about an unsaved meal": {} };
 }
 
 test.describe("day bar", () => {
