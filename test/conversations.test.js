@@ -271,6 +271,24 @@ describe("server/assistant/conversations.js", () => {
     ]);
   });
 
+  test("reads no data for a view without pending changes", async (t) => {
+    let reads = 0;
+    const real = stores();
+    const counting = {
+      ...real,
+      async read(weekIds) {
+        reads += 1;
+        return real.read(weekIds);
+      },
+    };
+    const { conversations } = setup(t, [{ text: "Hello." }], { stores: counting });
+    const id = await converse(conversations, { text: "Hi." });
+
+    const view = await conversations.view(id);
+
+    assert.deepEqual([view.pending, reads], [[], 0]);
+  });
+
   test("shows the turn as working until it ends", async (t) => {
     const hold = held();
     const { conversations } = setup(t, [hold.step]);

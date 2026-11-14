@@ -466,6 +466,9 @@ export function createConversations({
         ...(status === "failed" && conversation.error && { error: conversation.error }),
         messages: messagesForView(conversation.entries),
       };
+      // The window reads the conversation every second during a turn, and
+      // most turns stage nothing.
+      if (pending.length === 0) return structuredClone({ ...view, pending: [] });
       const state = await stores.read(weeksOf(pending));
       return structuredClone({ ...view, pending: describePending(state, pending, problems) });
     },
