@@ -177,15 +177,18 @@ that file.
 
 To turn on the assistant, do the following:
 
-1. Create the file, owned by `deployer:docker` with mode `0640`, and open
-   it:
+1. Create the empty file, owned by `deployer:docker` with mode `0640`:
 
    ```bash
    sudo install -o deployer -g docker -m 0640 /dev/null /opt/server/meals/assistant.env
-   sudoedit /opt/server/meals/assistant.env
    ```
 
-1. Enter the three variables, and save the file:
+1. Write the file as `deployer`. Run the following command, type the three
+   lines, and then press `Control+D`:
+
+   ```bash
+   sudo -u deployer tee /opt/server/meals/assistant.env >/dev/null
+   ```
 
    ```none
    ASSISTANT_API_KEY=API_KEY
@@ -195,11 +198,15 @@ To turn on the assistant, do the following:
 
    Replace `API_KEY` with the key from the provider's console, `MODEL` with
    the model's identifier at the provider, and `PROVIDER` with `anthropic`
-   or `openai`. The model must accept tools, PDF files, and images.
+   or `openai`. The model must accept tools, PDF files, and images. The
+   lines go through standard input, so the key never appears in a command
+   line or in your shell history. The file keeps its owner and mode.
+
 1. If the host tools come from a release without the assistant, run the
    installer of a release with it, as in
    [Install the host tools](#install-the-host-tools). The installer brings
    the `compose.yaml` that reads `assistant.env`.
+
 1. Restart the app, so that it reads the file:
 
    ```bash
@@ -532,10 +539,11 @@ The `docker` commands need membership in the `docker` group, or `sudo`:
 The app logs a failed health check as `health check failed` with the error
 code, such as `EACCES`, and a failure to start as `server failed to start`.
 It logs a problem with the assistant variables, such as a missing one, as
-`assistant not configured` with the problem, and a message that the assistant couldn't answer as `assistant
-turn failed` with the cause, such as a rejected API key. Each answer of the
-assistant also logs one `assistant turn` line, with the provider, the model,
-the token counts, and the duration, and never the content.
+`assistant not configured` with the problem, and a message that the
+assistant couldn't answer as `assistant turn failed` with the cause, such as
+a rejected API key. Each answer of the assistant also logs one
+`assistant turn` line, with the provider, the model, the token counts, and
+the duration, and never the content.
 To list only the app's errors, run the following command:
 
 ```bash

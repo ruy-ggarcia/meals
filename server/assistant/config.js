@@ -14,7 +14,7 @@ const PROVIDERS = ["anthropic", "openai"];
  * Reads the assistant's configuration from `env`, where an empty variable
  * counts as an unset one. Returns undefined when none of the three is set,
  * and `{ problem }` when the configuration is incomplete or names an unknown
- * provider. The problem never holds the API key.
+ * provider. The problem names variables, and never holds a value.
  *
  * @param {Record<string, string | undefined>} env
  * @returns {AssistantConfig | { problem: string } | undefined}
@@ -31,9 +31,8 @@ export function readAssistantConfig(env) {
   }
   const provider = /** @type {string} */ (env.ASSISTANT_PROVIDER);
   if (provider !== "anthropic" && provider !== "openai") {
-    return {
-      problem: `ASSISTANT_PROVIDER is "${provider}", but it must be ${PROVIDERS.join(" or ")}.`,
-    };
+    // Never the value: it could be the key, pasted into the wrong line.
+    return { problem: `ASSISTANT_PROVIDER must be ${PROVIDERS.join(" or ")}.` };
   }
   return {
     provider,

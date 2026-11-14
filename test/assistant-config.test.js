@@ -65,17 +65,17 @@ describe("readAssistantConfig", () => {
     );
   });
 
-  test("names an unknown provider", () => {
+  test("names ASSISTANT_PROVIDER when the provider is unknown", () => {
     const config = readAssistantConfig({ ...FULL, ASSISTANT_PROVIDER: "gemini" });
 
     assert.ok(config && "problem" in config, `expected a problem, got ${JSON.stringify(config)}`);
     assert.match(config.problem, /ASSISTANT_PROVIDER/);
-    assert.match(config.problem, /gemini/);
   });
 
   test("never puts the key in a problem", () => {
     const envs = [
-      { ...FULL, ASSISTANT_PROVIDER: "gemini" },
+      // The key pasted into the wrong variable.
+      { ...FULL, ASSISTANT_PROVIDER: KEY },
       ...PARTIAL.filter((missing) => !missing.includes("ASSISTANT_API_KEY")).map(without),
     ];
 
