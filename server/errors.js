@@ -29,3 +29,15 @@ export class NameConflictError extends Error {
 export class ConflictError extends Error {
   name = "ConflictError";
 }
+const RULE_ERRORS = [ConflictError, NameConflictError, NotFoundError, ValidationError];
+
+/**
+ * Whether `error` is one that a rule throws for bad input: one of the four
+ * errors above, which server/app.js maps to 400, 404, and 409. Anything else
+ * is a fault, such as a failed write, or a bug.
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export function isRuleError(error) {
+  return RULE_ERRORS.some((type) => error instanceof type);
+}
