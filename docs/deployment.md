@@ -104,9 +104,10 @@ the next version.
 
 ## Install the host tools
 
-The host needs Docker Engine with the Compose plugin, `curl`, `flock`,
-`gzip`, `jq`, and `tar`. On Ubuntu, usually only `jq` is missing. To install
-it, run `sudo apt install jq`.
+The host needs Docker Engine with the Compose plugin 2.24 or later, `curl`,
+`flock`, `gzip`, `jq`, and `tar`. On Ubuntu, usually only `jq` is missing. To
+install it, run `sudo apt install jq`. To see the version of the Compose
+plugin, run `docker compose version`.
 
 To install the host tools, or to update them to a release, do the
 following:
@@ -139,6 +140,7 @@ The installer creates the following:
     data/           # The data directory, mounted at /data in the container
     scripts/        # The meals-* scripts and their shared functions
     .env            # The deployed version and its settings
+    assistant.env   # Optional, you create it: the assistant's provider, model, and API key
     compose.yaml    # The app service
   ```
 
@@ -153,9 +155,9 @@ The installer creates the following:
 
 When you run the installer again, it replaces the scripts, `compose.yaml`,
 and the units, and resets the directory owners and modes. It keeps `.env`,
-`hold`, the data, and the backups. It removes the scripts and links of
-commands that the release renamed or dropped, and prints `Removed the old
-script NAME.` for each.
+`assistant.env`, `hold`, the data, and the backups. It removes the scripts
+and links of commands that the release renamed or dropped, and prints
+`Removed the old script NAME.` for each.
 
 The first installation also puts the host *on hold*, so it deploys nothing
 until you move your data in. To start without data, run
@@ -165,6 +167,101 @@ installation, see
 
 A release updates the app, but not the host tools. When a release changes
 `deploy/` or `scripts/`, run the installer again from that release.
+
+## Turn on the assistant
+
+The assistant is off until you give the app a provider, a model, and an API
+key. The provider is Anthropic or OpenAI. The model must accept tools, PDF
+files, and images.
+
+You can set up the assistant in the app, in **Settings**, or on the host, in
+`/opt/server/meals/assistant.env`., in `/opt/server/meals/assistant.env`.
+
+Before you turn on the assistant, consider the following:
+
+- The provider receives the assistant's instructions, the family
+  preferences, the messages and their attachments, and whatever the
+  assistant reads to answer: recipes, ingredients, and menus. The app sends
+  attachments inside each request, and never stores files at the provider.
+- The provider bills by use, and anyone who reaches the app can use the
+  assistant. Set a monthly spending limit in the provider's console.
+- The app keeps each conversation in memory for 24 hours after its last
+  activity, with up to 20 MB of attachments, and keeps up to 20
+  conversations. In the worst case, attachments take several hundred MB of
+  the host's memory.
+- The host needs outbound HTTPS to the provider: `api.anthropic.com` or
+  `api.openai.com`.
+- The assistant doesn't change the rule to keep the host reachable only from
+  a private network.
+
+In **Settings**, a change applies at once, without a restart. The app keeps
+the key in plain text in `v2/assistant.json` in the data directory. It
+writes that file with mode `0640`, owned by `deployer` and the `docker`
+group, so only they can read it. The app has no user accounts, so anyone who
+reaches it can change or remove the key. The app never shows the key in a
+response or writes it to a log.
+
+Only `deployer` and the `docker` group can read `assistant.env`. When the
+file sets all three variables, they take precedence over **Settings**, which
+then shows the provider and the model but can't change them. Don't put the
+key in `.env`: every user of the host can read that file.
+
+To turn on the assistant on the host, do the following:
+
+1. Create the empty file, owned by `deployer:docker` with mode `0640`:
+
+   ```bash
+   sudo install -o deployer -g docker -m 0640 /dev/null /opt/server/meals/assistant.env
+   ```
+
+1. Write the file as `deployer`. Run the following command, type the three
+   lines, and then press `Control+D`:
+
+   ```bash
+   sudo -u deployer tee /opt/server/meals/assistant.env >/dev/null
+   ```
+
+   ```none
+   ASSISTANT_API_KEY=API_KEY
+   ASSISTANT_MODEL=MODEL
+   ASSISTANT_PROVIDER=PROVIDER
+   ```
+
+   Replace `API_KEY` with the key from the provider's console, `MODEL` with
+   the model's identifier at the provider, and `PROVIDER` with `anthropic`
+   or `openai`. The lines go through standard input, so the key never
+   appears in a command line or in your shell history. The file keeps its
+   owner and mode.
+
+1. If the host tools come from a release without the assistant, run the
+   installer of a release with it, as in
+   [Install the host tools](#install-the-host-tools). The installer brings
+   the `compose.yaml` that reads `assistant.env`.
+
+1. Restart the app, so that it reads the file:
+
+   ```bash
+   cd /opt/server/meals && sudo -u deployer docker compose --project-directory /opt/server/meals --file /opt/server/meals/compose.yaml up --detach
+   ```
+
+1. Check the `server started` line of the app:
+
+   ```bash
+   docker compose --project-directory /opt/server/meals logs --no-log-prefix app \
+     | jq -c 'select(.msg == "server started" or .msg == "assistant not configured")'
+   ```
+
+   The last `server started` line has `"assistant":"anthropic"` or
+   `"assistant":"openai"`, with `"source":"environment"`. If it has
+   `"source":"settings"` or `"assistant":"off"`, the app didn't take the
+   variables, and uses the settings from **Settings** instead. An
+   `assistant not configured` line before it names a missing variable, a
+   wrong provider, or a key in `ASSISTANT_MODEL`. Without that line, none
+   of the variables arrived: check that `assistant.env` has the three lines
+   and that the installed `compose.yaml` reads it. Fix the problem, and
+   restart the app again.
+
+To go back to **Settings**, delete `assistant.env`, and restart the app.
 
 ## Deployments
 
@@ -259,7 +356,11 @@ sudo -u deployer touch /opt/server/meals/hold
 A backup is a `.tar.gz` archive of the whole data directory in
 `/opt/server/meals/backups/`. Its name holds the time in UTC, the backup
 kind, and the version that wrote the data, for example
-`2026-10-04T033000Z-daily-v0.2.0.tar.gz`.
+`2026-10-04T033000Z-daily-v0.2.0.tar.gz`. Each backup has mode `0640`,
+owned by `deployer` and the `docker` group, because it can hold the API key
+that you save in **Settings**, in plain text. Keep copies of backups as
+private as the data directory. A restore keeps `v2/assistant.json` at mode
+`0640`, as in the backup.
 
 | Kind | When | Backups kept |
 |------|------|--------------|
@@ -288,11 +389,15 @@ To take a backup now, run `sudo systemctl start meals-backup`.
 To restore a backup, run `meals-restore` with its file name in `backups/`,
 or with the absolute path of an archive elsewhere. `deployer` must be able
 to read the file, so first copy an archive from your home directory into
-`backups/`. For example:
+`backups/`, as in [Restore on a new host](#restore-on-a-new-host). For
+example:
 
 ```bash
 sudo -u deployer meals-restore 2026-10-04T033000Z-daily-v0.2.0.tar.gz
 ```
+
+If `deployer` can't read the archive, `meals-restore` says so, changes
+nothing, and prints the command that gives the archive to `deployer`.
 
 `meals-restore` checks the backup before it changes anything, stops the app,
 takes a `pre-restore` backup, replaces the data directory, and starts the
@@ -361,7 +466,16 @@ To restore a backup on a new host, do the following:
 
 1. Install the host tools, as in
    [Install the host tools](#install-the-host-tools).
-1. Copy the backup to `/opt/server/meals/backups/`.
+1. Copy the backup to `/opt/server/meals/backups/`, owned by `deployer` and
+   the `docker` group, with mode `0640`:
+
+   ```bash
+   sudo install -o deployer -g docker -m 0640 BACKUP /opt/server/meals/backups/
+   ```
+
+   Replace `BACKUP` with the path of the backup. Backups have mode `0640`,
+   so a copy that keeps another owner, as `rsync -a` does, is a file that
+   `deployer` can't read.
 1. Deploy the backup's version, which is in its name:
 
    ```bash
@@ -376,7 +490,8 @@ To restore a backup on a new host, do the following:
 
 The backups live on the host's disk, so they don't survive a disk failure.
 To keep copies elsewhere, copy `/opt/server/meals/backups/` regularly to
-another device, for example with `rsync`:
+another device, as a member of the `docker` group, for example with
+`rsync`:
 
 ```bash
 rsync -a /opt/server/meals/backups/ nas:/backups/meals/
@@ -462,6 +577,18 @@ The `docker` commands need membership in the `docker` group, or `sudo`:
 
 The app logs a failed health check as `health check failed` with the error
 code, such as `EACCES`, and a failure to start as `server failed to start`.
+It logs a problem with the assistant variables, such as a missing one, as
+`assistant not configured` with the problem, and a message that the
+assistant couldn't answer as `assistant turn failed` with the cause, such as
+a rejected API key. It logs a settings file that it can't read at start as
+`assistant settings unreadable`, and starts with the assistant off. A tool
+of the assistant that fails on the server, for example because it can't read
+a data file, logs `assistant tool failed` with the tool and the error. When
+the provider fails a key check or doesn't answer it, the app logs
+`assistant key check failed` with the cause. Each turn of the assistant also
+logs one `assistant turn` line, with the provider, the model, the token
+counts, the duration, and the outcome, and never the content.
+
 To list only the app's errors, run the following command:
 
 ```bash

@@ -491,6 +491,11 @@ class Host {
     return exists(path.join(this.root, relPath));
   }
 
+  /** The permission bits of the file at RELPATH in octal, such as "640". */
+  async mode(relPath) {
+    return ((await stat(path.join(this.root, relPath))).mode & 0o777).toString(8);
+  }
+
   /** The file names in backups/, sorted. */
   async backups() {
     return (await readdir(path.join(this.root, "backups"))).sort();

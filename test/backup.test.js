@@ -41,6 +41,16 @@ describe("meals-backup", () => {
     ]);
   });
 
+  test("creates every kind of archive with mode 0640", async () => {
+    for (const kind of ["daily", "pre-deploy", "pre-restore"]) {
+      assertExit(await host.run("meals-backup", kind), 0, kind);
+    }
+
+    const backups = await host.backups();
+    assert.equal(backups.length, 3);
+    for (const name of backups) assert.equal(await host.mode(`backups/${name}`), "640", name);
+  });
+
   test("takes no backup when .env doesn't exist", async () => {
     await rm(path.join(host.root, ".env"));
 

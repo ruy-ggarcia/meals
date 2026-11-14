@@ -7,6 +7,7 @@ import { beforeEach, describe, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import request from "supertest";
 import { createApp } from "../server/app.js";
+import { createConversations } from "../server/assistant/conversations.js";
 import {
   ConflictError,
   NameConflictError,
@@ -14,6 +15,7 @@ import {
   ValidationError,
 } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
+import { scriptedProvider } from "./assistant-helpers.js";
 import {
   blankWeek,
   collectingLogger,
@@ -329,6 +331,16 @@ describe("createApp", () => {
     assert.deepEqual(res.body, { error: "Gone" });
   });
 
+  test("answers malformed JSON with 400 and a fixed message", async () => {
+    const res = await request(app)
+      .post("/api/recipes")
+      .set("Content-Type", "application/json")
+      .send('{"name": Soup}');
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "The body isn't valid JSON." });
+  });
+
   test("returns 404 JSON for an unknown /api route", async () => {
     assertJsonError(await request(app).get("/api/nope"), 404, "GET /api/nope");
     assertJsonError(await request(app).delete("/api/recipes/x"), 404, "DELETE a recipe");
@@ -584,6 +596,18 @@ describe("PUT /api/preferences", () => {
     assert.equal(saved.status, 200);
     assert.deepEqual(saved.body, { text });
     assert.deepEqual(read.body, { text });
+  });
+
+  test("rejects a body of 12 MB with 413 while the assistant is on", async (t) => {
+    const stores = createStores({ dataDir: dataDir() });
+    const assistant = createConversations({ getProvider: () => scriptedProvider([]), stores });
+    t.after(() => assistant.stop());
+
+    const res = await request(createApp(stores, { assistant }))
+      .put("/api/preferences")
+      .send({ text: "a".repeat(12 * 1024 * 1024) });
+
+    assertJsonError(res, 413, "12 MB of preferences");
   });
 
   const INVALID_BODIES = [

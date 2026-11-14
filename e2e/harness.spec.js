@@ -9,6 +9,21 @@ import { dirname } from "node:path";
 import { CURRENT_WEEK, NOW } from "./catalog.js";
 import { expect, settleRequests, test, trackRequests, watchErrors } from "./fixtures.js";
 
+/**
+ * Asks the server of `app` for the models of `provider` with a key, and
+ * resolves to the status and the body of the answer.
+ * @param {{ url: string }} app
+ * @param {"anthropic" | "openai"} provider
+ */
+async function listModels(app, provider) {
+  const response = await fetch(`${app.url}/api/assistant/models`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, apiKey: "sk-test" }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 /** Throws `message` from a timer. The fake clock catches it, and logs it as a console error. */
 function throwFromTimer(page, message) {
   return Promise.all([
@@ -241,6 +256,38 @@ test.describe("e2e/fixtures.js", () => {
         "the data directory must be directly in the temp directory",
       ).toBe(tmpdir());
       expect((await stat(app.dataDir)).isDirectory(), "the data directory exists").toBe(true);
+    });
+
+    test("answers one model for each provider unless a test sets others", async ({ app }) => {
+      expect(await listModels(app, "anthropic")).toEqual({
+        status: 200,
+        body: { models: [{ id: "claude-test", name: "Claude Test" }] },
+      });
+      expect(await listModels(app, "openai")).toEqual({
+        status: 200,
+        body: { models: [{ id: "gpt-test", name: "gpt-test" }] },
+      });
+    });
+
+    test("lets a test change the answer of a model list while it runs", async ({ app }) => {
+      app.modelLists.openai = [];
+
+      expect(await listModels(app, "openai")).toEqual({ status: 200, body: { models: [] } });
+    });
+
+    test.describe(() => {
+      test.use({ modelLists: { openai: "auth" } });
+
+      test("answers the failure that a test sets for a model list", async ({ app }) => {
+        expect(await listModels(app, "openai")).toEqual({
+          status: 400,
+          body: { error: "The provider didn't accept this key." },
+        });
+      });
+
+      test("keeps the default answer of the provider that a test leaves", async ({ app }) => {
+        expect((await listModels(app, "anthropic")).status).toBe(200);
+      });
     });
   });
 });

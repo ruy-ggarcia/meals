@@ -90,6 +90,35 @@ export const refusingFetch = async () => {
   });
 };
 
+/** @typedef {import("../server/assistant/providers/types.js").Model} Model */
+
+/** The model that the fake model lists hold unless a test sets another answer. */
+export const LISTED_MODEL = { id: "model-1", name: "Model 1" };
+
+/**
+ * Fake model lists, in the shape that `createAssistantSetup` takes, so no
+ * test asks a real provider for its list. Each provider answers with its
+ * entry of `answers`: a list of models, or an Error to reject with. A
+ * provider without an entry answers `[LISTED_MODEL]`. `calls` records the
+ * provider and the key of each call.
+ *
+ * @param {Partial<Record<"anthropic" | "openai", Model[] | Error>>} [answers]
+ */
+export function fakeModelLists(answers = {}) {
+  /** @type {{ provider: string, apiKey: string }[]} */
+  const calls = [];
+  /** @param {"anthropic" | "openai"} provider */
+  const list =
+    (provider) =>
+    async ({ apiKey }) => {
+      calls.push({ provider, apiKey });
+      const answer = answers[provider] ?? [LISTED_MODEL];
+      if (answer instanceof Error) throw answer;
+      return answer;
+    };
+  return { calls, modelLists: { anthropic: list("anthropic"), openai: list("openai") } };
+}
+
 /** A promise that never settles, for a handler that holds its answer. */
 export function never() {
   return new Promise(() => {});
@@ -144,6 +173,44 @@ export function scriptedProvider(steps) {
         usage: answer.usage ?? { inputTokens: 0, outputTokens: 0 },
       };
     },
+  };
+}
+
+/**
+ * A step of `scriptedProvider` that holds its call until the test releases it,
+ * and then answers with what `release` gets. When the call's signal aborts
+ * first, the call rejects with the signal's reason, and `aborted` turns true.
+ * `called()` resolves when the call starts. A release before the call starts
+ * answers the call at once, and a release after an abort does nothing, so a
+ * test can release in its cleanup.
+ *
+ * @returns {{ called: () => Promise<void>, readonly aborted: boolean, release: (answer: ScriptedAnswer) => void, step: (request: ProviderRequest) => Promise<ScriptedAnswer> }}
+ */
+export function heldStep() {
+  /** @type {PromiseWithResolvers<void>} */
+  const called = Promise.withResolvers();
+  /** @type {PromiseWithResolvers<ScriptedAnswer>} */
+  const released = Promise.withResolvers();
+  let aborted = false;
+  return {
+    called: () => called.promise,
+    get aborted() {
+      return aborted;
+    },
+    release: (answer) => released.resolve(answer),
+    step: ({ signal }) =>
+      new Promise((resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => {
+            aborted = true;
+            reject(signal.reason);
+          },
+          { once: true },
+        );
+        released.promise.then(resolve);
+        called.resolve();
+      }),
   };
 }
 

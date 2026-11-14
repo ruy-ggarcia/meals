@@ -4,11 +4,12 @@
 // lines to a measure when the unit changes. It also reads and writes the
 // data of several files at once, for changes that span them.
 
+import { createAssistantSettings } from "./assistant/settings.js";
+import { PartialSaveError } from "./errors.js";
 import { createQueue } from "./files.js";
 import { createIngredients } from "./ingredients.js";
 import { createPreferences } from "./preferences.js";
 import { createRecipes } from "./recipes.js";
-import { isPlainObject } from "./shapes.js";
 import { createWeeks } from "./weeks.js";
 
 /**
@@ -20,31 +21,6 @@ import { createWeeks } from "./weeks.js";
  * @property {any[]} recipes
  * @property {Record<string, any>} weeks
  */
-
-/**
- * `computed`, after a check that it has the shape of the result of the
- * `compute` of a transaction, so a bug never writes some files and then
- * fails on the others.
- * @param {any} computed
- * @param {string[]} weekIds
- * @returns {{ state: State, result: any }}
- */
-function checkedResult(computed, weekIds) {
-  const state = computed?.state;
-  if (
-    !isPlainObject(computed) ||
-    !isPlainObject(state) ||
-    !Array.isArray(state.ingredients) ||
-    !Array.isArray(state.recipes) ||
-    !isPlainObject(state.weeks) ||
-    !weekIds.every((week) => isPlainObject(state.weeks[week]))
-  ) {
-    throw new TypeError(
-      "compute must return { state, result }, where state has ingredients, recipes, and each week.",
-    );
-  }
-  return computed;
-}
 
 export function createStores({ dataDir }) {
   // One queue for every file, so a save never checks another file while it
@@ -60,6 +36,7 @@ export function createStores({ dataDir }) {
   const recipes = createRecipes({ dataDir, enqueue, ingredients });
   const weeks = createWeeks({ dataDir, enqueue, recipes });
   const preferences = createPreferences({ dataDir, enqueue });
+  const assistantSettings = createAssistantSettings({ dataDir, enqueue });
   // An empty task runs after every write queued before it, so idle()
   // resolves once those writes are on disk.
   const idle = () => enqueue(() => {});
@@ -90,10 +67,10 @@ export function createStores({ dataDir }) {
    * Writes the catalog, the recipe book, and each week of `weekIds`, in that
    * order, only where `state` holds another object than the one read, and
    * resolves to `result`. When `compute` throws, nothing is written and the
-   * error rejects, and so does a result of another shape, with a TypeError.
-   * The order of the writes means that a failure between two
+   * error rejects. The order of the writes means that a failure between two
    * of them leaves extra entries, never a recipe or a menu that points to
-   * something missing.
+   * something missing. Such a failure, after a write, rejects with a
+   * PartialSaveError, because part of the changes is saved.
    * @param {string[]} weekIds
    * @param {(state: State) => { state: State, result: any }} compute
    * @returns {Promise<any>}
@@ -101,17 +78,38 @@ export function createStores({ dataDir }) {
   function transaction(weekIds, compute) {
     return enqueue(async () => {
       const before = await read(weekIds);
-      const { state, result } = checkedResult(compute(before), weekIds);
-      if (state.ingredients !== before.ingredients) await ingredients.writeAll(state.ingredients);
-      if (state.recipes !== before.recipes) await recipes.writeAll(state.recipes);
+      const { state, result } = compute(before);
+      // A write that fails after another leaves part of the changes saved.
+      let written = false;
+      const write = async (save) => {
+        try {
+          await save();
+        } catch (error) {
+          throw written ? new PartialSaveError(error) : error;
+        }
+        written = true;
+      };
+      if (state.ingredients !== before.ingredients) {
+        await write(() => ingredients.writeAll(state.ingredients));
+      }
+      if (state.recipes !== before.recipes) await write(() => recipes.writeAll(state.recipes));
       for (const week of weekIds) {
         if (state.weeks[week] !== before.weeks[week]) {
-          await weeks.writeStored(week, state.weeks[week]);
+          await write(() => weeks.writeStored(week, state.weeks[week]));
         }
       }
       return result;
     });
   }
 
-  return { idle, ingredients, preferences, read, recipes, transaction, weeks };
+  return {
+    assistantSettings,
+    idle,
+    ingredients,
+    preferences,
+    read,
+    recipes,
+    transaction,
+    weeks,
+  };
 }

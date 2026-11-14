@@ -1,5 +1,6 @@
-// Errors that the stores throw for bad input. server/app.js maps each one to
-// an HTTP status, so the stores never deal with HTTP.
+// Errors that the stores and the assistant throw for bad input, a failed
+// save, or a failed provider. server/app.js maps each one to an HTTP status,
+// so they never deal with HTTP.
 
 /** The input breaks a rule, such as an empty recipe name. */
 export class ValidationError extends Error {
@@ -29,6 +30,7 @@ export class NameConflictError extends Error {
 export class ConflictError extends Error {
   name = "ConflictError";
 }
+
 const RULE_ERRORS = [ConflictError, NameConflictError, NotFoundError, ValidationError];
 
 /**
@@ -40,4 +42,27 @@ const RULE_ERRORS = [ConflictError, NameConflictError, NotFoundError, Validation
  */
 export function isRuleError(error) {
   return RULE_ERRORS.some((type) => error instanceof type);
+}
+
+/**
+ * A service that the server asks on behalf of a request, such as the
+ * assistant's provider, failed or didn't answer in time.
+ */
+export class UpstreamError extends Error {
+  name = "UpstreamError";
+}
+
+/**
+ * A transaction failed after it wrote some of its files, so part of its
+ * changes is saved. `cause` is the failure of the write.
+ */
+export class PartialSaveError extends Error {
+  name = "PartialSaveError";
+
+  /** @param {any} cause */
+  constructor(cause) {
+    super(`Part of the changes was saved before a write failed: ${cause?.message ?? cause}`, {
+      cause,
+    });
+  }
 }

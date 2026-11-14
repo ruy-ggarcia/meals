@@ -40,7 +40,10 @@ partial=$MEALS_ROOT/backups/$name.partial
 check=$(mktemp -d) || die "Couldn't create a temporary directory for the validation, so no backup was kept."
 trap 'rm -rf "$partial" "$check"' EXIT
 
-tar -C "$MEALS_ROOT" -czf "$partial" data ||
+# A backup can hold the assistant's API key, so only deployer and the docker
+# group read it. The umask applies to the archive alone: other files that the
+# scripts create stay writable by the group.
+(umask 0137 && tar -C "$MEALS_ROOT" -czf "$partial" data) ||
   die "Couldn't archive the data, so no backup was kept. Check that deployer can read every file in $MEALS_ROOT/data."
 # A pre-restore backup keeps the data as it is, even with invalid JSON, so
 # you can restore over damaged data and still undo the restore.

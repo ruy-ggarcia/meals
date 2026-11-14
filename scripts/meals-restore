@@ -18,6 +18,10 @@ else
 fi
 [[ -f $archive ]] || die "No backup named $1. Give an absolute path or a file name in backups/."
 name=$(basename "$archive")
+# Backups have mode 0640, so a copy that keeps another owner, as rsync -a
+# does, can't be read. Without this check, the validation would only fail.
+[[ -r $archive ]] ||
+  die "deployer can't read the backup $name, so nothing changed. To give it to deployer, run sudo chown deployer:docker $archive && sudo chmod 0640 $archive."
 
 take_lock
 
