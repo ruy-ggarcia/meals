@@ -134,6 +134,24 @@ export function validItems(items) {
   });
 }
 
+/**
+ * The week as saveSlot writes it: `raw`, the parsed week file, by structure
+ * only, with the menu of the slot of `day` and `meal` replaced by `items`, as
+ * PUT on a slot takes them. `knownRecipeIds` holds the ID of every recipe.
+ * Returns a new week and never changes its arguments.
+ */
+export function withSlot(raw, day, meal, items, knownRecipeIds) {
+  if (!DAYS.includes(day) || !MEALS.includes(meal)) {
+    throw new RangeError(`Unknown slot: ${day}/${meal}`);
+  }
+  const clean = validItems(items);
+  const unknown = clean.find((item) => !knownRecipeIds.has(item.recipeId));
+  if (unknown) throw new ValidationError(`Unknown recipe: ${unknown.recipeId}`);
+  const data = normalizeStructure(raw);
+  data[day][meal] = { items: clean };
+  return data;
+}
+
 export function createWeeks({ dataDir, enqueue, recipes }) {
   function weekFile(week) {
     return dataPath(dataDir, "weeks", `${week}.json`);
@@ -141,6 +159,21 @@ export function createWeeks({ dataDir, enqueue, recipes }) {
 
   async function knownRecipeIds() {
     return new Set(await recipes.ids());
+  }
+
+  /**
+   * The week as stored, by structure only: its items keep recipes that the
+   * recipe book doesn't have. Never waits for the queue.
+   */
+  async function readStored(week) {
+    if (!isWeekId(week)) throw new RangeError(`Unknown week: ${week}`);
+    return normalizeStructure(await readJson(weekFile(week)));
+  }
+
+  /** Writes the week. Doesn't enqueue: the caller is already inside the queue. */
+  async function writeStored(week, data) {
+    if (!isWeekId(week)) throw new RangeError(`Unknown week: ${week}`);
+    await writeJson(weekFile(week), data);
   }
 
   async function readWeek(week) {
@@ -157,20 +190,18 @@ export function createWeeks({ dataDir, enqueue, recipes }) {
     if (!isSlot(week, day, meal)) {
       throw new RangeError(`Unknown slot: ${week}/${day}/${meal}`);
     }
-    const clean = validItems(items);
+    // Checked before the queue, so a bad request never waits for it, and
+    // checked again inside it, against the recipe book.
+    validItems(items);
     return enqueue(async () => {
       // Inside the queue, so no recipe write runs between this check and the
       // save.
       const known = await knownRecipeIds();
-      const unknown = clean.find((item) => !known.has(item.recipeId));
-      if (unknown) throw new ValidationError(`Unknown recipe: ${unknown.recipeId}`);
-      const raw = await readJson(weekFile(week));
-      const data = normalizeStructure(raw);
-      data[day][meal] = { items: clean };
-      await writeJson(weekFile(week), data);
-      return { week, day, meal, items: clean };
+      const data = withSlot(await readJson(weekFile(week)), day, meal, items, known);
+      await writeStored(week, data);
+      return { week, day, meal, items: data[day][meal].items };
     });
   }
 
-  return { readWeek, saveSlot };
+  return { readStored, readWeek, saveSlot, writeStored };
 }

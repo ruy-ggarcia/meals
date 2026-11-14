@@ -312,6 +312,79 @@ export function removedMeasureInUse(removed, measureIds) {
   return removed.find((measure) => measureIds.has(measure.id));
 }
 
+// The error for removing `measure` while recipes use it.
+function measureInUse(measure) {
+  return new ConflictError(
+    `"${measure.name}" is used in recipes. To remove it, change those recipes first.`,
+  );
+}
+
+// The error for a name that `ingredient`, another entry, already holds.
+function nameConflict(ingredient) {
+  return new NameConflictError(
+    `An ingredient named "${ingredient.name}" already exists.`,
+    "ingredient",
+    ingredient,
+  );
+}
+
+/**
+ * The catalog `all` with a new ingredient, from `fields` as POST
+ * /api/ingredients takes them, with the ID `id`. Returns `{ all, ingredient }`
+ * and never changes its arguments.
+ */
+export function withNewIngredient(all, fields, id) {
+  const valid = validNewIngredient(fields);
+  const holder = holderOf(all, valid.name);
+  if (holder) throw nameConflict(holder);
+  const ingredient = {
+    id,
+    name: valid.name,
+    unit: valid.unit,
+    measures: valid.measures,
+    archived: false,
+  };
+  return { all: [...all, ingredient], ingredient };
+}
+
+const UNIT_IN_EDITOR = "The unit of an ingredient changes in the ingredient editor.";
+
+// The usage for a change that removes no measure, which doesn't need it.
+const NO_USAGE = { inUnit: false, measureIds: new Set() };
+
+/**
+ * The catalog `all` with the changes to the ingredient `id`, from `changes`
+ * as PATCH /api/ingredients/:id takes them. A unit change moves recipe lines
+ * and needs the person to choose a conversion, so this function accepts
+ * only the stored unit, which changes nothing, and no conversion. `usage` is
+ * what the recipes use of the ingredient, `{ inUnit, measureIds }`. Returns
+ * `{ all, ingredient }` and never changes its arguments.
+ */
+export function withIngredientChanges(all, id, changes, usage) {
+  if (isPlainObject(changes) && "conversion" in changes) {
+    throw new ValidationError(UNIT_IN_EDITOR);
+  }
+  const valid = validChanges(changes);
+  const ingredient = all.find((entry) => entry.id === id);
+  if (!ingredient) throw new NotFoundError(`Unknown ingredient: ${id}`);
+  if (changesUnit(ingredient, valid)) throw new ValidationError(UNIT_IN_EDITOR);
+  if (valid.name !== undefined) {
+    const holder = holderOf(all, valid.name, id);
+    if (holder) throw nameConflict(holder);
+  }
+  const changed = { ...ingredient, ...valid };
+  if (valid.measures !== undefined) {
+    changed.measures = validMeasures(valid.measures, ingredient.measures);
+    const removed = removedMeasures(ingredient, changed.measures);
+    const used = removedMeasureInUse(removed, usage.measureIds);
+    if (used) throw measureInUse(used);
+  }
+  return {
+    all: all.map((entry) => (entry === ingredient ? changed : entry)),
+    ingredient: changed,
+  };
+}
+
 /**
  * `usageOf(id)` resolves to what the recipes, active or archived, use of the
  * ingredient: `{ inUnit, measureIds }`, where `inUnit` tells whether a recipe
@@ -324,16 +397,17 @@ export function removedMeasureInUse(removed, measureIds) {
 export function createIngredients({ dataDir, enqueue, moveUnitLinesToMeasure, usageOf }) {
   const file = dataPath(dataDir, "ingredients.json");
 
+  /** Every ingredient as stored. Never waits for the queue. */
   async function readAll() {
     return normalize(await readJson(file));
   }
 
-  function conflict(ingredient) {
-    return new NameConflictError(
-      `An ingredient named "${ingredient.name}" already exists.`,
-      "ingredient",
-      ingredient,
-    );
+  /**
+   * Writes the catalog `all`. Doesn't enqueue: the caller is already inside
+   * the queue.
+   */
+  async function writeAll(all) {
+    await writeJson(file, { ingredients: all });
   }
 
   /** Every ingredient, archived ones included, from A to Z. Never waits for the queue. */
@@ -348,28 +422,27 @@ export function createIngredients({ dataDir, enqueue, moveUnitLinesToMeasure, us
     if (removed.length === 0) return;
     const { measureIds } = await usageOf(ingredient.id);
     const used = removedMeasureInUse(removed, measureIds);
-    if (used) {
-      throw new ConflictError(
-        `"${used.name}" is used in recipes. To remove it, change those recipes first.`,
-      );
-    }
+    if (used) throw measureInUse(used);
   }
 
+  // What the recipes use of the ingredient, for `measures`, the measures of a
+  // change as sent. Reads the recipe book only when they leave out a stored
+  // measure: any other change doesn't depend on the recipes, so it saves even
+  // when the recipe book can't be read.
+  async function usageForRemovals(ingredient, measures) {
+    if (measures === undefined) return NO_USAGE;
+    const removed = removedMeasures(ingredient, measures.filter(isPlainObject));
+    return removed.length > 0 ? usageOf(ingredient.id) : NO_USAGE;
+  }
+
+  // The body is checked before the queue, so a bad request never waits for
+  // it, and checked again inside it, against the data.
   async function create(fields) {
-    const valid = validNewIngredient(fields);
+    validNewIngredient(fields);
     return enqueue(async () => {
-      const all = await readAll();
-      const holder = holderOf(all, valid.name);
-      if (holder) throw conflict(holder);
-      const ingredient = {
-        id: randomUUID(),
-        name: valid.name,
-        unit: valid.unit,
-        measures: valid.measures,
-        archived: false,
-      };
-      await writeJson(file, { ingredients: [...all, ingredient] });
-      return ingredient;
+      const next = withNewIngredient(await readAll(), fields, randomUUID());
+      await writeAll(next.all);
+      return next.ingredient;
     });
   }
 
@@ -379,23 +452,35 @@ export function createIngredients({ dataDir, enqueue, moveUnitLinesToMeasure, us
       const all = await readAll();
       const ingredient = all.find((entry) => entry.id === id);
       if (!ingredient) throw new NotFoundError(`Unknown ingredient: ${id}`);
-      if (valid.name !== undefined) {
-        const holder = holderOf(all, valid.name, id);
-        if (holder) throw conflict(holder);
+      if (valid.conversion !== undefined || changesUnit(ingredient, valid)) {
+        return updateWithUnit(all, ingredient, valid);
       }
-      if (valid.measures !== undefined) {
-        valid.measures = validMeasures(valid.measures, ingredient.measures);
-        await checkRemovedMeasuresUnused(ingredient, valid.measures);
-      }
-      const { conversion, ...fields } = valid;
-      const usage = changesUnit(ingredient, fields) ? await usageOf(id) : undefined;
-      const error = unitChangeError(ingredient, fields, conversion, usage);
-      if (error) throw error;
-      if (conversion) return changeUnit(all, ingredient, fields, conversion, usage.inUnit);
-      Object.assign(ingredient, fields);
-      await writeJson(file, { ingredients: all });
-      return ingredient;
+      const usage = await usageForRemovals(ingredient, valid.measures);
+      const next = withIngredientChanges(all, id, changes, usage);
+      await writeAll(next.all);
+      return next.ingredient;
     });
+  }
+
+  // Applies `valid`, changes that give the ingredient, one of `all`, another
+  // unit or have a conversion. Inside the queue.
+  async function updateWithUnit(all, ingredient, valid) {
+    if (valid.name !== undefined) {
+      const holder = holderOf(all, valid.name, ingredient.id);
+      if (holder) throw nameConflict(holder);
+    }
+    if (valid.measures !== undefined) {
+      valid.measures = validMeasures(valid.measures, ingredient.measures);
+      await checkRemovedMeasuresUnused(ingredient, valid.measures);
+    }
+    const { conversion, ...fields } = valid;
+    const usage = changesUnit(ingredient, fields) ? await usageOf(ingredient.id) : undefined;
+    const error = unitChangeError(ingredient, fields, conversion, usage);
+    if (error) throw error;
+    if (conversion) return changeUnit(all, ingredient, fields, conversion, usage.inUnit);
+    Object.assign(ingredient, fields);
+    await writeAll(all);
+    return ingredient;
   }
 
   // Changes the unit of the ingredient, one of `all`, with the conversion, and
@@ -411,13 +496,13 @@ export function createIngredients({ dataDir, enqueue, moveUnitLinesToMeasure, us
     const { added, measures, target } = planUnitChange(ingredient, fields.unit, conversion, inUnit);
     if (added) {
       ingredient.measures.push(target);
-      await writeJson(file, { ingredients: all });
+      await writeAll(all);
     }
     if (target) await moveUnitLinesToMeasure(ingredient.id, target.id);
     Object.assign(ingredient, fields, { measures });
-    await writeJson(file, { ingredients: all });
+    await writeAll(all);
     return ingredient;
   }
 
-  return { create, list, update };
+  return { create, list, readAll, update, writeAll };
 }
