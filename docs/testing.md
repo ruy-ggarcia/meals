@@ -188,6 +188,12 @@ The session finds what Playwright can't emulate. It never blocks a release:
 each finding becomes an issue, and its fix comes with a test at the lowest
 level that can prove it.
 
+Each session also checks what Playwright can't emulate at all:
+
+- **Password managers and the API key.** In Chrome and in Safari, save a key
+  in the **BYOK** section of **Settings**. The browser doesn't offer to
+  save a password.
+
 ## Where a new test goes
 
 To choose the level of a new test, find the first row that matches what the

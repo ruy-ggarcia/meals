@@ -325,6 +325,75 @@ converted amounts. To change both the unit and the measures, save each change
 separately. If any converted amount falls outside `0.01` to `10000`, the app
 rejects the change and changes nothing.
 
+## Change the settings
+
+**Settings** has two sections: **Assistant** holds the family preferences,
+and **BYOK**, for bring your own key, sets up the assistant with your key of
+a provider.
+
+The family preferences are a text of up to 10,000 characters, such as
+dietary rules and who eats away from home. The assistant reads this text in
+every conversation, and a change applies from the next message. You can
+edit the text while the assistant is off. While it's off, the **Assistant**
+section says "Needs a valid API key to turn on."
+
+To change the family preferences, do the following:
+
+1. Click the gear button at the end of the toolbar of any page, in the
+   upper right corner. On the meal plan, it's after **Shopping list**.
+1. Under **Assistant**, edit the text under **Family preferences**. When
+   fewer than 1,000 characters remain, a count under the text shows how
+   many are left.
+1. Click **Done**.
+
+The **BYOK** section holds the assistant's provider, API key, and model. To
+set up the assistant, do the following:
+
+1. Click the gear button of **Settings**.
+1. Under **BYOK**, choose **Anthropic** or **OpenAI** under **Provider**.
+1. Paste the key from the provider's console under **API key**. The app
+   asks the provider for its models with the key, without saving the key.
+1. Under **Model**, choose a model from the list that the provider sends,
+   newest first.
+1. Click **Done**.
+
+**Model** lists the models of the provider that can chat. A list that
+arrives proves that the provider accepts the key, and until it arrives, you
+can't choose a model. When **Settings** opens with a saved key, the app asks
+for the list again with the saved key. The section says what went wrong
+under **Model**:
+
+- "The provider didn't accept this key." when the provider rejects the key.
+- "This key has no models that can chat." when the list is empty.
+- "Couldn't check the key." when the app can't reach the provider. Click
+  **Check Again** to ask again.
+
+A saved model that the list no longer holds shows as "(not available)",
+selected, so you see what's saved. If you change the provider, enter a key
+for it: the app never sends the saved key to another provider.
+
+**Done** saves the family preferences and the **BYOK** section, each only
+when it changed. If the **BYOK** section has a problem, such as a model that
+isn't from the list, **Done** saves nothing and says what to fix. A saved
+key that the app couldn't check doesn't keep you from saving the family
+preferences. If a save fails, **Settings** stays open and shows why under
+its section.
+
+**Settings** never shows the key again. Once a key is saved, the **BYOK**
+section says "A key is saved." instead of the key field, with two buttons:
+
+- **Replace Key** shows an empty key field for a new key. If you leave it
+  empty, the saved key stays.
+- **Remove Key** removes the key when you click **Done**, which turns off
+  the assistant. Until then, **Keep Key** undoes it.
+
+When the server sets up the assistant with its environment variables, the
+**BYOK** section shows the provider and the model, says "Set on the
+server.", and can't change them. See
+[Configure the server](#configure-the-server).
+
+To close **Settings** without saving, click **Cancel** or press `Escape`.
+
 ## Configure the server
 
 The server reads the following environment variables:
@@ -383,11 +452,14 @@ On the host, backups are automatic. See
 
 If a week file, `preferences.json`, `recipes.json`, or `ingredients.json`
 contains invalid JSON, the app shows an error, such as
-`Couldn't load the meal plan.`, and doesn't overwrite the file. To recover,
-do the following:
+`Couldn't load the meal plan.`, and doesn't overwrite the file. For an
+invalid `preferences.json`, a click on the gear button of **Settings**
+shows `Couldn't load the settings. Try again.` at the top of the page, and
+the assistant can't answer. To recover, do the following:
 
 1. Restore a backup copy of the file, or fix the JSON by hand.
-1. In the app, click **Retry**.
+1. In the app, click **Retry**. For the family preferences, click the gear
+   button again.
 
 If `assistant.json` isn't valid, and the `ASSISTANT_` variables don't set up
 the assistant, the server logs `assistant settings unreadable` when it
@@ -646,6 +718,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   recipes.html         # Recipe book page.
   recipes.js           # Recipe book page logic.
   saves.js             # Save logic.*
+  settings.js          # The Settings dialog: the family preferences and the assistant's settings.
   shopping-dialog.js   # The shopping list dialog.
   shopping-list.js     # Computes the shopping list.*
   slot-editor.js       # The slot editor dialog.
