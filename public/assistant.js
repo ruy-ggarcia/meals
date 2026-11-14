@@ -39,9 +39,12 @@ const EMPTY = { status: "idle", messages: [], pending: [] };
 const BUTTON_MARKUP =
   '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4c4.7 0 8.5 3.1 8.5 7s-3.8 7-8.5 7c-1 0-2-.1-2.9-.4L5 19.5l1.2-3.4C4.6 14.8 3.5 13 3.5 11c0-3.9 3.8-7 8.5-7z"/></svg>';
 
-// static markup, never user text
+// static markup, never user text. The card of the pending changes takes its
+// name from aria-label, not from aria-labelledby on its heading: after the
+// window shows pending changes, Firefox crashes when a script reads the
+// card's ariaLabelledByElements, as accessibility checkers do.
 const WINDOW_MARKUP = `
-  <header class="assistant-header">
+  <div class="assistant-header">
     <h2 class="assistant-title">Assistant</h2>
     <button type="button" class="new-conversation glass icon-button" aria-label="New conversation" title="New conversation">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
@@ -49,10 +52,10 @@ const WINDOW_MARKUP = `
     <button type="button" class="collapse glass icon-button" aria-label="Collapse" title="Collapse">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 9l7 7 7-7"/></svg>
     </button>
-  </header>
+  </div>
   <div class="assistant-messages" role="log" aria-label="Messages"></div>
-  <section class="pending-card" aria-labelledby="pending-title" hidden>
-    <h3 id="pending-title" class="pending-title">Pending changes</h3>
+  <section class="pending-card" aria-label="Pending changes" hidden>
+    <h3 class="pending-title">Pending changes</h3>
     <ul class="pending-summary"></ul>
     <button type="button" class="view-details" aria-expanded="false" aria-controls="pending-details">View details</button>
     <ul id="pending-details" class="pending-details" hidden></ul>

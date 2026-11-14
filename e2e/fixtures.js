@@ -1,7 +1,8 @@
 // The fixtures of the browser tests. Each test gets its own server, on a free
 // port and with a new data directory, seeded through the API. Its pages start
 // at the fixed date, and the test fails on an error in a page. A test can
-// also make the API fail, as if the server were stopped or paused.
+// also make the API fail, as if the server were stopped or paused, and turn
+// the assistant on with a scripted provider, so no test calls a real one.
 
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -11,6 +12,7 @@ import { test as base, expect } from "@playwright/test";
 import { silentLogger } from "../server/logger.js";
 import { start } from "../server/start.js";
 import { createApi } from "./api.js";
+import { scriptedProvider } from "./assistant.js";
 import { INGREDIENTS, NOW, RECIPE_NAMES } from "./catalog.js";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -145,6 +147,7 @@ export function watchErrors(page, consoleErrors) {
  * @typedef {object} Fixtures
  * @property {"catalog" | "empty"} seed
  * @property {"never" | "real"} requestTimeout
+ * @property {"off" | { script: import("./assistant.js").Step[] }} assistant
  * @property {{
  *   url: string,
  *   port: number,
@@ -152,6 +155,7 @@ export function watchErrors(page, consoleErrors) {
  *   api: ReturnType<typeof createApi>,
  *   recipes: Record<string, any>,
  *   ingredients: Record<string, any>,
+ *   assistant?: ReturnType<typeof scriptedProvider>,
  * }} app
  * @property {{ allowed: boolean }} consoleErrors
  * @property {() => Promise<import("@playwright/test").Page>} newPage
@@ -178,15 +182,27 @@ const fixtures = {
   // seconds of real time, for a test that checks how the app gives up.
   requestTimeout: ["never", { option: true }],
 
-  app: async ({ seed }, use) => {
+  // "off" starts the server without the assistant. A script of steps, which
+  // a test sets with `test.use({ assistant: { script: [...] } })`, turns it
+  // on: the assistant answers with `scriptedProvider` of e2e/assistant.js,
+  // which the test reaches as `app.assistant`. The script sits in an object
+  // because Playwright reads an array whose second item is an object as a
+  // fixture and its options.
+  assistant: ["off", { option: true }],
+
+  app: async ({ assistant, seed }, use) => {
     const dataDir = await mkdtemp(join(tmpdir(), "meals-e2e-"));
     try {
+      let app;
+      const provider =
+        assistant === "off" ? undefined : scriptedProvider(assistant.script, () => app);
       // Only this machine can reach the server, not the network.
       const server = await start({
         dataDir,
         host: "127.0.0.1",
         logger: silentLogger,
         port: 0,
+        provider,
         version,
       });
       try {
@@ -194,10 +210,13 @@ const fixtures = {
         const api = createApi(url);
         const seeded =
           seed === "catalog" ? await seedCatalog(api) : { recipes: {}, ingredients: {} };
-        await use({ url, port: server.port, dataDir, api, ...seeded });
+        app = { url, port: server.port, dataDir, api, ...seeded, assistant: provider };
+        await use(app);
       } finally {
+        // Stopping the server rejects the calls that the provider holds.
         await server.stop();
       }
+      expect(provider?.overruns ?? [], "calls of the assistant beyond its script").toEqual([]);
     } finally {
       await rm(dataDir, { recursive: true, force: true });
     }

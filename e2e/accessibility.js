@@ -3,6 +3,15 @@
 // every kind of control.
 
 import AxeBuilder from "@axe-core/playwright";
+import {
+  assistantWindow,
+  attachFile,
+  openAssistant,
+  pendingCard,
+  proposeMenus,
+  SCHOOL_MENU,
+  sendMessage,
+} from "./assistant.js";
 import { CURRENT_WEEK } from "./catalog.js";
 import { expect, test } from "./fixtures.js";
 import {
@@ -62,6 +71,10 @@ async function openMealPlan(page) {
  * @typedef {object} State
  * @property {string} title
  * @property {"alertdialog" | "dialog"} [role]
+ * @property {{ script: import("./assistant.js").Step[] }} [assistant] The
+ *   script of the assistant, which turns it on.
+ * @property {string} [behind] The title of the state of the page behind the
+ *   window, whose known violations axe finds too.
  * @property {(fixtures: { app?: any, network?: any, page: import("@playwright/test").Page }) => Promise<void>} open
  */
 
@@ -154,6 +167,52 @@ export const STATES = [
   },
 ];
 
+const REPLY = "Here's a plan for the week.";
+
+/**
+ * The states of the assistant's window, open on the meal plan. Each turns the
+ * assistant on with a script. They aren't in `STATES`, whose states the
+ * specs also check with the assistant off.
+ * @type {State[]}
+ */
+const ASSISTANT_STATES = [
+  {
+    title: "assistant window",
+    role: "dialog",
+    behind: "meal plan",
+    assistant: { script: [{ text: REPLY }] },
+    async open({ page }) {
+      await openMealPlan(page);
+      const chat = await openAssistant(page);
+      // A sent message with an attachment, and a file attached to the next one.
+      await attachFile(page, SCHOOL_MENU);
+      await sendMessage(page, "Plan the week around the school menu.");
+      await expect(chat.getByText(REPLY)).toBeVisible();
+      await attachFile(page, SCHOOL_MENU);
+      await expect(chat.getByRole("button", { name: `Remove ${SCHOOL_MENU.name}` })).toBeVisible();
+    },
+  },
+  {
+    title: "assistant window with pending changes",
+    role: "dialog",
+    behind: "meal plan",
+    assistant: {
+      script: [
+        proposeMenus(CURRENT_WEEK, [["wed", "dinner", { Omelette: 2, "Green salad": 1 }]]),
+        { text: REPLY },
+      ],
+    },
+    async open({ page }) {
+      await openMealPlan(page);
+      await openAssistant(page);
+      await sendMessage(page, "Plan Wednesday's dinner.");
+      await expect(assistantWindow(page).getByText(REPLY)).toBeVisible();
+      await pendingCard(page).getByRole("button", { name: "View details" }).click();
+      await expect(pendingCard(page).getByText("Omelette × 2")).toBeVisible();
+    },
+  },
+];
+
 /**
  * Describes the element of an axe `node` by its tag and classes, such as
  * `button.slot-empty`, or by axe's selector if its HTML doesn't start with a
@@ -193,13 +252,16 @@ export async function violationsOf(page) {
  * Defines a test for each state and appearance: axe finds exactly the
  * violations in the list that `known(project)` returns for the project, a map
  * from the title of a state to its lines (see `violationsOf`), per appearance.
+ * A state of the assistant's window also expects the lines of the page behind
+ * it, which axe checks too.
  *
  * @param {(project: string) => Record<string, Record<string, string[]>>} [known]
  */
 export function defineAxeTests(known = () => ({})) {
   test.describe("accessibility", () => {
-    for (const state of STATES) {
+    for (const state of [...STATES, ...ASSISTANT_STATES]) {
       test.describe(state.title, () => {
+        if (state.assistant) test.use({ assistant: state.assistant });
         for (const scheme of SCHEMES) {
           test(`finds only the known violations when the appearance is ${scheme}`, async ({
             app,
@@ -210,7 +272,11 @@ export function defineAxeTests(known = () => ({})) {
             await page.emulateMedia({ colorScheme: scheme });
             await state.open({ app, network, page });
 
-            const expected = known(testInfo.project.name)[state.title]?.[scheme] ?? [];
+            const lines = known(testInfo.project.name);
+            const expected = [
+              ...(lines[state.behind]?.[scheme] ?? []),
+              ...(lines[state.title]?.[scheme] ?? []),
+            ].sort();
             expect(await violationsOf(page)).toEqual(expected);
           });
         }

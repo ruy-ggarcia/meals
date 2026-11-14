@@ -115,6 +115,11 @@ Integration tests check modules together with a real dependency, also in
   [happy-dom](https://github.com/capricorn86/happy-dom) with a fake server, so
   a test can click, type, and read the page. A test fails on a
   `console.error` call that it didn't declare, as the browser tests do.
+- No test of the assistant calls a real provider. The tests of the
+  conversations, the tools, and the routes use a scripted provider, which
+  answers with the text and the tool calls that the test sets. Each provider
+  adapter runs against a local stub server, which checks the request and
+  answers in the provider's format.
 - For the deployment, `npm run test:image` builds the image and runs it
   through `deploy/compose.yaml` as the host does, and `npm run test:host`
   runs the `meals-*` scripts against real Docker in a temporary root.
@@ -130,8 +135,11 @@ End-to-end tests check the whole system as a person or the host uses it:
   page and dialog in the light and dark appearances. A request never times
   out in a browser test, so a test can hold it as long as it needs; a test
   that checks how the app gives up on a request uses `test.use({
-  requestTimeout: "real" })` and waits for the real 5 seconds. `npm run
-  test:e2e` runs them.
+  requestTimeout: "real" })` and waits for the real 5 seconds. The assistant
+  is off unless a test sets a script with `test.use({ assistant: { script:
+  [...] } })`. The server then answers with the scripted provider of
+  `e2e/assistant.js`, whose tool calls run on the test's data, and never
+  calls a real provider. `npm run test:e2e` runs them.
 - `scripts/host-acceptance.sh` installs the host tools for real on a
   disposable GitHub-hosted runner, deploys published releases, backs up,
   restores, and restarts Docker. `.github/workflows/host.yml` runs it on pull
