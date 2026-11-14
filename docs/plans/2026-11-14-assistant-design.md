@@ -336,9 +336,10 @@ manual reload, through the page's own way of loading its data.
 - `GET /api/preferences` and `PUT /api/preferences` read and save it. The
   routes exist even when the assistant is off.
 - You edit them in **Settings**. A round glass button with a gear, in the
-  upper right corner of every page, opens it. On the meal plan, the button
-  follows **Shopping list** in the toolbar. The sidebar and the tab bar keep
-  their three sections.
+  upper right corner of every page, opens it. On wide screens, the button is
+  in the toolbar, after **Shopping list** on the meal plan. On phones, it
+  sits on the line of the page's large title. The sidebar and the tab bar
+  keep their three sections.
 - **Settings** is a dialog like the editors: a sheet on phones, with
   **Cancel** and **Done**. It shows the text under the title **Family
   preferences**, with a line that says what the assistant uses it for.
