@@ -531,7 +531,10 @@ export function createConversations({
           note(conversation, APPLIED);
         } else {
           conversation.problems = result.problems;
-          const messages = result.problems.map((problem) => problem.message).join("; ");
+          // Each message ends with a period, and the note ends with its own.
+          const messages = result.problems
+            .map((problem) => problem.message.replace(/\.$/, ""))
+            .join("; ");
           note(conversation, `(Meals: the pending changes couldn't be applied: ${messages}.)`);
         }
         return structuredClone(result);

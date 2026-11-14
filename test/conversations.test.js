@@ -343,6 +343,35 @@ describe("server/assistant/conversations.js", () => {
     await applying;
   });
 
+  test("keeps the pending changes and unlocks the conversation when a save fails", async (t) => {
+    const failure = new Error("EIO: /data/v2/ingredients.json");
+    const failing = {
+      ...stores(),
+      transaction: async () => {
+        throw failure;
+      },
+    };
+    const { conversations } = setup(
+      t,
+      [
+        { toolCalls: [call("c1", "propose_ingredient", { name: "Leek", unit: "g" })] },
+        { text: "Leek is pending." },
+        { text: "Let's try again." },
+      ],
+      { stores: failing },
+    );
+    const id = await converse(conversations, { text: "Add leeks." });
+
+    await assert.rejects(conversations.apply(id), (error) => error === failure);
+
+    assert.deepEqual(
+      (await conversations.view(id)).pending.map((change) => change.name),
+      ["Leek"],
+    );
+    conversations.send(id, { text: "Apply failed." });
+    await settle(conversations, id);
+  });
+
   test("restores the pending changes when a turn fails after staging some", async (t) => {
     const { conversations } = setup(t, [
       { toolCalls: [call("c1", "propose_ingredient", { name: "Leek", unit: "g" })] },
@@ -672,7 +701,7 @@ describe("server/assistant/conversations.js", () => {
 
     assert.equal(
       lastSent(provider),
-      `(Meals: the pending changes couldn't be applied: ${SQUASH_PROBLEM.message}.)\nFix it.`,
+      "(Meals: the pending changes couldn't be applied: Squash soup changed after the assistant proposed this.)\nFix it.",
     );
   });
 
