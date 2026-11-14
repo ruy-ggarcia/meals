@@ -190,25 +190,67 @@ export function moveLines(all, ingredientId, measureId) {
   return changed;
 }
 
+// The error for a name that `recipe`, another entry, already holds.
+function nameConflict(recipe) {
+  return new NameConflictError(`A recipe named "${recipe.name}" already exists.`, "recipe", recipe);
+}
+
+/**
+ * The recipe book `all` with a new recipe, from `fields` as POST /api/recipes
+ * takes them, with the ID `id`. `known` holds the IDs of the measures of each
+ * ingredient of the catalog, as measureIdsByIngredient returns them. Returns
+ * `{ all, recipe }` and never changes its arguments.
+ */
+export function withNewRecipe(all, fields, known, id) {
+  const valid = validNewRecipe(fields);
+  const holder = holderOf(all, valid.name);
+  if (holder) throw nameConflict(holder);
+  checkIngredientsExist(known, valid.ingredients);
+  const recipe = { id, name: valid.name, archived: false, ingredients: valid.ingredients };
+  return { all: [...all, recipe], recipe };
+}
+
+/**
+ * The recipe book `all` with the changes to the recipe `id`, from `changes`
+ * as PATCH /api/recipes/:id takes them. `known` is as in withNewRecipe.
+ * Returns `{ all, recipe }`, with the recipe as stored, and never changes its
+ * arguments.
+ */
+export function withRecipeChanges(all, id, changes, known) {
+  const valid = validChanges(changes);
+  const recipe = all.find((entry) => entry.id === id);
+  if (!recipe) throw new NotFoundError(`Unknown recipe: ${id}`);
+  if (valid.name !== undefined) {
+    const holder = holderOf(all, valid.name, id);
+    if (holder) throw nameConflict(holder);
+  }
+  if (valid.ingredients !== undefined) checkIngredientsExist(known, valid.ingredients);
+  const changed = { ...recipe, ...valid };
+  return { all: all.map((entry) => (entry === recipe ? changed : entry)), recipe: changed };
+}
+
 export function createRecipes({ dataDir, enqueue, ingredients }) {
   const file = dataPath(dataDir, "recipes.json");
 
-  // Every recipe as stored, with its ingredients checked by shape only.
+  /**
+   * Every recipe as stored, with its ingredients checked by shape only. Never
+   * waits for the queue.
+   */
   async function readAll() {
     return normalize(await readJson(file));
+  }
+
+  /**
+   * Writes the recipe book `all`. Doesn't enqueue: the caller is already
+   * inside the queue.
+   */
+  async function writeAll(all) {
+    await writeJson(file, { recipes: all });
   }
 
   // The IDs of the measures of each ingredient in the catalog.
   async function knownMeasures() {
     return measureIdsByIngredient(await ingredients.list());
-  }
-
-  function conflict(recipe) {
-    return new NameConflictError(
-      `A recipe named "${recipe.name}" already exists.`,
-      "recipe",
-      recipe,
-    );
   }
 
   /**
@@ -231,40 +273,27 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
     return (await readAll()).map((recipe) => recipe.id);
   }
 
+  // The body is checked before the queue, so a bad request never waits for
+  // it, and checked again inside it, against the data.
   async function create(fields) {
-    const valid = validNewRecipe(fields);
+    validNewRecipe(fields);
     return enqueue(async () => {
       const all = await readAll();
-      const holder = holderOf(all, valid.name);
-      if (holder) throw conflict(holder);
-      checkIngredientsExist(await knownMeasures(), valid.ingredients);
-      const recipe = {
-        id: randomUUID(),
-        name: valid.name,
-        archived: false,
-        ingredients: valid.ingredients,
-      };
-      await writeJson(file, { recipes: [...all, recipe] });
-      return recipe;
+      const next = withNewRecipe(all, fields, await knownMeasures(), randomUUID());
+      await writeAll(next.all);
+      return next.recipe;
     });
   }
 
   async function update(id, changes) {
-    const valid = validChanges(changes);
+    validChanges(changes);
     return enqueue(async () => {
       const all = await readAll();
-      const recipe = all.find((entry) => entry.id === id);
-      if (!recipe) throw new NotFoundError(`Unknown recipe: ${id}`);
-      if (valid.name !== undefined) {
-        const holder = holderOf(all, valid.name, id);
-        if (holder) throw conflict(holder);
-      }
       const known = await knownMeasures();
-      if (valid.ingredients !== undefined) checkIngredientsExist(known, valid.ingredients);
-      Object.assign(recipe, valid);
-      await writeJson(file, { recipes: all });
+      const next = withRecipeChanges(all, id, changes, known);
+      await writeAll(next.all);
       // The file keeps what the catalog doesn't have, but the reply matches list().
-      return withKnownIngredients(recipe, known);
+      return withKnownIngredients(next.recipe, known);
     });
   }
 
@@ -286,9 +315,9 @@ export function createRecipes({ dataDir, enqueue, ingredients }) {
   async function moveUnitLinesToMeasure(ingredientId, measureId) {
     const all = await readAll();
     const changed = moveLines(all, ingredientId, measureId);
-    if (changed > 0) await writeJson(file, { recipes: all });
+    if (changed > 0) await writeAll(all);
     return changed;
   }
 
-  return { create, ids, list, moveUnitLinesToMeasure, update, usageOf };
+  return { create, ids, list, moveUnitLinesToMeasure, readAll, update, usageOf, writeAll };
 }

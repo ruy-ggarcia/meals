@@ -9,6 +9,7 @@ import {
   MEALS,
   normalizeWeek,
   validItems,
+  withSlot,
 } from "../server/weeks.js";
 import { blankWeek, EXPECTED_DAYS, EXPECTED_MEALS } from "./backend-helpers.js";
 
@@ -264,5 +265,76 @@ describe("normalizeWeek", () => {
     const week = normalizeWeek({ sun: { dinner: { items } } }, new Set(ids));
 
     assert.deepEqual(week.sun.dinner.items, items.slice(0, 20));
+  });
+});
+
+describe("withSlot", () => {
+  const known = new Set(["soup"]);
+
+  /** A stored week whose Monday lunch holds a recipe that `known` doesn't have. */
+  function storedWeek() {
+    const week = blankWeek();
+    week.mon.lunch = { items: [{ recipeId: "gone", servings: 1 }] };
+    return week;
+  }
+
+  test("replaces the menu of the slot and keeps every other slot as stored", () => {
+    const items = [{ recipeId: "soup", servings: 2 }];
+
+    const week = withSlot(storedWeek(), "tue", "dinner", items, known);
+
+    const expected = storedWeek();
+    expected.tue.dinner = { items };
+    assert.deepEqual(week, expected);
+  });
+
+  test("returns a complete week when nothing is stored", () => {
+    const items = [{ recipeId: "soup", servings: 2 }];
+
+    const week = withSlot(undefined, "tue", "dinner", items, known);
+
+    const expected = blankWeek();
+    expected.tue.dinner = { items };
+    assert.deepEqual(week, expected);
+  });
+
+  test("rejects items that PUT on a slot rejects", () => {
+    assert.throws(() => withSlot(storedWeek(), "tue", "dinner", [{ recipeId: "soup" }], known), {
+      name: "ValidationError",
+      message: 'items[0] must have exactly "recipeId" and "servings".',
+    });
+  });
+
+  test("rejects an item whose recipe isn't known", () => {
+    const items = [{ recipeId: "x", servings: 1 }];
+
+    assert.throws(() => withSlot(storedWeek(), "tue", "dinner", items, known), {
+      name: "ValidationError",
+      message: "Unknown recipe: x",
+    });
+  });
+
+  test("rejects a day or a meal that isn't in the week", () => {
+    for (const [day, meal] of [
+      ["holiday", "lunch"],
+      ["mon", "brunch"],
+      ["__proto__", "lunch"],
+    ]) {
+      assert.throws(
+        () => withSlot(storedWeek(), day, meal, [], known),
+        RangeError,
+        `${day}/${meal}`,
+      );
+    }
+  });
+
+  test("doesn't change its arguments", () => {
+    const raw = storedWeek();
+    const items = [{ recipeId: "soup", servings: 2 }];
+    const before = structuredClone({ raw, items, known });
+
+    withSlot(raw, "mon", "lunch", items, known);
+
+    assert.deepEqual({ raw, items, known }, before);
   });
 });
