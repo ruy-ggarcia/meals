@@ -994,8 +994,9 @@ accepts up to 100 KB.
 | `409`  | The assistant is still answering, or the pending changes are being applied. |
 
 - The message has text or at least one attachment.
-- It has at most 5 attachments, each with a name, and with `data` in
-  standard base64.
+- Its text has at most 20,000 characters, without the spaces around it.
+- It has at most 5 attachments, each with a name of at most 255 characters,
+  and with `data` in standard base64.
 - Each file is a PDF, a JPEG, or a PNG, as its first bytes show, of at most
   10 MB.
 - The attachments of the conversation total at most 20 MB. A new
