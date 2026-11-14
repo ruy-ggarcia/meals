@@ -1,33 +1,56 @@
 // The fixtures of the browser tests. Each test gets its own server, on a free
 // port and with a new data directory, seeded through the API. Its pages start
 // at the fixed date, and the test fails on an error in a page. A test can
-// also make the API fail, as if the server were stopped or paused.
-// The providers' model lists are fakes too, with answers that a test sets.
+// also make the API fail, as if the server were stopped or paused, and turn
+// the assistant on with a scripted provider, so no test calls a real one.
+// The providers' model lists are fakes too.
 
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test as base, expect } from "@playwright/test";
-import { ProviderError } from "../server/assistant/providers/errors.js";
 import { silentLogger } from "../server/logger.js";
 import { start } from "../server/start.js";
 import { createApi } from "./api.js";
+import { scriptedProvider } from "./assistant.js";
 import { INGREDIENTS, NOW, RECIPE_NAMES } from "./catalog.js";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 /**
- * What a fake model list answers: the models, or the kind of a
- * `ProviderError` to reject with, such as "auth" for a rejected key.
- * @typedef {import("../server/assistant/providers/types.js").Model[]
- *   | import("../server/assistant/providers/errors.js").ProviderErrorKind} ModelListAnswer
+ * The factories of the providers while a test has no script: each builds a
+ * provider that fails every call, so a key that a test saves in Settings
+ * never reaches a real provider.
+ * @type {import("../server/assistant/setup.js").ProviderFactories}
  */
+const NO_REAL_PROVIDERS = {
+  anthropic: ({ model }) => providerWithoutNetwork("anthropic", model),
+  openai: ({ model }) => providerWithoutNetwork("openai", model),
+};
 
 /**
- * The answers of the model lists unless a test sets others: one model for
- * each provider, which a test can choose and save.
- * @type {Record<"anthropic" | "openai", ModelListAnswer>}
+ * A provider named `name` that rejects every call.
+ * @param {"anthropic" | "openai"} name
+ * @param {string} model
+ * @returns {import("../server/assistant/providers/types.js").Provider}
+ */
+function providerWithoutNetwork(name, model) {
+  return {
+    name,
+    model,
+    async complete() {
+      throw new Error("No real provider in tests: set a script with test.use({ assistant }).");
+    },
+  };
+}
+
+/** @typedef {import("../server/assistant/providers/types.js").Model} Model */
+
+/**
+ * The answers of the model lists: one model for each provider, which a test
+ * can choose and save.
+ * @type {Record<"anthropic" | "openai", Model[]>}
  */
 const MODEL_LISTS = {
   anthropic: [{ id: "claude-test", name: "Claude Test" }],
@@ -35,20 +58,14 @@ const MODEL_LISTS = {
 };
 
 /**
- * Model lists that answer from `answers`, which a test can change while it
- * runs, so no key that a test enters reaches a real provider.
- * @param {Record<"anthropic" | "openai", ModelListAnswer>} answers
+ * Model lists that answer from `answers`, so no key that a test enters
+ * reaches a real provider.
+ * @param {Record<"anthropic" | "openai", Model[]>} answers
  * @returns {import("../server/assistant/setup.js").ModelLists}
  */
 function fakeModelLists(answers) {
   /** @param {"anthropic" | "openai"} provider */
-  const list = (provider) => async () => {
-    const answer = answers[provider];
-    if (typeof answer === "string") {
-      throw new ProviderError(answer, `The fake list of ${provider} failed with ${answer}`);
-    }
-    return structuredClone(answer);
-  };
+  const list = (provider) => async () => structuredClone(answers[provider]);
   return { anthropic: list("anthropic"), openai: list("openai") };
 }
 
@@ -90,6 +107,15 @@ function isApiRequest(url) {
 function isFailureLog(text) {
   // The browser's message about a request that failed, and the app's own.
   return text.startsWith("Failed to load resource") || text.startsWith("Couldn't ");
+}
+
+/**
+ * Whether `text` is WebKit's notice that it ignores `interactive-widget`, a
+ * key of the pages' viewport meta that Chrome on Android reads and Safari
+ * doesn't. WebKit logs it as an error of every page it loads.
+ */
+function isViewportNotice(text) {
+  return text === 'Viewport argument key "interactive-widget" not recognized and ignored.';
 }
 
 /**
@@ -149,10 +175,11 @@ export async function settleRequests(page) {
 
 /**
  * Starts to collect the errors of `page` that fail a test: uncaught errors,
- * and console errors. While `consoleErrors.allowed` is set, the console
- * errors that a server failure causes don't count. A console error that logs
- * only an Error object always counts: that's how the fake clock reports an
- * error thrown from a timer. Returns a function that resolves to the errors.
+ * and console errors other than WebKit's notice about the viewport meta.
+ * While `consoleErrors.allowed` is set, the console errors that a server
+ * failure causes don't count. A console error that logs only an Error object
+ * always counts: that's how the fake clock reports an error thrown from a
+ * timer. Returns a function that resolves to the errors.
  */
 export function watchErrors(page, consoleErrors) {
   const errors = [];
@@ -163,6 +190,7 @@ export function watchErrors(page, consoleErrors) {
     // What the test allowed when the page logged the error.
     const { allowed } = consoleErrors;
     const text = message.text();
+    if (isViewportNotice(text)) return;
     pending.push(
       loggedError(message).then((thrown) => {
         if (thrown === null && allowed && isFailureLog(text)) return;
@@ -182,7 +210,7 @@ export function watchErrors(page, consoleErrors) {
  * @typedef {object} Fixtures
  * @property {"catalog" | "empty"} seed
  * @property {"never" | "real"} requestTimeout
- * @property {Partial<Record<"anthropic" | "openai", ModelListAnswer>>} modelLists
+ * @property {"off" | { script: import("./assistant.js").Step[] }} assistant
  * @property {{
  *   url: string,
  *   port: number,
@@ -190,7 +218,7 @@ export function watchErrors(page, consoleErrors) {
  *   api: ReturnType<typeof createApi>,
  *   recipes: Record<string, any>,
  *   ingredients: Record<string, any>,
- *   modelLists: Record<"anthropic" | "openai", ModelListAnswer>,
+ *   assistant?: ReturnType<typeof scriptedProvider>,
  * }} app
  * @property {{ allowed: boolean }} consoleErrors
  * @property {() => Promise<import("@playwright/test").Page>} newPage
@@ -217,22 +245,36 @@ const fixtures = {
   // seconds of real time, for a test that checks how the app gives up.
   requestTimeout: ["never", { option: true }],
 
-  // What the providers' model lists answer, which a test sets with
-  // `test.use({ modelLists: { ... } })`, and can change while it runs through
-  // `app.modelLists`. The server never asks a real provider for its list.
-  modelLists: [MODEL_LISTS, { option: true }],
+  // "off" starts the server without the assistant, which a test can turn on
+  // in Settings with a provider that fails every call. A script of steps, which
+  // a test sets with `test.use({ assistant: { script: [...] } })`, turns it
+  // on: the assistant answers with `scriptedProvider` of e2e/assistant.js,
+  // which the test reaches as `app.assistant`. The script sits in an object
+  // because Playwright reads an array whose second item is an object as a
+  // fixture and its options.
+  assistant: ["off", { option: true }],
 
-  app: async ({ modelLists, seed }, use) => {
+  app: async ({ assistant, seed }, use) => {
     const dataDir = await mkdtemp(join(tmpdir(), "meals-e2e-"));
     try {
-      // A test that sets one provider's answer keeps the other's default.
-      const answers = structuredClone({ ...MODEL_LISTS, ...modelLists });
-      // Only this machine can reach the server, not the network.
+      let app;
+      const provider =
+        assistant === "off" ? undefined : scriptedProvider(assistant.script, () => app);
+      // Only this machine can reach the server, not the network. With a
+      // script, the assistant is set up as the environment variables do it,
+      // and both factories build the scripted provider. Without one, the
+      // factories never build a real provider.
       const server = await start({
         dataDir,
-        modelLists: fakeModelLists(answers),
+        ...(provider
+          ? {
+              environment: { provider: "anthropic", model: provider.model, apiKey: "e2e" },
+              providerFactories: { anthropic: () => provider, openai: () => provider },
+            }
+          : { providerFactories: NO_REAL_PROVIDERS }),
         host: "127.0.0.1",
         logger: silentLogger,
+        modelLists: fakeModelLists(MODEL_LISTS),
         port: 0,
         version,
       });
@@ -241,10 +283,20 @@ const fixtures = {
         const api = createApi(url);
         const seeded =
           seed === "catalog" ? await seedCatalog(api) : { recipes: {}, ingredients: {} };
-        await use({ url, port: server.port, dataDir, api, ...seeded, modelLists: answers });
+        app = {
+          url,
+          port: server.port,
+          dataDir,
+          api,
+          ...seeded,
+          assistant: provider,
+        };
+        await use(app);
       } finally {
+        // Stopping the server rejects the calls that the provider holds.
         await server.stop();
       }
+      expect(provider?.overruns ?? [], "calls of the assistant beyond its script").toEqual([]);
     } finally {
       await rm(dataDir, { recursive: true, force: true });
     }

@@ -3,9 +3,9 @@
 
 import { CURRENT_RANGE, CURRENT_WEEK, NEXT_WEEK } from "./catalog.js";
 import { expect, test } from "./fixtures.js";
-import { expectAbove, expectInsideViewport } from "./layout.js";
-import { sectionsOf } from "./navigation.js";
-import { expectNoDoubleTapZoom, zoomText } from "./phone.js";
+import { expectAbove, expectCenteredOnScreen, expectInsideViewport } from "./layout.js";
+import { sectionsOf, TAB_BAR_SCREENS } from "./navigation.js";
+import { expectNoDoubleTapZoom } from "./phone.js";
 
 const MEALS = ["Breakfast", "Morning snack", "Lunch", "Afternoon snack", "Dinner"];
 
@@ -177,33 +177,27 @@ test.describe("tab bar", () => {
     await expectInsideViewport(sectionsOf(page));
   });
 
-  test("keeps every label inside its tab and the tab bar at a 200% text size", async ({ page }) => {
-    await page.goto("/");
-    await expect(sectionsOf(page)).toBeVisible();
+  // Without the assistant, the tab bar is up to 360 px wide, 20 px from each
+  // edge of a narrower screen, and centered.
+  for (const viewport of TAB_BAR_SCREENS) {
+    const size = ` at ${viewport.width}×${viewport.height}`;
 
-    await zoomText(sectionsOf(page), 2);
+    test.describe(() => {
+      test.use({ viewport });
 
-    const outside = await sectionsOf(page).evaluate((bar) => {
-      const edges = (box) => `from ${box.left}px to ${box.right}px`;
-      const barBox = bar.getBoundingClientRect();
-      return [...bar.querySelectorAll("a")].flatMap((link) => {
-        const tab = link.getBoundingClientRect();
-        const range = document.createRange();
-        range.selectNodeContents(link.querySelector(".page-name"));
-        const label = range.getBoundingClientRect();
-        const name = link.textContent.trim();
-        return [
-          ...(label.left < tab.left || label.right > tab.right
-            ? [`${name}: label ${edges(label)}, tab ${edges(tab)}`]
-            : []),
-          ...(tab.left < barBox.left || tab.right > barBox.right
-            ? [`${name}: tab ${edges(tab)}, tab bar ${edges(barBox)}`]
-            : []),
-        ];
+      test(`centers the tab bar, 20 px from each edge up to 360 px wide${size}`, async ({
+        page,
+      }) => {
+        await page.goto("/");
+        await expect(sectionsOf(page)).toBeVisible();
+
+        const box = await sectionsOf(page).boundingBox();
+        const width = Math.min(360, viewport.width - 40);
+        expect(box.width, `the width of the tab bar must be ${width}px`).toBeCloseTo(width, 0);
+        expectCenteredOnScreen(page, box);
       });
     });
-    expect(outside, "the labels outside their tabs, and the tabs outside the tab bar").toEqual([]);
-  });
+  }
 
   test("keeps the toolbar and the tab bar in place while the page scrolls", async ({
     app,

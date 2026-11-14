@@ -156,6 +156,11 @@ Integration tests check modules together with a real dependency, also in
   [happy-dom](https://github.com/capricorn86/happy-dom) with a fake server, so
   a test can click, type, and read the page. A test fails on a
   `console.error` call that it didn't declare, as the browser tests do.
+- No test of the assistant calls a real provider. The tests of the
+  conversations, the turns, and the routes use a scripted provider, which
+  answers with the text and the tool calls that the test sets. Each provider
+  adapter runs against a local stub server, which records each request and
+  answers in the provider's format.
 - For the deployment, `npm run test:image` builds the image and runs it
   through `deploy/compose.yaml` as the host does, and `npm run test:host`
   runs the `meals-*` scripts against real Docker in a temporary root.
@@ -171,8 +176,14 @@ End-to-end tests check the whole system as a person or the host uses it:
   page and dialog in the light and dark appearances. A request never times
   out in a browser test, so a test can hold it as long as it needs; a test
   that checks how the app gives up on a request uses `test.use({
-  requestTimeout: "real" })` and waits for the real 5 seconds. `npm run
-  test:e2e` runs them.
+  requestTimeout: "real" })` and waits for the real 5 seconds. The assistant
+  is off unless a test sets a script with `test.use({ assistant: { script:
+  [...] } })`. The server then answers with the scripted provider of
+  `e2e/assistant.js`, whose tool calls run on the test's data, and never
+  calls a real provider. Without a script, a key that a test saves in
+  **Settings** turns on a provider that fails every call. The server never
+  asks a real provider for its models either: each provider lists one
+  model. `npm run test:e2e` runs them.
 - `scripts/host-acceptance.sh` installs the host tools for real on a
   disposable GitHub-hosted runner, deploys published releases, backs up,
   restores, and restarts Docker. `.github/workflows/host.yml` runs it on pull
@@ -188,11 +199,15 @@ The session finds what Playwright can't emulate. It never blocks a release:
 each finding becomes an issue, and its fix comes with a test at the lowest
 level that can prove it.
 
-Each session also checks what Playwright can't emulate at all:
+Each session also checks the following:
 
-- **Password managers and the API key.** In Chrome and in Safari, save a key
-  in the **BYOK** section of **Settings**. The browser doesn't offer to
-  save a password.
+- **The on-screen keyboard and the assistant's sheet.** On an iPhone, open the
+  assistant's window on the meal plan: the keyboard stays closed. Tap the
+  message field, and type a message of several lines. The window's header
+  and the message field stay visible above the keyboard.
+- **Password managers and the API key.** In Safari on the Mac and on the
+  iPhone, save a key in the **BYOK** section of **Settings**. The browser
+  doesn't offer to save a password.
 
 ## Where a new test goes
 
