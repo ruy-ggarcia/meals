@@ -3,6 +3,17 @@
 // every kind of control.
 
 import AxeBuilder from "@axe-core/playwright";
+import {
+  assistantButton,
+  assistantWindow,
+  attachFile,
+  largePlan,
+  openAssistant,
+  pendingCard,
+  proposeMenus,
+  SCHOOL_MENU,
+  sendMessage,
+} from "./assistant.js";
 import { CURRENT_WEEK } from "./catalog.js";
 import { expect, test } from "./fixtures.js";
 import {
@@ -10,7 +21,8 @@ import {
   editorOf as ingredientEditorOf,
   useMediumOnions,
 } from "./ingredients.js";
-import { editorOf as recipeEditorOf } from "./recipes.js";
+import { openBook, editorOf as recipeEditorOf } from "./recipes.js";
+import { byokSectionOf, openSettings, saveKey } from "./settings.js";
 import { editorOf as slotEditorOf } from "./slot-editor.js";
 
 /** The rules of the WCAG 2.1 levels A and AA. */
@@ -62,6 +74,10 @@ async function openMealPlan(page) {
  * @typedef {object} State
  * @property {string} title
  * @property {"alertdialog" | "dialog"} [role]
+ * @property {{ script: import("./assistant.js").Step[] }} [assistant] The
+ *   script of the assistant, which turns it on.
+ * @property {string} [behind] The title of the state of the page behind the
+ *   window, whose known violations axe finds too while the page isn't inert.
  * @property {(fixtures: { app?: any, network?: any, page: import("@playwright/test").Page }) => Promise<void>} open
  */
 
@@ -146,10 +162,117 @@ export const STATES = [
     title: "settings",
     role: "dialog",
     async open({ page }) {
-      await page.goto("/recipes.html");
-      await expect(page.getByRole("button", { name: "Edit Omelette", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Settings", exact: true }).click();
-      await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+      await openBook(page);
+      await openSettings(page);
+    },
+  },
+  {
+    title: "settings with a saved key and its models",
+    role: "dialog",
+    async open({ page }) {
+      await openBook(page);
+      await saveKey(await openSettings(page));
+      // The save turns the assistant on, and the page shows its button.
+      await expect(assistantButton(page)).toBeVisible();
+      const section = byokSectionOf(await openSettings(page));
+      await expect(section.getByText("A key is saved.")).toBeVisible();
+      // The list of the saved key has arrived.
+      await expect(section.getByRole("combobox", { name: "Model" })).toBeEnabled();
+    },
+  },
+];
+
+const REPLY = "Here's a plan for the week.";
+
+/**
+ * The states that need the assistant on: the assistant's window, open on the
+ * meal plan, and Settings with the assistant's settings of the server. Each
+ * turns the assistant on with a script. They aren't in `STATES`, whose
+ * states the specs also check with the assistant off.
+ * @type {State[]}
+ */
+const ASSISTANT_STATES = [
+  {
+    title: "settings with the settings of the server",
+    role: "dialog",
+    assistant: { script: [] },
+    async open({ page }) {
+      await openBook(page);
+      const dialog = await openSettings(page);
+      await expect(dialog.getByText("Set on the server.")).toBeVisible();
+    },
+  },
+  {
+    title: "assistant window",
+    role: "dialog",
+    behind: "meal plan",
+    assistant: { script: [{ text: REPLY }] },
+    async open({ page }) {
+      await openMealPlan(page);
+      const chat = await openAssistant(page);
+      // A sent message with an attachment, and a file attached to the next one.
+      await attachFile(page, SCHOOL_MENU);
+      await sendMessage(page, "Plan the week around the school menu.");
+      await expect(chat.getByText(REPLY)).toBeVisible();
+      await attachFile(page, SCHOOL_MENU);
+      await expect(chat.getByRole("button", { name: `Remove ${SCHOOL_MENU.name}` })).toBeVisible();
+    },
+  },
+  {
+    title: "assistant window with pending changes",
+    role: "dialog",
+    behind: "meal plan",
+    assistant: {
+      script: [
+        proposeMenus(CURRENT_WEEK, [["wed", "dinner", { Omelette: 2, "Green salad": 1 }]]),
+        { text: REPLY },
+      ],
+    },
+    async open({ page }) {
+      await openMealPlan(page);
+      await openAssistant(page);
+      await sendMessage(page, "Plan Wednesday's dinner.");
+      await expect(assistantWindow(page).getByText(REPLY)).toBeVisible();
+      await pendingCard(page).getByRole("button", { name: "View details" }).click();
+      await expect(pendingCard(page).getByText("Omelette × 2")).toBeVisible();
+    },
+  },
+  {
+    title: "assistant window with an applied row and a failed answer",
+    role: "dialog",
+    behind: "meal plan",
+    assistant: {
+      script: [
+        // Tuesday's dinner keeps one recipe with 1 serving, so the slots
+        // behind the window break the same rules as before.
+        proposeMenus(CURRENT_WEEK, [["tue", "dinner", { Omelette: 1 }]]),
+        { text: REPLY },
+        new Error("The model is overloaded."),
+      ],
+    },
+    async open({ page }) {
+      await openMealPlan(page);
+      const chat = await openAssistant(page);
+      await sendMessage(page, "Plan Tuesday's dinner.");
+      await expect(chat.getByText(REPLY)).toBeVisible();
+      await pendingCard(page).getByRole("button", { name: "Apply" }).click();
+      await expect(chat.getByText("Applied: 1 slot.")).toBeVisible();
+      await sendMessage(page, "Plan Thursday's dinner.");
+      await expect(chat.getByRole("button", { name: "Retry" })).toBeVisible();
+    },
+  },
+  {
+    title: "assistant window with the details of a large plan",
+    role: "dialog",
+    behind: "meal plan",
+    assistant: { script: largePlan(CURRENT_WEEK, REPLY) },
+    async open({ page }) {
+      await openMealPlan(page);
+      await openAssistant(page);
+      await sendMessage(page, "Plan the whole week, with new recipes.");
+      await expect(assistantWindow(page).getByText(REPLY)).toBeVisible();
+      await pendingCard(page).getByRole("button", { name: "View details" }).click();
+      await expect(pendingCard(page).getByRole("button", { name: "Back" })).toBeFocused();
     },
   },
 ];
@@ -193,13 +316,18 @@ export async function violationsOf(page) {
  * Defines a test for each state and appearance: axe finds exactly the
  * violations in the list that `known(project)` returns for the project, a map
  * from the title of a state to its lines (see `violationsOf`), per appearance.
+ * A state of the assistant's window also expects the lines of the page behind
+ * it, which axe checks too, unless `inertBehindWindow` says that the window
+ * is a sheet over an inert page, as on a phone: axe skips an inert page.
  *
  * @param {(project: string) => Record<string, Record<string, string[]>>} [known]
+ * @param {{ inertBehindWindow?: boolean }} [options]
  */
-export function defineAxeTests(known = () => ({})) {
+export function defineAxeTests(known = () => ({}), { inertBehindWindow = false } = {}) {
   test.describe("accessibility", () => {
-    for (const state of STATES) {
+    for (const state of [...STATES, ...ASSISTANT_STATES]) {
       test.describe(state.title, () => {
+        if (state.assistant) test.use({ assistant: state.assistant });
         for (const scheme of SCHEMES) {
           test(`finds only the known violations when the appearance is ${scheme}`, async ({
             app,
@@ -210,7 +338,12 @@ export function defineAxeTests(known = () => ({})) {
             await page.emulateMedia({ colorScheme: scheme });
             await state.open({ app, network, page });
 
-            const expected = known(testInfo.project.name)[state.title]?.[scheme] ?? [];
+            const lines = known(testInfo.project.name);
+            const behind = inertBehindWindow ? undefined : state.behind;
+            const expected = [
+              ...(lines[behind]?.[scheme] ?? []),
+              ...(lines[state.title]?.[scheme] ?? []),
+            ].sort();
             expect(await violationsOf(page)).toEqual(expected);
           });
         }

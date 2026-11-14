@@ -1,25 +1,30 @@
-// Settings, where the family edits the family preferences: the save against
-// the real server, the focus, the layout of the sheet on a phone, and the
-// Settings button at the end of each page's toolbar, which fits at every
-// phone width, and beside the sidebar on an iPad upright.
+// Settings against the real server: the saves, the model list of a key, the
+// assistant's button and the phone's tab bar that a key changes, the settings
+// that the server sets, the focus, the layout of the sheet, and the Settings
+// button in each toolbar.
 
 import { devices } from "@playwright/test";
+import { assistantButton } from "./assistant.js";
 import { expect, test } from "./fixtures.js";
 import { openCatalog } from "./ingredients.js";
-import { expectInsideViewport } from "./layout.js";
+import { expectAbove, expectAfterOnLine, expectInsideViewport } from "./layout.js";
+import { sectionsOf } from "./navigation.js";
 import { openBook } from "./recipes.js";
+import { byokSectionOf, openSettings, saveKey, settingsButton } from "./settings.js";
 
-/** The one Settings button of the page, at the end of its toolbar. */
-function settingsButton(page) {
-  return page.getByRole("button", { name: "Settings", exact: true });
+/** Marks the document of `page`, which a reload would lose. */
+async function keepDocument(page) {
+  await page.evaluate(() => {
+    /** @type {any} */ (window).sameDocument = true;
+  });
 }
 
-/** Opens Settings with its button, and returns the dialog. */
-async function openSettings(page) {
-  await settingsButton(page).click();
-  const dialog = page.getByRole("dialog", { name: "Settings" });
-  await expect(dialog).toBeVisible();
-  return dialog;
+/** Checks that `page` shows the document that `keepDocument` marked, without a reload. */
+async function expectSameDocument(page) {
+  expect(
+    await page.evaluate(() => /** @type {any} */ (window).sameDocument),
+    "the page must not reload",
+  ).toBe(true);
 }
 
 /** Whether the boxes `a` and `b` share any area. */
@@ -82,6 +87,26 @@ async function expectToolbarFits(page) {
       ).toBe(false);
     }
   }
+}
+
+/**
+ * Checks that the family preferences fill the rest of the Settings `dialog`:
+ * its content ends with the BYOK section, right at the bottom of the dialog,
+ * without scrolling, and the field is taller than its minimum.
+ */
+async function expectPreferencesFill(dialog) {
+  const { scrolls, gap } = await dialog.locator(".sheet-content").evaluate((content) => {
+    const padding = Number.parseFloat(getComputedStyle(content).paddingBottom);
+    const last = content.lastElementChild.getBoundingClientRect().bottom;
+    return {
+      scrolls: content.scrollHeight > content.clientHeight,
+      gap: content.getBoundingClientRect().bottom - padding - last,
+    };
+  });
+  expect(scrolls, "the content of the dialog must not scroll").toBe(false);
+  expect(Math.abs(gap), "the space below the BYOK section, in px").toBeLessThan(1);
+  const field = await dialog.getByRole("textbox", { name: "Family preferences" }).boundingBox();
+  expect(field.height, "the height of the field, more than its minimum").toBeGreaterThan(160);
 }
 
 /** Narrows the page to the `width` of a phone. */
@@ -166,18 +191,143 @@ test.describe("settings", () => {
     }
   });
 
-  test("fills the sheet of a phone with the field of the family preferences", async ({ page }) => {
+  test("scrolls the load message of Settings into view on a scrolled page", async ({
+    consoleErrors,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await openBook(page);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    expect(await page.evaluate(() => window.scrollY), "the page scrolled down").toBeGreaterThan(0);
+    await page.route("**/api/preferences", (route) => route.abort("connectionrefused"));
+    // The failed load logs its error, as the browser does the failed request.
+    consoleErrors.allowed = true;
+
+    await settingsButton(page).click();
+
+    const message = page
+      .getByRole("alert")
+      .filter({ hasText: "Couldn't load the settings. Try again." });
+    await expect(message).toBeInViewport({ ratio: 1 });
+    await expectAbove(page.getByRole("banner"), message);
+  });
+
+  // WebKit keeps the focus on the disabled button by itself, so there the
+  // test passes without the page's help: Chromium and Firefox check that the
+  // page gives the focus back.
+  test("returns the focus to Settings after a failed load", async ({ consoleErrors, page }) => {
+    await openBook(page);
+    await page.route("**/api/preferences", (route) => route.abort("connectionrefused"));
+    // The failed load logs its error, as the browser does the failed request.
+    consoleErrors.allowed = true;
+    await settingsButton(page).focus();
+
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByText("Couldn't load the settings. Try again.")).toBeVisible();
+    await expect(settingsButton(page)).toBeFocused();
+  });
+
+  test("fills the rest of a phone's sheet with the family preferences", async ({ page }) => {
     await useWidth(page, PHONE_WIDTHS[0]);
     await openBook(page);
 
     const dialog = await openSettings(page);
 
-    const sheet = await dialog.boundingBox();
-    const field = await dialog.getByRole("textbox", { name: "Family preferences" }).boundingBox();
+    await expectPreferencesFill(dialog);
+  });
+
+  test("fills the dialog with the family preferences on a wide screen", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openBook(page);
+
+    const dialog = await openSettings(page);
+
+    await expectPreferencesFill(dialog);
+  });
+
+  test("shows the assistant's button without a reload after a key is saved", async ({ page }) => {
+    await openBook(page);
+    await keepDocument(page);
+    await expect(assistantButton(page)).toHaveCount(0);
+    const dialog = await openSettings(page);
+
+    await saveKey(dialog);
+
+    await expect(assistantButton(page)).toBeVisible();
+    await expectSameDocument(page);
+  });
+
+  test("says that a key is saved instead of showing it after a reload", async ({ page }) => {
+    await openBook(page);
+    await saveKey(await openSettings(page));
+    // The save makes the page check the assistant again. A reload during that
+    // check aborts it, which Firefox and WebKit log as an error.
+    await expect(assistantButton(page)).toBeVisible();
+    await page.reload();
+    const answer = page.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        new URL(response.url()).pathname === "/api/assistant/settings",
+    );
+
+    const section = byokSectionOf(await openSettings(page));
+
+    await expect(section.getByText("A key is saved.")).toBeVisible();
+    await expect(section.getByLabel("API key")).toBeHidden();
+    await expect(section.getByRole("radio", { name: "OpenAI" })).toBeChecked();
+    await expect(section.getByRole("combobox", { name: "Model" })).toBeEnabled();
+    await expect(section.getByRole("combobox", { name: "Model" })).toHaveValue("gpt-test");
     expect(
-      field.height,
-      `the height of the field must be more than half the sheet's ${sheet.height}px`,
-    ).toBeGreaterThan(sheet.height / 2);
+      await (await answer).text(),
+      "the answer of the server must not hold the key",
+    ).not.toContain("sk-test");
+  });
+
+  test("moves a phone's tab bar without a reload when a key is saved", async ({ page }) => {
+    await useWidth(page, PHONE_WIDTHS[2]);
+    await openBook(page);
+    await keepDocument(page);
+    const tabBar = sectionsOf(page);
+
+    await saveKey(await openSettings(page));
+
+    await expect(assistantButton(page)).toBeVisible();
+    // 20 px from the left edge, and as wide as the screen leaves with 20 px
+    // on each side, the 56 px button, and 8 px of space before it.
+    const screen = await page.evaluate(() => document.documentElement.clientWidth);
+    await expect
+      .poll(async () => {
+        const { x, width } = await tabBar.boundingBox();
+        return { x: Math.round(x), width: Math.round(width) };
+      }, "the tab bar beside the button")
+      .toEqual({ x: 20, width: screen - 104 });
+    await expectAfterOnLine(tabBar, assistantButton(page));
+    await expectSameDocument(page);
+  });
+
+  test("restores a phone's tab bar without a reload after Remove Key", async ({ page }) => {
+    // A small Android phone, where the tab bar moves and narrows beside the
+    // button.
+    await useWidth(page, PHONE_WIDTHS[1]);
+    await openBook(page);
+    const tabBar = sectionsOf(page);
+    const alone = await tabBar.boundingBox();
+    await saveKey(await openSettings(page));
+    await expect(assistantButton(page)).toBeVisible();
+    await expect
+      .poll(() => tabBar.boundingBox(), "the tab bar beside the button")
+      .not.toEqual(alone);
+    await keepDocument(page);
+    const dialog = await openSettings(page);
+
+    await byokSectionOf(dialog).getByRole("button", { name: "Remove Key" }).click();
+    await dialog.getByRole("button", { name: "Done" }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(assistantButton(page)).toHaveCount(0);
+    await expect.poll(() => tabBar.boundingBox(), "the tab bar without the button").toEqual(alone);
+    await expectSameDocument(page);
   });
 
   for (const { name, open } of PAGES) {
@@ -203,6 +353,22 @@ test.describe("settings", () => {
     }
   }
 
+  for (const width of PHONE_WIDTHS) {
+    test(`places Today after the week arrows on a phone at ${width} px`, async ({ page }) => {
+      await useWidth(page, width);
+
+      await PAGES[0].open(page);
+
+      const next = await page.getByRole("button", { name: "Next week" }).boundingBox();
+      const today = await page.getByRole("button", { name: "Today", exact: true }).boundingBox();
+      expect(
+        today.x - (next.x + next.width),
+        "the space between the right edge of Next week and the left edge of Today must be the toolbar's 8px",
+      ).toBeCloseTo(8, 0);
+      await expectToolbarFits(page);
+    });
+  }
+
   test("fits the meal plan's toolbar beside the sidebar on an iPad upright", async ({ page }) => {
     await page.setViewportSize(devices["iPad (gen 7)"].viewport);
     await page.addInitScript(() => window.localStorage.setItem("meals.sidebar", "shown"));
@@ -225,5 +391,23 @@ test.describe("settings", () => {
     await expectInsideViewport(
       dialog.getByText("The assistant reads this text in every conversation."),
     );
+  });
+
+  test.describe("BYOK section", () => {
+    test.use({ assistant: { script: [] } });
+
+    test("shows the provider and the model read-only when the server sets them", async ({
+      page,
+    }) => {
+      await openBook(page);
+
+      const section = byokSectionOf(await openSettings(page));
+
+      await expect(section.getByText("Set on the server.")).toBeVisible();
+      await expect(section.getByRole("definition")).toHaveText(["Anthropic", "scripted"]);
+      await expect(section.getByRole("textbox")).toHaveCount(0);
+      await expect(section.getByRole("radio")).toHaveCount(0);
+      await expect(section.getByRole("combobox")).toHaveCount(0);
+    });
   });
 });

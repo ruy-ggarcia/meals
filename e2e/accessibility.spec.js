@@ -27,7 +27,8 @@ const WEEKS_AFTER = [
  *
  * - `color-contrast`: in the light appearance, the green name of the current
  *   page in the sidebar (contrast 4.2 on a green tint, and 4.5 is the
- *   minimum), and the red `Leave Without Saving` (4.21 on the gray sheet).
+ *   minimum), the red `Leave Without Saving` (4.21 on the gray sheet), and
+ *   the green `Retry` of a failed answer (4.35 on its green tint).
  * - `label-content-name-mismatch`: the accessible name of a slot (`Monday,
  *   Breakfast: empty`) and of a row (`Edit Egg`) doesn't contain the visible
  *   text (`Add`, `Egg`, and the details). A voice control user who says the
@@ -40,6 +41,9 @@ const SIDEBAR = "color-contrast span.page-name ×1";
 const KNOWN = {
   "meal plan": { light: [SIDEBAR, SLOTS], dark: [SLOTS] },
   "alert about an unsaved meal": { light: ["color-contrast button.leave ×1"] },
+  "assistant window with an applied row and a failed answer": {
+    light: ["color-contrast button.failure-action ×1"],
+  },
   "recipe book": {
     light: [SIDEBAR, "label-content-name-mismatch button.entry ×7"],
     dark: ["label-content-name-mismatch button.entry ×7"],
