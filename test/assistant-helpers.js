@@ -149,3 +149,65 @@ export function scriptedProvider(steps) {
     },
   };
 }
+
+/**
+ * @typedef {object} Clock
+ * @property {() => number} now The time in milliseconds since the epoch.
+ * @property {(fn: () => void, ms: number) => any} setTimeout
+ * @property {(handle: any) => void} clearTimeout
+ */
+
+/**
+ * A clock whose time moves only when a test calls `advance`, so a test of a
+ * time limit never waits for real time. It starts at `start`, in
+ * milliseconds since the epoch.
+ *
+ * `advance(ms)` moves the time forward by `ms` and runs each timer that falls
+ * due on the way, in order of due time and then of creation, with the time
+ * set to its due time. A timer that a timer sets runs too if it falls due
+ * within `ms`. `pendingTimers()` counts the timers that are set and haven't
+ * run or been cleared.
+ *
+ * @param {number} start
+ * @returns {Clock & { advance: (ms: number) => void, pendingTimers: () => number }}
+ */
+export function fakeClock(start) {
+  let now = start;
+  let created = 0;
+  /** @type {Map<number, { at: number, fn: () => void }>} */
+  const timers = new Map();
+
+  // The handle of the timer that falls due first, or undefined if none does
+  // by `limit`. Handles grow with each timer, so the lower one is older.
+  function nextDue(limit) {
+    let next;
+    for (const [handle, timer] of timers) {
+      if (timer.at > limit) continue;
+      if (next === undefined || timer.at < /** @type {any} */ (timers.get(next)).at) next = handle;
+    }
+    return next;
+  }
+
+  return {
+    now: () => now,
+    setTimeout(fn, ms) {
+      created += 1;
+      timers.set(created, { at: now + ms, fn });
+      return created;
+    },
+    clearTimeout(handle) {
+      timers.delete(handle);
+    },
+    advance(ms) {
+      const end = now + ms;
+      for (let handle = nextDue(end); handle !== undefined; handle = nextDue(end)) {
+        const timer = /** @type {{ at: number, fn: () => void }} */ (timers.get(handle));
+        timers.delete(handle);
+        now = timer.at;
+        timer.fn();
+      }
+      now = end;
+    },
+    pendingTimers: () => timers.size,
+  };
+}
