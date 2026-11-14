@@ -13,7 +13,7 @@ import {
   pendingDetail,
   summarize,
 } from "./assistant-view.js";
-import { createElement, createWarningIcon } from "./dom.js";
+import { createElement, createWarningIcon, focusIsFree } from "./dom.js";
 import { getJson, sendJson, UPLOAD_TIMEOUT_MS } from "./http.js";
 
 const CONVERSATION_KEY = "meals.assistant.conversation";
@@ -227,6 +227,10 @@ export async function setUpAssistant() {
   let attached = [];
   /** True while a request of a button runs, so two never overlap. */
   let busy = false;
+  /** True from a saved Apply or Discard until a read shows what it left. */
+  let settling = false;
+  /** The control of the card or the log whose request runs, or null. */
+  let actionControl = null;
   let detailsOpen = false;
   /** The timer of the next read, while the assistant answers. */
   let timer;
@@ -262,6 +266,7 @@ export async function setUpAssistant() {
     seen = 0;
     store(SEEN_KEY, null);
     view = EMPTY;
+    settling = false;
     detailsOpen = false;
   }
 
@@ -302,6 +307,7 @@ export async function setUpAssistant() {
     }
     if (current !== reads) return;
     view = next;
+    settling = false;
     render();
     if (view.status === "working") readLater();
   }
@@ -374,8 +380,8 @@ export async function setUpAssistant() {
   function renderControls() {
     const working = view.status === "working";
     parts.sendButton.disabled = working || busy;
-    parts.applyButton.disabled = working || busy;
-    parts.discardButton.disabled = working || busy;
+    parts.applyButton.disabled = working || busy || settling;
+    parts.discardButton.disabled = working || busy || settling;
     parts.newButton.disabled = busy;
     for (const retry of /** @type {NodeListOf<HTMLButtonElement>} */ (
       log.querySelectorAll(".retry-turn")
@@ -403,7 +409,28 @@ export async function setUpAssistant() {
     );
   }
 
+  /** Whether `element` is in the page and not hidden. */
+  function isShown(element) {
+    return element.isConnected && element.closest("[hidden]") === null;
+  }
+
+  // Keeps the focus in the window when the card or the log hid or removed
+  // the control that had it, or that started the request that just ended:
+  // the focus moves to the message field. `active` is the element that had
+  // the focus before the change.
+  function keepFocus(active) {
+    /** @type {HTMLElement | null} */
+    let control = null;
+    if (parts.card.contains(active) || log.contains(active)) control = active;
+    else if (focusIsFree()) control = actionControl;
+    actionControl = null;
+    if (control === null) return;
+    if (!isShown(control)) field.focus();
+    else if (document.activeElement !== control) control.focus();
+  }
+
   function render() {
+    const active = document.activeElement;
     // The open window shows every reply, so none of them marks the button.
     if (open) {
       const replies = view.messages.filter((message) => message.role === "assistant").length;
@@ -416,6 +443,7 @@ export async function setUpAssistant() {
     renderCard();
     renderControls();
     renderButton();
+    keepFocus(active);
   }
 
   function setBusy(value) {
@@ -452,6 +480,7 @@ export async function setUpAssistant() {
   async function send() {
     const text = field.value.trim();
     if (busy || view.status === "working" || (text === "" && attached.length === 0)) return;
+    const typed = field.value;
     showProblem("");
     setBusy(true);
     const files = attached;
@@ -474,8 +503,10 @@ export async function setUpAssistant() {
         response = await postMessage(body);
       }
       if (response.status === 202) {
-        field.value = "";
-        attached = [];
+        // What the user typed or attached during the upload stays for the
+        // next message.
+        if (field.value === typed) field.value = "";
+        attached = attached.filter((file) => !files.includes(file));
         renderChips();
         usedBytes += files.reduce((sum, file) => sum + file.size, 0);
         store(USED_KEY, usedBytes);
@@ -496,24 +527,35 @@ export async function setUpAssistant() {
   // server doesn't know anymore leaves an empty chat.
   async function post(action, failure) {
     if (busy || conversationId === null) return undefined;
+    const active = /** @type {HTMLElement} */ (document.activeElement);
+    actionControl = parts.card.contains(active) || log.contains(active) ? active : null;
     showProblem("");
     setBusy(true);
+    let response;
     try {
-      const response = await sendJson("POST", `${urlOf(conversationId)}/${action}`, {});
-      if (response.status === 404) {
-        forgetConversation();
-        render();
-        showProblem(GONE);
-        return undefined;
-      }
-      return response;
+      response = await sendJson("POST", `${urlOf(conversationId)}/${action}`, {});
     } catch (error) {
       console.error(`${failure}:`, error);
       showProblem(`${failure}. Try again.`);
-      return undefined;
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
+    if (response?.status === 404) {
+      forgetConversation();
+      render();
+      showProblem(GONE);
+      return undefined;
+    }
+    // After a failure, nothing changed: the focus stays on the control.
+    if (response === undefined) keepFocus(active);
+    return response;
+  }
+
+  // Keeps Apply and Discard disabled until a read shows what a saved Apply
+  // or Discard left, so they never act twice on the same pending changes.
+  function settle() {
+    settling = true;
+    renderControls();
+    read();
   }
 
   async function retryTurn() {
@@ -529,7 +571,7 @@ export async function setUpAssistant() {
     if (response.status === 200) {
       // The page behind the window loads its data again.
       window.dispatchEvent(new window.Event("meals:data-changed"));
-      read();
+      settle();
       return;
     }
     showProblem(errorOf(response.body, "Couldn't apply the changes. Try again."));
@@ -553,9 +595,11 @@ export async function setUpAssistant() {
   async function discard() {
     const response = await post("discard", "Couldn't discard the changes");
     if (response === undefined) return;
-    if (response.status !== 200) {
-      showProblem(errorOf(response.body, "Couldn't discard the changes. Try again."));
+    if (response.status === 200) {
+      settle();
+      return;
     }
+    showProblem(errorOf(response.body, "Couldn't discard the changes. Try again."));
     read();
   }
 

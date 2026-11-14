@@ -277,6 +277,7 @@ describe("assistant window", () => {
     pressKey(window, messageField(), "Escape");
 
     assert.equal(assistantWindow().hidden, true);
+    assertFocus(document, assistantButton());
   });
 
   test("remembers that the window is open", async (t) => {
@@ -370,6 +371,34 @@ describe("assistant window", () => {
     await answer("GET", CONVERSATION_URL, 200, conversation());
 
     assert.equal(messageField().value, "");
+  });
+
+  test("keeps the text typed while the message uploads", async (t) => {
+    await openConversation(t, conversation());
+    assistantButton().click();
+    const message = await send("Plan next week.");
+
+    typeInto(window, messageField(), "And the snacks.");
+    message.respond(202, {});
+    await answer("GET", CONVERSATION_URL, 200, conversation());
+
+    assert.equal(messageField().value, "And the snacks.");
+  });
+
+  test("keeps the files picked while the message uploads", async (t) => {
+    await openConversation(t, conversation());
+    assistantButton().click();
+    pick([pdf("a.pdf", 10).file]);
+    const message = await send("Plan next week.");
+
+    pick([pdf("b.pdf", 10).file]);
+    message.respond(202, {});
+    await answer("GET", CONVERSATION_URL, 200, conversation());
+
+    const names = [...assistantWindow().querySelectorAll(".attachment-name")].map(
+      (name) => name.textContent,
+    );
+    assert.deepEqual(names, ["b.pdf"]);
   });
 
   test("keeps the text and shows the message when the server rejects it", async (t) => {
@@ -680,6 +709,22 @@ describe("assistant window", () => {
     assert.doesNotMatch(log().textContent, /couldn't answer/);
   });
 
+  test("moves the focus to the message field after Retry", async (t) => {
+    const message = { ...QUESTION, failed: true };
+    await openConversation(
+      t,
+      conversation({ status: "failed", error: "provider", messages: [message] }),
+    );
+    assistantButton().click();
+
+    control("Retry").focus();
+    control("Retry").click();
+    await answer("POST", `${CONVERSATION_URL}/retry`, 202, {});
+    await answer("GET", CONVERSATION_URL, 200, conversation({ messages: [QUESTION, REPLY] }));
+
+    assertFocus(document, messageField());
+  });
+
   test("summarizes the pending changes on a card", async (t) => {
     await openConversation(t, conversation({ messages: [QUESTION, REPLY], pending: PENDING }));
 
@@ -755,6 +800,62 @@ describe("assistant window", () => {
     await answer("GET", CONVERSATION_URL, 200, conversation());
 
     assert.equal(pendingCard().hidden, true);
+  });
+
+  test("moves the focus to the message field after Discard", async (t) => {
+    await openConversation(t, conversation({ pending: PENDING }));
+    assistantButton().click();
+
+    control("Discard").focus();
+    control("Discard").click();
+    await answer("POST", `${CONVERSATION_URL}/discard`, 200, {});
+    await answer("GET", CONVERSATION_URL, 200, conversation());
+
+    assertFocus(document, messageField());
+  });
+
+  test("moves the focus to the message field after Apply", async (t) => {
+    await openConversation(t, conversation({ pending: PENDING }));
+    assistantButton().click();
+
+    control("Apply").focus();
+    control("Apply").click();
+    await answer("POST", `${CONVERSATION_URL}/apply`, 200, { applied: true });
+    await answer("GET", CONVERSATION_URL, 200, conversation());
+    await answer("GET", "/api/recipes", 200, { recipes: [] });
+    await answer("GET", "/api/ingredients", 200, { ingredients: [] });
+
+    assertFocus(document, messageField());
+  });
+
+  test("keeps Apply and Discard disabled until the read after Apply", async (t) => {
+    await openConversation(t, conversation({ pending: PENDING }));
+    assistantButton().click();
+
+    control("Apply").click();
+    await answer("POST", `${CONVERSATION_URL}/apply`, 200, { applied: true });
+    await answer("GET", "/api/recipes", 200, { recipes: [] });
+    await answer("GET", "/api/ingredients", 200, { ingredients: [] });
+    assert.equal(control("Apply").disabled, true, "Apply before the read");
+    assert.equal(control("Discard").disabled, true, "Discard before the read");
+    await answer("GET", CONVERSATION_URL, 200, conversation({ pending: PENDING }));
+
+    assert.equal(control("Apply").disabled, false, "Apply after the read");
+    assert.equal(control("Discard").disabled, false, "Discard after the read");
+  });
+
+  test("keeps Apply and Discard disabled until the read after Discard", async (t) => {
+    await openConversation(t, conversation({ pending: PENDING }));
+    assistantButton().click();
+
+    control("Discard").click();
+    await answer("POST", `${CONVERSATION_URL}/discard`, 200, {});
+    assert.equal(control("Apply").disabled, true, "Apply before the read");
+    assert.equal(control("Discard").disabled, true, "Discard before the read");
+    await answer("GET", CONVERSATION_URL, 200, conversation({ pending: PENDING }));
+
+    assert.equal(control("Apply").disabled, false, "Apply after the read");
+    assert.equal(control("Discard").disabled, false, "Discard after the read");
   });
 
   test("reloads the recipes after Apply", async (t) => {
