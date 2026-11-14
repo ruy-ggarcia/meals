@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
+import * as assistantView from "../public/assistant-view.js";
 import * as menus from "../public/menus.js";
 import * as quantities from "../public/quantities.js";
 import * as settings from "../public/settings.js";
@@ -44,5 +45,11 @@ describe("public/settings.js", () => {
   test("has the key limit of the shared table", () => {
     // Settings lists the models of the provider, so it has no model limit.
     assert.equal(settings.MAX_KEY, limits.settings.MAX_KEY, "MAX_KEY");
+  });
+});
+
+describe("public/assistant-view.js", () => {
+  test("has the attachment limits of the shared table", () => {
+    assertLimits(assistantView, "attachment");
   });
 });

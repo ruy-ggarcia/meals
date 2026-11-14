@@ -1,9 +1,10 @@
-// Tests for Settings (public/settings.js), where the family edits the family
-// preferences, against a real DOM built from the real pages. See
+// Tests for Settings (public/settings.js): the family preferences, the BYOK
+// section, and how a save turns the assistant on or off. See
 // test/dom-helpers.js for the harness.
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { isShown } from "./assistant-window-helpers.js";
 import {
   assertFocus,
   dispatchBeforeUnload,
@@ -67,12 +68,15 @@ let manualAssistant;
 
 /**
  * Opens the recipe book, with `fetchOptions` for the fake server, and
- * answers its load with an empty book.
+ * answers its load with an empty book. When the test answers the assistant's
+ * checks, the page's own check at load says that the assistant is off, so
+ * the page adds no assistant window, unless `assistantOn` says otherwise.
  *
  * @param {import("node:test").TestContext} t
  * @param {Parameters<typeof fakeFetch>[0]} [fetchOptions]
+ * @param {{ assistantOn?: boolean }} [options]
  */
-async function openRecipeBook(t, fetchOptions) {
+async function openRecipeBook(t, fetchOptions, { assistantOn = false } = {}) {
   server = fakeFetch(fetchOptions);
   manualAssistant = fetchOptions?.assistant === "manual";
   ({ document, window } = await openPage(t, {
@@ -80,6 +84,9 @@ async function openRecipeBook(t, fetchOptions) {
     script: "recipes.js",
     fetch: server.fetch,
   }));
+  if (manualAssistant) {
+    await respondTo(server, "GET", "/api/assistant", 200, { enabled: assistantOn });
+  }
   await respondTo(server, "GET", "/api/recipes", 200, { recipes: [] });
   await respondTo(server, "GET", "/api/ingredients", 200, { ingredients: [] });
 }
@@ -231,11 +238,6 @@ function settingsControl(name) {
   );
 }
 
-/** Whether `element` shows: neither it nor a container of it is hidden. */
-function isShown(element) {
-  return element.closest("[hidden]") === null;
-}
-
 /** The section of Settings named `name`: Assistant or BYOK. */
 function section(name) {
   return [...settingsDialog().querySelectorAll("section")].find(
@@ -313,6 +315,46 @@ async function chooseOpenAI() {
   await answerModels(OPENAI_MODELS);
 }
 
+/**
+ * Opens Settings with the assistant's `loaded` settings, saves the BYOK
+ * section with Done after `change` changes it, and answers the save with
+ * `saved` and the check of the assistant after it with `enabled`.
+ */
+async function saveAssistant({ loaded, change, saved, enabled }) {
+  await openSettings(SAVED, loaded);
+  await change();
+  query(".done").click();
+  await respondTo(server, "PUT", SETTINGS_URL, 200, saved);
+  await answerAssistantCheck(enabled);
+}
+
+/** Turns the assistant on with a key that Settings saves. */
+async function turnAssistantOn() {
+  await saveAssistant({ loaded: NO_SETTINGS, change: chooseOpenAI, saved: OPENAI, enabled: true });
+}
+
+/** Turns the assistant off with Remove Key. */
+async function turnAssistantOff() {
+  await saveAssistant({
+    loaded: WITH_KEY,
+    change: () => settingsControl("Remove Key").click(),
+    saved: { ...WITH_KEY, keySaved: false },
+    enabled: false,
+  });
+}
+
+/** The assistant's round button, or null. */
+function assistantButton() {
+  return document.querySelector(".assistant-button");
+}
+
+/** The skip link Ask the assistant, or undefined. */
+function skipLink() {
+  return [...document.querySelectorAll("a")].find(
+    (link) => link.textContent === "Ask the assistant",
+  );
+}
+
 /** Opens Settings, types `text`, and chooses Done. */
 async function saveText(text) {
   await openSettings();
@@ -385,7 +427,7 @@ describe("settings", () => {
   });
 
   test("hides Needs a valid API key to turn on. while the assistant is on", async (t) => {
-    await openRecipeBook(t, { assistant: "manual" });
+    await openRecipeBook(t, { assistant: "manual" }, { assistantOn: true });
 
     await openSettings(SAVED, WITH_KEY, { enabled: true });
 
@@ -409,6 +451,24 @@ describe("settings", () => {
 
     await openSettingsWithFailedCheck();
 
+    assert.equal(isShown(offHint()), false);
+  });
+
+  test("hides Needs a valid API key to turn on. after a save turns it on", async (t) => {
+    quiet.expect(1);
+    await openRecipeBook(t, { assistant: "manual" });
+    await openSettings();
+    typeInto(window, preferencesField(), "No pork.");
+    await chooseOpenAI();
+    query(".done").click();
+    // The family preferences fail to save, so Settings stays open.
+    await waitFor(() => server.requestFor("PUT", "/api/preferences") !== undefined);
+    server.requestFor("PUT", "/api/preferences").fail();
+
+    await respondTo(server, "PUT", SETTINGS_URL, 200, OPENAI);
+    await answerAssistantCheck(true);
+
+    assert.equal(settingsDialog().open, true);
     assert.equal(isShown(offHint()), false);
   });
 
@@ -1631,6 +1691,78 @@ describe("settings", () => {
     settingsControl("Remove Key").click();
 
     assert.equal(dispatchBeforeUnload(window).defaultPrevented, true);
+  });
+
+  test("adds the assistant's button after a save turns the assistant on", async (t) => {
+    await openRecipeBook(t, { assistant: "manual" });
+
+    await turnAssistantOn();
+
+    assert.equal(isShown(assistantButton()), true);
+    assert.equal(isShown(skipLink()), true);
+  });
+
+  test("removes the assistant's button after a save turns the assistant off", async (t) => {
+    await openRecipeBook(t, { assistant: "manual" }, { assistantOn: true });
+
+    await turnAssistantOff();
+
+    // Out of the page, so the layout rules for the button no longer apply.
+    assert.equal(document.querySelectorAll(".assistant-button").length, 0);
+    assert.equal(skipLink() === undefined, true, "the skip link must be out of the page");
+  });
+
+  test("marks the root enabled after a save turns the assistant on", async (t) => {
+    await openRecipeBook(t, { assistant: "manual" });
+
+    await turnAssistantOn();
+
+    assert.equal(document.documentElement.hasAttribute("data-assistant-enabled"), true);
+  });
+
+  test("removes the root's mark after a save turns the assistant off", async (t) => {
+    await openRecipeBook(t, { assistant: "manual" }, { assistantOn: true });
+
+    await turnAssistantOff();
+
+    assert.equal(document.documentElement.hasAttribute("data-assistant-enabled"), false);
+  });
+
+  test("collapses the open window after a save turns the assistant off", async (t) => {
+    await openRecipeBook(t, { assistant: "manual" }, { assistantOn: true });
+    assistantButton().click();
+
+    await turnAssistantOff();
+
+    assert.equal(isShown(document.querySelector(".assistant-window")), false);
+    assert.equal(document.documentElement.dataset.assistant, undefined);
+  });
+
+  test("shows the assistant's button again after a save turns it back on", async (t) => {
+    await openRecipeBook(t, { assistant: "manual" }, { assistantOn: true });
+    await turnAssistantOff();
+
+    await turnAssistantOn();
+
+    assert.equal(document.querySelectorAll(".assistant-button").length, 1);
+    assert.equal(isShown(assistantButton()), true);
+    assert.equal(isShown(skipLink()), true);
+  });
+
+  test("keeps the assistant on the page when the check after a save fails", async (t) => {
+    quiet.expect(1);
+    await openRecipeBook(t, { assistant: "manual" }, { assistantOn: true });
+    await openSettings(SAVED, WITH_KEY, { enabled: true });
+    settingsControl("Remove Key").click();
+
+    query(".done").click();
+    await respondTo(server, "PUT", SETTINGS_URL, 200, { ...WITH_KEY, keySaved: false });
+    (await unansweredRequest("GET", "/api/assistant")).fail();
+    await tick();
+
+    assert.equal(isShown(assistantButton()), true);
+    assert.equal(isShown(skipLink()), true);
+    assert.equal(document.documentElement.hasAttribute("data-assistant-enabled"), true);
   });
 
   test("returns the focus to the button after closing", async (t) => {

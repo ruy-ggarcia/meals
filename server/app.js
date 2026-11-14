@@ -1,4 +1,5 @@
-import { access, constants } from "node:fs/promises";
+import { access, constants, readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import {
@@ -13,6 +14,14 @@ import { silentLogger } from "./logger.js";
 import { isSlot, isWeekId } from "./weeks.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
+
+/** The file of each page, by the paths that serve it. */
+const PAGE_FILES = {
+  "/": "index.html",
+  "/index.html": "index.html",
+  "/recipes.html": "recipes.html",
+  "/ingredients.html": "ingredients.html",
+};
 
 /** The path of the read of one conversation with the assistant. */
 const CONVERSATION_PATH = /^\/api\/assistant\/conversations\/[^/]+$/;
@@ -56,6 +65,16 @@ function logRequests(logger) {
     });
     next();
   };
+}
+
+/**
+ * `page` with `data-assistant-enabled` at the end of the start tag of its
+ * root, the first `<html` tag, whatever attributes it has.
+ *
+ * @param {string} page
+ */
+export function markAssistantEnabled(page) {
+  return page.replace(/<html(?=[\s>])[^>]*/i, (tag) => `${tag} data-assistant-enabled`);
 }
 
 /**
@@ -226,6 +245,18 @@ export function createApp(
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Not found" });
   });
+
+  // The pages carry whether the assistant is on, as the root's
+  // `data-assistant-enabled`, so the phone's tab bar has its place from the
+  // first paint. The browser checks a page again before each use, so the
+  // mark follows every change in Settings.
+  for (const [route, file] of Object.entries(PAGE_FILES)) {
+    app.get(route, async (_req, res) => {
+      const page = await readFile(path.join(PUBLIC_DIR, file), "utf8");
+      const marked = assistant?.enabled() ? markAssistantEnabled(page) : page;
+      res.set("Cache-Control", "no-cache").type("html").send(marked);
+    });
+  }
 
   app.use(express.static(PUBLIC_DIR));
 

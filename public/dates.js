@@ -21,10 +21,14 @@ export function dayIndex(date) {
   return (date.getDay() + 6) % 7;
 }
 
+/** The local date of `date` as YYYY-MM-DD. */
+export function dateIdOf(date) {
+  return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /** Identifier of the week that contains `date`: its Monday as YYYY-MM-DD. */
 export function weekIdOf(date) {
-  const monday = addDays(date, -dayIndex(date));
-  return `${pad(monday.getFullYear(), 4)}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+  return dateIdOf(addDays(date, -dayIndex(date)));
 }
 
 /** True for a real calendar date in YYYY-MM-DD format that falls on a Monday. */
@@ -60,6 +64,12 @@ export function formatWeekRange(id) {
     year: "numeric",
   });
   return format.formatRange(monday, addDays(monday, 6));
+}
+
+/** The Monday of week `id`, for example, "Sep 21". */
+export function formatWeekStart(id) {
+  const format = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+  return format.format(weekStart(id));
 }
 
 /** For example, "Monday, Sep 21". */

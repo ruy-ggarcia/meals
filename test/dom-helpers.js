@@ -325,9 +325,10 @@ export async function loadSlotEditorDialog() {
  * app aborts it. The cleanup of a page fails the test when a request is still
  * pending (`fetch.pending()` lists them).
  *
- * Settings asks `GET /api/assistant` each time it opens. Unless `assistant`
- * is "manual", the fake answers that request itself, with the assistant off,
- * and doesn't record it, so a test that doesn't care sees no extra request.
+ * Each page asks `GET /api/assistant` when it loads, and Settings asks again
+ * each time it opens. Unless `assistant` is "manual", the fake answers that
+ * request itself, with the assistant off, and doesn't record it, so a test
+ * that doesn't care sees no extra request.
  *
  * @param {{ assistant?: "auto" | "manual" }} [options]
  */
