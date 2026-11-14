@@ -36,10 +36,10 @@ import { runTurn, TurnLimitError } from "./turn.js";
 
 /**
  * A message as the conversation keeps it. A user message keeps the week that
- * the page showed, and whether its turn failed. A note records what the user
- * did outside the chat, for the model only. Assistant and tool messages are
- * the ones that a turn returns.
- * @typedef {{ role: "user", text: string, attachments: StoredAttachment[], week?: string, failed?: boolean }} UserEntry
+ * the page showed, the browser's date, and whether its turn failed. A note
+ * records what the user did outside the chat, for the model only. Assistant
+ * and tool messages are the ones that a turn returns.
+ * @typedef {{ role: "user", text: string, attachments: StoredAttachment[], week?: string, today?: string, failed?: boolean }} UserEntry
  * @typedef {{ role: "note", text: string }} NoteEntry
  * @typedef {UserEntry | NoteEntry | Exclude<Message, { role: "user" }>} Entry
  */
@@ -73,6 +73,9 @@ const MB = 1024 * 1024;
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_BYTES = 10 * MB;
 const MAX_CONVERSATION_BYTES = 20 * MB;
+const DAY_MS = 86_400_000;
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 // The first bytes of each type of file that the providers read.
 const SIGNATURES = [
@@ -114,6 +117,29 @@ function localDate(time) {
   const date = new Date(time);
   const pad = (value) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * Whether `value` is a real calendar date as `YYYY-MM-DD`. An impossible date
+ * such as 2026-02-30 rolls over to another day, so it fails the round trip.
+ */
+function isDate(value) {
+  if (typeof value !== "string" || !DATE_PATTERN.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+/**
+ * The date that the model reads as today: the browser's, which knows the
+ * family's time zone, when it's at most one day from `serverToday`, the
+ * server's own. A browser with a wrong clock gets the server's.
+ * @param {string | undefined} browserToday
+ * @param {string} serverToday
+ */
+function todayOf(browserToday, serverToday) {
+  if (browserToday === undefined) return serverToday;
+  const days = (Date.parse(browserToday) - Date.parse(serverToday)) / DAY_MS;
+  return Math.abs(days) <= 1 ? browserToday : serverToday;
 }
 
 /** The media type that the first bytes of `bytes` show, or undefined. */
@@ -159,11 +185,14 @@ function attachmentOf(attachment, index) {
  * @returns {UserEntry}
  */
 function userEntryOf(message, usedBytes) {
-  const { text = "", attachments = [], week } = isPlainObject(message) ? message : {};
+  const { text = "", attachments = [], week, today } = isPlainObject(message) ? message : {};
   if (typeof text !== "string") throw new ValidationError('"text" must be a string.');
   if (!Array.isArray(attachments)) throw new ValidationError('"attachments" must be a list.');
   if (week !== undefined && !isWeekId(week)) {
     throw new ValidationError('"week" must be a Monday as YYYY-MM-DD.');
+  }
+  if (today !== undefined && !isDate(today)) {
+    throw new ValidationError('"today" must be a date as YYYY-MM-DD.');
   }
   const trimmed = text.trim();
   if (trimmed === "" && attachments.length === 0) {
@@ -179,7 +208,13 @@ function userEntryOf(message, usedBytes) {
       "The attachments of a conversation total at most 20 MB. Start a new conversation to attach more.",
     );
   }
-  return { role: "user", text: trimmed, attachments: files, ...(week !== undefined && { week }) };
+  return {
+    role: "user",
+    text: trimmed,
+    attachments: files,
+    ...(week !== undefined && { week }),
+    ...(today !== undefined && { today }),
+  };
 }
 
 /**
@@ -344,7 +379,7 @@ export function createConversations({
       );
       const system = instructions({
         preferences: await stores.preferences.read(),
-        today: localDate(clock.now()),
+        today: todayOf(lastUserEntry(conversation)?.today, localDate(clock.now())),
         week: /** @type {UserEntry | undefined} */ (week)?.week,
       });
       const result = await runTurn({
@@ -478,7 +513,7 @@ export function createConversations({
      * without waiting for the turn. A message after a failed one clears its
      * failed mark: the model reads both as one.
      * @param {string} id
-     * @param {{ text?: string, attachments?: { name: string, data: string }[], week?: string }} message
+     * @param {{ text?: string, attachments?: { name: string, data: string }[], week?: string, today?: string }} message
      */
     send(id, message) {
       const conversation = get(id);

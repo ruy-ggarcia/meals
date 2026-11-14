@@ -544,6 +544,44 @@ describe("server/assistant/conversations.js", () => {
     );
   });
 
+  test("uses the browser's today when it's one day from the server's", async (t) => {
+    const { conversations, provider } = setup(t, [{ text: "Sure." }]);
+
+    await converse(conversations, { text: "Plan tomorrow.", today: "2026-11-17" });
+
+    assert.equal(
+      provider.calls[0].system,
+      instructions({ preferences: "", today: "2026-11-17", week: undefined }),
+    );
+  });
+
+  test("ignores the browser's today when it's two days from the server's", async (t) => {
+    const { conversations, provider } = setup(t, [{ text: "Sure." }]);
+
+    await converse(conversations, { text: "Plan tomorrow.", today: "2026-11-14" });
+
+    assert.equal(
+      provider.calls[0].system,
+      instructions({ preferences: "", today: WEEK, week: undefined }),
+    );
+  });
+
+  test("keeps the browser's today of a failed message for Retry", async (t) => {
+    const { conversations, provider } = setup(t, [
+      new ProviderError("overloaded", "Overloaded"),
+      { text: "Sure." },
+    ]);
+    const id = await converse(conversations, { text: "Plan tomorrow.", today: "2026-11-15" });
+
+    conversations.retry(id);
+    await settle(conversations, id);
+
+    assert.equal(
+      provider.calls[1].system,
+      instructions({ preferences: "", today: "2026-11-15", week: undefined }),
+    );
+  });
+
   /** Asserts that sending `message` to a new conversation throws `expected`. */
   function rejectsMessage(t, message, expected) {
     const { conversations, provider } = setup(t, []);
