@@ -20,5 +20,9 @@
     "MAX_INGREDIENTS": 50,
     "MAX_QUANTITY": 10000,
     "MIN_QUANTITY": 0.01
+  },
+  "settings": {
+    "MAX_KEY": 500,
+    "MAX_MODEL": 200
   }
 }

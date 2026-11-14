@@ -11,9 +11,11 @@ import { fileURLToPath } from "node:url";
 import { silentLogger } from "../server/logger.js";
 import { start } from "../server/start.js";
 import { createStores } from "../server/stores.js";
-import { startTestServer, useDataDir, within } from "./backend-helpers.js";
+import { fakeModelLists, heldStep, scriptedProvider } from "./assistant-helpers.js";
+import { startTestServer, useDataDir, within, writeDataFile } from "./backend-helpers.js";
 
 const INDEX = fileURLToPath(new URL("../server/index.js", import.meta.url));
+const NO_NETWORK_HOOK = fileURLToPath(new URL("./hooks/no-network.js", import.meta.url));
 const SIGNAL_LISTENERS_HOOK = fileURLToPath(
   new URL("./hooks/signal-listeners.js", import.meta.url),
 );
@@ -22,6 +24,32 @@ const { version: PACKAGE_VERSION } = JSON.parse(
 );
 
 const dataDir = useDataDir("meals-server-");
+
+/**
+ * The configuration of complete environment variables.
+ * @type {import("../server/assistant/config.js").AssistantConfig}
+ */
+const ENVIRONMENT = { provider: "anthropic", model: "model-1", apiKey: "sk-test-key" };
+
+/**
+ * Provider factories that both build `provider`, each under its own name, so
+ * a test can tell which one the server used.
+ * @param {import("../server/assistant/providers/types.js").Provider} provider
+ */
+function factoriesOf(provider) {
+  /** @param {"anthropic" | "openai"} name */
+  const named = (name) => () => ({ ...provider, name });
+  return { anthropic: named("anthropic"), openai: named("openai") };
+}
+
+/** Saves settings with a key in the data directory of the test. */
+function writeSettings() {
+  return writeDataFile(
+    dataDir(),
+    "v2/assistant.json",
+    JSON.stringify({ provider: "openai", model: "model-1", apiKey: "sk-saved-key" }),
+  );
+}
 
 /** The names in the saved ingredient catalog. */
 async function savedIngredients() {
@@ -75,6 +103,53 @@ describe("start", () => {
     t.after(() => server.stop());
 
     assert.equal(server.address, "127.0.0.1");
+  });
+
+  test("turns the assistant on from a complete environment", async (t) => {
+    const server = await startTestServer(t, dataDir(), {
+      environment: ENVIRONMENT,
+      providerFactories: factoriesOf(scriptedProvider([])),
+    });
+
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/assistant`);
+
+    assert.deepEqual(await res.json(), { enabled: true });
+    assert.deepEqual(server.assistant, { provider: "anthropic", source: "environment" });
+  });
+
+  test("turns the assistant on from the saved settings", async (t) => {
+    await writeSettings();
+    const server = await startTestServer(t, dataDir(), {
+      providerFactories: factoriesOf(scriptedProvider([])),
+    });
+
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/assistant`);
+
+    assert.deepEqual(await res.json(), { enabled: true });
+    assert.deepEqual(server.assistant, { provider: "openai", source: "settings" });
+  });
+
+  test("asks the model lists that it gets for the models of a key", async (t) => {
+    const { calls, modelLists } = fakeModelLists();
+    const server = await startTestServer(t, dataDir(), { modelLists });
+
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/assistant/models`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "openai", apiKey: "sk-test-key" }),
+    });
+    await res.json();
+
+    assert.deepEqual(calls, [{ provider: "openai", apiKey: "sk-test-key" }]);
+  });
+
+  test("starts with the assistant off when nothing sets it up", async (t) => {
+    const server = await startTestServer(t, dataDir());
+
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/assistant`);
+
+    assert.deepEqual(await res.json(), { enabled: false });
+    assert.equal(server.assistant, undefined);
   });
 
   test("rejects when it can't create the data directory", async (t) => {
@@ -193,6 +268,41 @@ describe("stop", () => {
     await within(post.socketClosed, "The server didn't close the keep-alive connection");
   });
 
+  test("cancels a turn that waits for the provider", async (t) => {
+    const held = heldStep();
+    const server = await start({
+      dataDir: dataDir(),
+      host: "127.0.0.1",
+      logger: silentLogger,
+      port: 0,
+      environment: ENVIRONMENT,
+      providerFactories: factoriesOf(scriptedProvider([held.step])),
+      version: "1.2.3",
+    });
+    /** @type {Promise<void> | undefined} */
+    let stopping;
+    // A failure must not leave the server running: the release ends a call
+    // that the stop didn't cancel, so the stop can finish.
+    t.after(async () => {
+      held.release({ text: "Released." });
+      await (stopping ?? server.stop()).catch(() => {});
+    });
+    const base = `http://127.0.0.1:${server.port}/api/assistant/conversations`;
+    const { id } = await (await fetch(base, { method: "POST" })).json();
+    const sent = await fetch(`${base}/${id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "Hi." }),
+    });
+    assert.equal(sent.status, 202);
+    await held.called();
+
+    stopping = server.stop();
+    await stopping;
+
+    assert.equal(held.aborted, true, "the provider call is still running");
+  });
+
   test("rejects with the error of the server when it can't close", async () => {
     const server = await start({
       dataDir: dataDir(),
@@ -210,16 +320,27 @@ describe("stop", () => {
 
 /**
  * Runs `node server/index.js` in the data directory of the test, with the
- * environment variables ENV, and kills it when the test ends. `entries` holds
- * the lines of its standard output parsed as JSON, and a line that isn't JSON
- * as `{ notJson: line }`.
+ * environment variables ENV, and kills it when the test ends. It preloads
+ * test/hooks/no-network.js, so the process never calls a real provider.
+ * `entries` holds the lines of its standard output parsed as JSON, and a line
+ * that isn't JSON as `{ notJson: line }`. `logged(msg)` resolves to the first
+ * entry whose message is `msg`, once the process writes it.
  * @param {import("node:test").TestContext} t
  * @param {Record<string, string>} env
  * @param {string[]} [nodeArgs] The options of `node`, before the script.
  */
 function runIndex(t, env, nodeArgs = []) {
-  const child = spawn(process.execPath, [...nodeArgs, INDEX], {
-    env: { ...process.env, DATA_DIR: dataDir(), ...env },
+  const child = spawn(process.execPath, ["--import", NO_NETWORK_HOOK, ...nodeArgs, INDEX], {
+    // An empty variable is an unset one, so the assistant of the machine
+    // that runs the tests stays off unless a test turns it on.
+    env: {
+      ...process.env,
+      ASSISTANT_API_KEY: "",
+      ASSISTANT_MODEL: "",
+      ASSISTANT_PROVIDER: "",
+      DATA_DIR: dataDir(),
+      ...env,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(() => {
@@ -262,11 +383,26 @@ function runIndex(t, env, nodeArgs = []) {
   exited.catch(() => {});
   // The same for `first`, which rejects when the first line isn't JSON.
   first.catch(() => {});
+  /** @param {string} msg */
+  function logged(msg) {
+    return new Promise((resolve) => {
+      // Registered after the parser above, so each line is in `entries` by now.
+      const check = () => {
+        const entry = entries.find((candidate) => candidate.msg === msg);
+        if (entry === undefined) return;
+        lines.off("line", check);
+        resolve(entry);
+      };
+      lines.on("line", check);
+      check();
+    });
+  }
   return {
     child,
     entries,
     exited,
     first,
+    logged,
     get stderr() {
       return stderr;
     },
@@ -319,11 +455,81 @@ describe("server/index.js", () => {
         version: PACKAGE_VERSION,
         port: entry.port,
         dataDir: dataDir(),
+        assistant: "off",
       },
     );
     // The logged port is the one that answers.
     const health = await fetch(`http://127.0.0.1:${entry.port}/api/health`);
     assert.equal(health.status, 200);
+  });
+
+  test("logs the provider of a complete environment at start", async (t) => {
+    const server = runIndex(t, {
+      ASSISTANT_API_KEY: "sk-test-key",
+      ASSISTANT_MODEL: "model-1",
+      ASSISTANT_PROVIDER: "anthropic",
+      PORT: "0",
+    });
+
+    const entry = await server.first;
+
+    assert.equal(entry.msg, "server started");
+    assert.deepEqual([entry.assistant, entry.source], ["anthropic", "environment"]);
+  });
+
+  test("logs the problem and keeps the assistant off when it's incomplete", async (t) => {
+    const server = runIndex(t, {
+      ASSISTANT_API_KEY: "sk-test-key",
+      ASSISTANT_PROVIDER: "anthropic",
+      PORT: "0",
+    });
+    // No short limit here: a child process starts as slowly as the machine is
+    // loaded. The limit of the test catches a server that never starts.
+    const started = await server.logged("server started");
+
+    assert.deepEqual(
+      server.entries.map(({ level, msg, problem, assistant }) => ({
+        level,
+        msg,
+        problem,
+        assistant,
+      })),
+      [
+        {
+          level: "error",
+          msg: "assistant not configured",
+          problem: server.entries[0].problem,
+          assistant: undefined,
+        },
+        { level: "info", msg: "server started", problem: undefined, assistant: "off" },
+      ],
+    );
+    assert.match(server.entries[0].problem, /ASSISTANT_MODEL/);
+    assert.equal(server.stdout.includes("sk-test-key"), false, "the key is in the log");
+    const res = await fetch(`http://127.0.0.1:${started.port}/api/assistant`);
+    assert.deepEqual(await res.json(), { enabled: false });
+  });
+
+  test("logs the provider of the saved settings at start", async (t) => {
+    await writeSettings();
+    const server = runIndex(t, { PORT: "0" });
+
+    const entry = await server.first;
+
+    assert.equal(entry.msg, "server started");
+    assert.deepEqual([entry.assistant, entry.source], ["openai", "settings"]);
+    assert.equal(server.stdout.includes("sk-saved-key"), false, "the key is in the log");
+  });
+
+  test("uses the saved settings when the variables are incomplete", async (t) => {
+    await writeSettings();
+    const server = runIndex(t, { ASSISTANT_PROVIDER: "anthropic", PORT: "0" });
+
+    // No short limit here: a child process starts as slowly as the machine is
+    // loaded. The limit of the test catches a server that never starts.
+    const started = await server.logged("server started");
+
+    assert.deepEqual([started.assistant, started.source], ["openai", "settings"]);
   });
 
   test("registers the SIGINT and SIGTERM handlers before it logs its start", async (t) => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile } from "node:fs/promises";
+import { chmod, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import {
@@ -48,6 +48,20 @@ describe("meals-restore", () => {
 
     assertExit(result, 0);
     await assertOriginalData(host);
+  });
+
+  test("keeps mode 0640 of a data file that meals-backup archived", async () => {
+    const file = path.join(host.root, "data", "v2", "assistant.json");
+    await host.writeData("v2/assistant.json", "{}\n");
+    await chmod(file, 0o640);
+    assertExit(await host.run("meals-backup", "daily"), 0);
+    const [daily] = await host.backups();
+    await chmod(file, 0o664);
+
+    const result = await host.run("meals-restore", daily);
+
+    assertExit(result, 0);
+    assert.equal(await host.mode("data/v2/assistant.json"), "640");
   });
 
   test("replaces data that has invalid JSON", async () => {

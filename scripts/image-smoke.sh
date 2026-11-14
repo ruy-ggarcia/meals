@@ -3,8 +3,8 @@
 #
 # Runs IMAGE through deploy/compose.yaml, as the host does, and checks that
 # it doesn't start without a data directory, becomes healthy, reports the
-# version in package.json, keeps its data across a restart, and stops with
-# exit code 0.
+# version in package.json, keeps its data across a restart, turns on the
+# assistant with the variables of assistant.env, and stops with exit code 0.
 set -euo pipefail
 
 image=${1:?Usage: scripts/image-smoke.sh IMAGE}
@@ -56,6 +56,17 @@ compose up --detach --wait --wait-timeout 60 ||
   fail "the container didn't become healthy after a restart"
 curl -fsS "$(url /api/ingredients)" | jq -e '.ingredients | any(.name == "Smoke test")' >/dev/null ||
   fail "the ingredient didn't survive a restart"
+
+# Compose passes the variables of assistant.env to the app. The values are
+# fake, and the key never shows: neither request reaches a provider.
+printf '%s\n' ASSISTANT_API_KEY=smoke-test-key ASSISTANT_MODEL=smoke-test-model \
+  ASSISTANT_PROVIDER=openai >"$work/assistant.env" || fail "couldn't write assistant.env"
+compose up --detach --force-recreate --wait --wait-timeout 60 ||
+  fail "the container didn't become healthy with assistant.env"
+curl -fsS "$(url /api/assistant)" | jq -e '.enabled == true' >/dev/null ||
+  fail "/api/assistant doesn't say that the assistant is on with assistant.env"
+curl -fsS "$(url /api/assistant/settings)" | jq -e '.source == "environment"' >/dev/null ||
+  fail "/api/assistant/settings doesn't say that assistant.env sets the assistant"
 
 container=$(compose ps --quiet app) || fail "couldn't find the container"
 compose stop app >/dev/null || fail "couldn't stop the container"

@@ -4,14 +4,8 @@ import { createConversations } from "../server/assistant/conversations.js";
 import { instructions } from "../server/assistant/instructions.js";
 import { ProviderError } from "../server/assistant/providers/errors.js";
 import { createStores } from "../server/stores.js";
-import { fakeClock, scriptedProvider } from "./assistant-helpers.js";
-import {
-  blankWeek,
-  collectingLogger,
-  useDataDir,
-  within,
-  writeDataFile,
-} from "./backend-helpers.js";
+import { fakeClock, heldStep, scriptedProvider } from "./assistant-helpers.js";
+import { blankWeek, collectingLogger, useDataDir, writeDataFile } from "./backend-helpers.js";
 
 const WEEK = "2026-11-16";
 const NEXT_WEEK = "2026-11-23";
@@ -87,35 +81,6 @@ function outputOf(request, callId) {
     if (result) return JSON.parse(result.output);
   }
   throw new Error(`No result of tool call ${callId}`);
-}
-
-/**
- * A step of a script that holds the provider call until the test releases
- * it, and rejects with the reason of the call's signal when it aborts.
- * `called` resolves when the call starts.
- */
-function held() {
-  /** @type {(answer: any) => void} */
-  let release = () => {
-    throw new Error("The held call hasn't started.");
-  };
-  /** @type {() => void} */
-  let started = () => {};
-  const called = new Promise((resolve) => {
-    started = () => resolve(undefined);
-  });
-  /** @param {{ signal?: AbortSignal }} request */
-  const step = ({ signal }) =>
-    new Promise((resolve, reject) => {
-      release = resolve;
-      signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
-      started();
-    });
-  return {
-    step,
-    called: () => within(called, "the provider call didn't start"),
-    release: (answer) => release(answer),
-  };
 }
 
 /**
@@ -356,7 +321,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("shows the turn as working until it ends", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations } = setup(t, [hold.step]);
     const { id } = conversations.create();
 
@@ -370,7 +335,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("rejects a message during a turn and keeps the conversation as it was", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations, provider } = setup(t, [hold.step]);
     const { id } = conversations.create();
     conversations.send(id, { text: "Plan next week." });
@@ -405,7 +370,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("finishes a running turn with the provider that it started with", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const first = scriptedProvider([{ toolCalls: [call("c1", "list_recipes")] }, hold.step]);
     const second = scriptedProvider([]);
     let provider = first;
@@ -436,7 +401,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("rejects apply and discard during a turn", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations } = setup(t, [hold.step]);
     const { id } = conversations.create();
     conversations.send(id, { text: "Plan next week." });
@@ -447,7 +412,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("rejects a retry during a turn", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations } = setup(t, [hold.step]);
     const { id } = conversations.create();
     conversations.send(id, { text: "Plan next week." });
@@ -624,7 +589,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("fails the turn with limit when the clock passes 3 minutes", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations, clock } = setup(t, [hold.step]);
     const { id } = conversations.create();
     conversations.send(id, { text: "Plan next week." });
@@ -1251,7 +1216,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("cancels the turn of a conversation that a new one ends", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations, entries } = setup(t, [hold.step], { maxConversations: 1 });
     const { id } = conversations.create();
     conversations.send(id, { text: "Plan next week." });
@@ -1267,7 +1232,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("cancels the turn when the conversation ends, and logs canceled", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations, entries } = setup(t, [hold.step]);
     const { id } = conversations.create();
     conversations.send(id, { text: "Plan next week." });
@@ -1283,8 +1248,8 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("cancels every turn on stop, and leaves no timer", async (t) => {
-    const first = held();
-    const second = held();
+    const first = heldStep();
+    const second = heldStep();
     const { conversations, clock, entries } = setup(t, [first.step, second.step]);
     for (const hold of [first, second]) {
       const { id } = conversations.create();
@@ -1302,7 +1267,7 @@ describe("server/assistant/conversations.js", () => {
   });
 
   test("logs one line per turn with its token counts and nothing else", async (t) => {
-    const hold = held();
+    const hold = heldStep();
     const { conversations, clock, entries } = setup(t, [
       {
         toolCalls: [call("c1", "list_recipes")],

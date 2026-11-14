@@ -52,7 +52,7 @@ Meals in production, see [Deploy Meals](docs/deployment.md).
    the following:
 
    ```json
-   {"time":"2026-10-04T10:00:00.000Z","level":"info","msg":"server started","version":"0.1.0","port":3000,"dataDir":"/path/to/meals/data"}
+   {"time":"2026-10-04T10:00:00.000Z","level":"info","msg":"server started","version":"0.1.0","port":3000,"dataDir":"/path/to/meals/data","assistant":"off"}
    ```
 
 To stop the server, press `Control+C`.
@@ -329,10 +329,25 @@ rejects the change and changes nothing.
 
 The server reads the following environment variables:
 
-| Variable   | Default  | Description                           |
-|------------|----------|---------------------------------------|
-| `DATA_DIR` | `./data` | The data directory. See [Data files](#data-files). |
-| `PORT`     | `3000`   | The port that the server listens on.  |
+| Variable             | Default  | Description                                             |
+|----------------------|----------|---------------------------------------------------------|
+| `ASSISTANT_API_KEY`  | None     | The API key of the assistant's provider.                |
+| `ASSISTANT_MODEL`    | None     | The identifier of the model at the provider.            |
+| `ASSISTANT_PROVIDER` | None     | The provider of the assistant: `anthropic` or `openai`. |
+| `DATA_DIR`           | `./data` | The data directory. See [Data files](#data-files).      |
+| `PORT`               | `3000`   | The port that the server listens on.                    |
+
+You can set up the assistant in **Settings** instead of with the three
+`ASSISTANT_` variables. When all three are set, they take precedence over
+**Settings**. If only some of them are set, or `ASSISTANT_PROVIDER` isn't
+`anthropic` or `openai`, the server logs `assistant not configured` with the
+problem, and uses the settings saved in **Settings** instead. The assistant
+is off until the variables or the settings have a provider, a model, and a
+key. No response or log of the server holds the API key.
+
+The `server started` log line has `assistant`, which is `anthropic`,
+`openai`, or `off`, and, when the assistant is on, `source`, which is
+`environment` or `settings`.
 
 For example, to store data in `/srv/meals` and listen on port 8080, run the
 following command:
@@ -346,10 +361,13 @@ The image sets `DATA_DIR` to `/data` and `PORT` to `3000`. See
 
 ## Data files
 
-The meal plan, the recipe book, the ingredient catalog, and the family
-preferences live in the `v2/` directory inside the data directory, which is
-`data/` unless you set `DATA_DIR`:
+The meal plan, the recipe book, the ingredient catalog, the family
+preferences, and the assistant's settings live in the `v2/` directory inside
+the data directory, which is `data/` unless you set `DATA_DIR`:
 
+- `v2/assistant.json` holds the assistant's settings from **Settings**, as
+  `{ "provider", "model", "apiKey" }`, where `apiKey` is `null` when no key
+  is saved. The file holds the key in plain text, so backups include it.
 - `v2/ingredients.json` holds the ingredient catalog.
 - `v2/preferences.json` holds the family preferences, as `{ "text": "..." }`.
 - `v2/recipes.json` holds the recipe book.
@@ -369,6 +387,13 @@ do the following:
 
 1. Restore a backup copy of the file, or fix the JSON by hand.
 1. In the app, click **Retry**.
+
+If `assistant.json` isn't valid, and the `ASSISTANT_` variables don't set up
+the assistant, the server logs `assistant settings unreadable` when it
+starts, without the file's content, and starts with the assistant off.
+**Settings** shows `Couldn't load the settings. Try again.` until you fix
+the file. The server doesn't overwrite the file. To recover, restore a
+backup copy of the file or fix it by hand, and then restart the server.
 
 If you restore an older `recipes.json` or `ingredients.json`, the app hides
 what the restored file doesn't have: menu items whose recipe is missing, and
@@ -639,11 +664,28 @@ scripts/
   meals-restore-check   # Checks that the latest backup restores.
   units-check.sh        # Verifies the systemd units with systemd-analyze.
 server/
+  assistant/
+    providers/
+      anthropic.js    # The adapter of the Anthropic Messages API.
+      errors.js       # The error of a call to a provider.
+      http.js         # The HTTP request of the adapters.
+      index.js        # The providers: the adapter and the model list of each.
+      openai.js       # The adapter of the OpenAI Responses API.
+      types.js        # The common shape of a provider and of a conversation.
+    config.js         # Reads the assistant's environment variables.
+    conversations.js  # Conversations in memory, their turns, and Apply.
+    instructions.js   # The system instructions of the model.
+    limits.js         # The limits of the data, as the model reads them.
+    pending.js        # Pending changes and the data that they would save.
+    settings.js       # The assistant's settings from Settings, with the API key.
+    setup.js          # The provider, from the environment or the settings.
+    tools.js          # The tools that the model calls.
+    turn.js           # A turn: model calls and tool calls until an answer.
   app.js         # HTTP API (Express), static files, and the health check.
   errors.js      # Errors for bad input, which app.js maps to HTTP statuses.
   files.js       # JSON files and the write queue. The only module that touches disk.
   healthcheck.js # The image's health check.
-  index.js       # Startup: reads DATA_DIR and PORT, and stops on SIGINT and SIGTERM.
+  index.js       # Startup: reads the environment variables, and stops on SIGINT and SIGTERM.
   ingredients.js # The ingredient catalog: unique names, units, measures, and archiving.
   logger.js      # Logs one JSON object per line.
   names.js       # Name rules shared by recipes and ingredients.
@@ -676,9 +718,10 @@ tsconfig.tests.json # Type check settings of e2e/ and test/.
 ## API reference
 
 The user interface depends only on this API. All responses are JSON. Errors
-have the shape `{ "error": "MESSAGE" }`. Any other path under `/api` returns
-`404`. If a data file contains invalid JSON, the requests that read it return
-`500`.
+have the shape `{ "error": "MESSAGE" }`. A body that isn't valid JSON returns
+`400` with a message that doesn't quote the body. Any other path under `/api`
+returns `404`. If a data file contains invalid JSON, the requests that read
+it return `500`.
 
 The server cleans every name that it receives, of a recipe, an ingredient,
 or a measure: it trims the name and collapses runs of whitespace. A valid
@@ -884,3 +927,204 @@ Request body: `{ "items": [{ "recipeId": "RECIPE_ID", "servings": 1.5 }] }`
 - Each menu item has exactly the keys `recipeId` and `servings`.
 - Each `recipeId` is an existing recipe, archived or not, and appears once.
 - Each `servings` is a multiple of 0.5 from 0.5 to 99.
+
+### Check the assistant
+
+`GET /api/assistant`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "enabled": true }` when the assistant is on, and `{ "enabled": false }` when it's off. |
+
+The routes of the conversations work while the assistant is off, except that
+a message or a retry returns `409`.
+
+### Get the assistant's settings
+
+`GET /api/assistant/settings`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "provider", "model", "keySaved", "source" }`. |
+
+- `provider` is `anthropic` or `openai`, and `model` is the model's
+  identifier. Both are `null` until the first save.
+- `keySaved` is `true` when a key is saved.
+- `source` is `environment` when the three `ASSISTANT_` variables set up the
+  assistant, and `settings` otherwise. See
+  [Configure the server](#configure-the-server).
+
+### List the models of a key
+
+`POST /api/assistant/models`
+
+Request body: `{ "provider": "PROVIDER", "apiKey": "API_KEY" }`, where
+`apiKey` is optional. Without `apiKey`, the server uses the saved key, but
+only for the provider that it was saved for. The server asks the provider
+for its models with the key, so a list that arrives proves that the
+provider accepts the key. The key travels in the body, never in the URL.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "models": [{ "id", "name" }] }`, newest first. The list is empty when the key has no models that can chat. |
+| `400`  | The body breaks one of the following rules, no key of this provider is saved, or the provider didn't accept the key. |
+| `409`  | The three `ASSISTANT_` variables set up the assistant, so the settings can't change. |
+| `502`  | The provider failed or didn't answer within 4 seconds. The body is `{ "error": "Couldn't check the key." }`. |
+
+- The body has exactly `provider`, or `provider` and `apiKey`.
+- `provider` is `anthropic` or `openai`.
+- `apiKey` has 1 to 500 printable ASCII characters, with no spaces.
+
+`id` is the model's identifier at the provider. For Anthropic, `name` is
+the model's display name. OpenAI's list has no display names, so `name` is
+the identifier, and the list holds only the models that start with `gpt-`
+or with `o` and a digit, without the models for audio, realtime, speech,
+transcription, images, embeddings, search, and moderation.
+
+### Save the assistant's settings
+
+`PUT /api/assistant/settings`
+
+Request body: `{ "provider": "PROVIDER", "model": "MODEL", "apiKey": "API_KEY" }`,
+where `apiKey` is optional. Without `apiKey`, the saved key stays. With
+`"apiKey": null`, the server removes the key, keeps the provider and the
+model, and turns off the assistant. The next message uses the new settings,
+and an answer in progress finishes with the old ones. The server logs
+`assistant settings changed` with the provider and the model.
+
+Unless the body removes the key, the server first asks the provider for its
+models with the key, as `POST /api/assistant/models` does, and saves only
+when the list holds the model. Without `apiKey`, it asks with the saved key,
+which must be a key of the same provider. So the saved settings always have
+a key that the provider accepted.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The settings were saved. The body is what `GET /api/assistant/settings` returns. |
+| `400`  | The server saved nothing: the body breaks one of the following rules, no key of this provider is saved, the provider didn't accept the key, or the provider's list doesn't hold the model. |
+| `409`  | The three `ASSISTANT_` variables set up the assistant, so the settings can't change. |
+| `502`  | The server saved nothing: the provider failed or didn't answer within 4 seconds. The body is `{ "error": "Couldn't check the key." }`. |
+
+- The body has exactly `provider` and `model`, or `provider`, `model`, and
+  `apiKey`.
+- `provider` is `anthropic` or `openai`.
+- `model` has 1 to 200 characters, with no control characters.
+- `apiKey` is `null`, or 1 to 500 printable ASCII characters with no spaces.
+
+### Start a conversation
+
+`POST /api/assistant/conversations`
+
+| Status | Meaning |
+|--------|---------|
+| `201`  | The body is `{ "id": "ID" }`. When the server already keeps 20 conversations, the one with the oldest activity ends. |
+
+### Get a conversation
+
+`GET /api/assistant/conversations/ID`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is the conversation. The server doesn't log a successful request. |
+| `404`  | No conversation has that ID, for example because it expired after 24 hours without activity, or because the server restarted. |
+
+The server keeps each conversation in memory. A conversation has the shape
+`{ "id", "status", "error", "messages", "pending", "revision" }`:
+
+- `status` is `idle`, `working` while the assistant answers, or `failed`
+  when the last message failed.
+- `error` is only present when `status` is `failed`: `limit` when the turn
+  ran for 30 tool rounds or 3 minutes, `too_long` when the conversation is
+  too long for the model, or `provider` for any other failure, such as a
+  rejected API key or no network.
+- `messages` is a list of the messages and the events of the conversation,
+  in order. A message is `{ "role", "text" }`, where `role` is `user` or
+  `assistant`. A user message can also have `"attachments"`, the names of its
+  files, and `"failed": true`. An event is `{ "role": "event", "kind" }`,
+  where `kind` is `discarded` after a discard, or `applied` after an apply.
+  A discard or an apply without pending changes adds no event. An `applied`
+  event also has `"counts"`, `{ "slots", "recipes", "ingredients" }`, how
+  many of each the apply saved, and `"weeks"`, the weeks of its menus, from
+  the earliest, as `[{ "week", "day" }]`, where `day` is the first day of the
+  week whose menu changed. The assistant never reads the events.
+- `pending` is the list of pending changes, each with a `target`, a `kind`
+  of `menu`, `recipe`, or `ingredient`, the names of the recipes and
+  ingredients that it uses, and a `problem` after a rejected apply.
+- `revision` is `0` in a new conversation, and grows each time the list of
+  pending changes changes, such as when the assistant proposes a change, or
+  when you apply or discard the pending changes.
+
+### Send a message
+
+`POST /api/assistant/conversations/ID/messages`
+
+Request body:
+`{ "text": "TEXT", "attachments": [{ "name": "NAME", "data": "BASE64" }], "week": "WEEK", "today": "DATE" }`,
+where `attachments` is optional and defaults to `[]`, `week` is the week
+that the page shows, also optional, and `today` is the browser's local date
+as `YYYY-MM-DD`, also optional. The assistant reads `today` as the current
+date when it's at most one day from the server's date, and the server's date
+otherwise. This route accepts a body of up to 30 MB; every other route
+accepts up to 100 KB.
+
+| Status | Meaning |
+|--------|---------|
+| `202`  | The assistant answers the message in the background. The body is `{}`. Get the conversation until its `status` isn't `working`. |
+| `400`  | The message breaks one of the following rules. |
+| `404`  | No conversation has that ID. |
+| `409`  | The assistant isn't set up, the assistant is still answering, or the pending changes are being applied. |
+
+- The message has text or at least one attachment.
+- Its text has at most 20,000 characters, without the spaces around it.
+- It has at most 5 attachments, each with a name of at most 255 characters,
+  and with `data` in standard base64.
+- Each file is a PDF, a JPEG, or a PNG, as its first bytes show. A PDF has
+  at most 10 MB, and a JPEG or a PNG at most 7 MB.
+- The attachments of the conversation total at most 20 MB. A new
+  conversation frees the space.
+- `week` is a valid week identifier.
+- `today` is a valid date as `YYYY-MM-DD`.
+
+### Retry a message
+
+`POST /api/assistant/conversations/ID/retry`
+
+| Status | Meaning |
+|--------|---------|
+| `202`  | The assistant answers the failed message again in the background. The body is `{}`. |
+| `404`  | No conversation has that ID. |
+| `409`  | The last message didn't fail, the assistant isn't set up, the assistant is still answering, or the pending changes are being applied. |
+
+### Apply the pending changes
+
+`POST /api/assistant/conversations/ID/apply`
+
+Request body: `{ "revision": N }`, where `N` is the `revision` of the
+conversation whose pending changes you reviewed.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The server saved every pending change. If there were any, the conversation shows an `applied` event. The body is `{ "applied": true }`. |
+| `400`  | `revision` is missing or isn't an integer. |
+| `404`  | No conversation has that ID. |
+| `409`  | The server saved nothing. If `revision` isn't the current one, because the pending changes changed after you got the conversation, the body is `{ "error": "The pending changes changed. Review them again." }`. If a pending change is invalid against the data as it is now, for example because someone edited its target by hand, the body is `{ "error", "problems" }`, where `problems` is a list of `{ "target", "message" }`, and the conversation keeps its pending changes. Otherwise, the assistant is still answering, or the pending changes are already being applied. |
+| `500`  | A write to a data file failed, and the conversation keeps its pending changes. If the server saved part of the changes before the failure, the body also has `"code": "partly_saved"`. |
+
+### Discard the pending changes
+
+`POST /api/assistant/conversations/ID/discard`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The server removed every pending change. If there were any, the conversation shows a `discarded` event. The body is `{}`. |
+| `404`  | No conversation has that ID. |
+| `409`  | The assistant is still answering, or the pending changes are being applied. |
+
+### End a conversation
+
+`DELETE /api/assistant/conversations/ID`
+
+| Status | Meaning |
+|--------|---------|
+| `204`  | The conversation ended, and the server canceled its answer in progress. |
+| `404`  | No conversation has that ID. |

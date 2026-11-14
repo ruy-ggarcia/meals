@@ -2,18 +2,55 @@
 // port and with a new data directory, seeded through the API. Its pages start
 // at the fixed date, and the test fails on an error in a page. A test can
 // also make the API fail, as if the server were stopped or paused.
+// The providers' model lists are fakes too, with answers that a test sets.
 
 import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test as base, expect } from "@playwright/test";
+import { ProviderError } from "../server/assistant/providers/errors.js";
 import { silentLogger } from "../server/logger.js";
 import { start } from "../server/start.js";
 import { createApi } from "./api.js";
 import { INGREDIENTS, NOW, RECIPE_NAMES } from "./catalog.js";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+
+/**
+ * What a fake model list answers: the models, or the kind of a
+ * `ProviderError` to reject with, such as "auth" for a rejected key.
+ * @typedef {import("../server/assistant/providers/types.js").Model[]
+ *   | import("../server/assistant/providers/errors.js").ProviderErrorKind} ModelListAnswer
+ */
+
+/**
+ * The answers of the model lists unless a test sets others: one model for
+ * each provider, which a test can choose and save.
+ * @type {Record<"anthropic" | "openai", ModelListAnswer>}
+ */
+const MODEL_LISTS = {
+  anthropic: [{ id: "claude-test", name: "Claude Test" }],
+  openai: [{ id: "gpt-test", name: "gpt-test" }],
+};
+
+/**
+ * Model lists that answer from `answers`, which a test can change while it
+ * runs, so no key that a test enters reaches a real provider.
+ * @param {Record<"anthropic" | "openai", ModelListAnswer>} answers
+ * @returns {import("../server/assistant/setup.js").ModelLists}
+ */
+function fakeModelLists(answers) {
+  /** @param {"anthropic" | "openai"} provider */
+  const list = (provider) => async () => {
+    const answer = answers[provider];
+    if (typeof answer === "string") {
+      throw new ProviderError(answer, `The fake list of ${provider} failed with ${answer}`);
+    }
+    return structuredClone(answer);
+  };
+  return { anthropic: list("anthropic"), openai: list("openai") };
+}
 
 /** Adds the catalog through `api`, and returns the recipes and the ingredients by name. */
 async function seedCatalog(api) {
@@ -145,6 +182,7 @@ export function watchErrors(page, consoleErrors) {
  * @typedef {object} Fixtures
  * @property {"catalog" | "empty"} seed
  * @property {"never" | "real"} requestTimeout
+ * @property {Partial<Record<"anthropic" | "openai", ModelListAnswer>>} modelLists
  * @property {{
  *   url: string,
  *   port: number,
@@ -152,6 +190,7 @@ export function watchErrors(page, consoleErrors) {
  *   api: ReturnType<typeof createApi>,
  *   recipes: Record<string, any>,
  *   ingredients: Record<string, any>,
+ *   modelLists: Record<"anthropic" | "openai", ModelListAnswer>,
  * }} app
  * @property {{ allowed: boolean }} consoleErrors
  * @property {() => Promise<import("@playwright/test").Page>} newPage
@@ -178,12 +217,20 @@ const fixtures = {
   // seconds of real time, for a test that checks how the app gives up.
   requestTimeout: ["never", { option: true }],
 
-  app: async ({ seed }, use) => {
+  // What the providers' model lists answer, which a test sets with
+  // `test.use({ modelLists: { ... } })`, and can change while it runs through
+  // `app.modelLists`. The server never asks a real provider for its list.
+  modelLists: [MODEL_LISTS, { option: true }],
+
+  app: async ({ modelLists, seed }, use) => {
     const dataDir = await mkdtemp(join(tmpdir(), "meals-e2e-"));
     try {
+      // A test that sets one provider's answer keeps the other's default.
+      const answers = structuredClone({ ...MODEL_LISTS, ...modelLists });
       // Only this machine can reach the server, not the network.
       const server = await start({
         dataDir,
+        modelLists: fakeModelLists(answers),
         host: "127.0.0.1",
         logger: silentLogger,
         port: 0,
@@ -194,7 +241,7 @@ const fixtures = {
         const api = createApi(url);
         const seeded =
           seed === "catalog" ? await seedCatalog(api) : { recipes: {}, ingredients: {} };
-        await use({ url, port: server.port, dataDir, api, ...seeded });
+        await use({ url, port: server.port, dataDir, api, ...seeded, modelLists: answers });
       } finally {
         await server.stop();
       }

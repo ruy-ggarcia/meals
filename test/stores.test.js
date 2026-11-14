@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat, utimes } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, utimes } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, test } from "node:test";
+import { PartialSaveError } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
 import { blankWeek, useDataDir, writeDataFile } from "./backend-helpers.js";
 
@@ -208,23 +209,39 @@ describe("createStores", () => {
       assert.deepEqual(await readText(storedFiles(dataDir())), before);
     });
 
-    test("rejects a malformed result of compute and writes nothing", async () => {
-      const before = await readText(storedFiles(dataDir()));
+    test("rejects with a PartialSaveError when a write fails after another", async () => {
+      // A directory in place of the temporary file makes the write fail.
+      await mkdir(path.join(dataDir(), "v2", "recipes.json.tmp"));
 
-      // The catalog changes, but the weeks are missing.
       await assert.rejects(
-        stores().transaction([WEEK], (state) => ({
-          state: { ingredients: [...state.ingredients, newLeek], recipes: state.recipes },
+        stores().transaction([], (state) => ({
+          state: {
+            ...state,
+            ingredients: [...state.ingredients, newLeek],
+            recipes: [...state.recipes, newStew],
+          },
           result: undefined,
         })),
-        {
-          name: "TypeError",
-          message:
-            "compute must return { state, result }, where state has ingredients, recipes, and each week.",
-        },
+        (error) =>
+          error instanceof PartialSaveError &&
+          /** @type {NodeJS.ErrnoException} */ (error.cause).code === "EISDIR",
       );
+    });
 
-      assert.deepEqual(await readText(storedFiles(dataDir())), before);
+    test("rejects with the error of the first write when it fails", async () => {
+      await mkdir(path.join(dataDir(), "v2", "ingredients.json.tmp"));
+
+      await assert.rejects(
+        stores().transaction([], (state) => ({
+          state: {
+            ...state,
+            ingredients: [...state.ingredients, newLeek],
+            recipes: [...state.recipes, newStew],
+          },
+          result: undefined,
+        })),
+        { code: "EISDIR" },
+      );
     });
 
     test("leaves untouched the files whose data compute returns as it got it", async () => {
