@@ -11,6 +11,7 @@ interface, and the documentation. Don't use synonyms, such as *cell* for
 | Archived ingredient | An ingredient that the recipe editor no longer offers, but that stays in the recipes that already use it. You can restore it. |
 | Archived recipe | A recipe that the slot editor no longer offers, but that stays in the menus that already use it. You can restore it. |
 | Day | One of the seven days of a week: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, or `sun`. |
+| Family preferences | Free text that the assistant reads in every conversation, such as dietary rules and who eats away from home. |
 | Ingredient | Something you buy and use in recipes. The ingredient catalog holds it with a stable ID, a unique name, a unit, and its measures. In a recipe, it has a quantity. |
 | Ingredient catalog | All the ingredients, active and archived. |
 | Meal | One of the five times of day: `breakfast`, `snack_am`, `lunch`, `snack_pm`, or `dinner`. |

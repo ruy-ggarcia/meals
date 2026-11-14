@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 import * as ingredients from "../server/ingredients.js";
+import * as preferences from "../server/preferences.js";
 import * as quantities from "../server/quantities.js";
 import * as recipes from "../server/recipes.js";
 import * as weeks from "../server/weeks.js";
@@ -42,5 +43,11 @@ describe("server/quantities.js", () => {
 describe("server/ingredients.js", () => {
   test("has the measure limit of the shared table", () => {
     assertLimits(ingredients, "measure");
+  });
+});
+
+describe("server/preferences.js", () => {
+  test("has the preferences limit of the shared table", () => {
+    assertLimits(preferences, "preferences");
   });
 });

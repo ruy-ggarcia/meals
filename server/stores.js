@@ -6,6 +6,7 @@
 
 import { createQueue } from "./files.js";
 import { createIngredients } from "./ingredients.js";
+import { createPreferences } from "./preferences.js";
 import { createRecipes } from "./recipes.js";
 import { isPlainObject } from "./shapes.js";
 import { createWeeks } from "./weeks.js";
@@ -58,6 +59,7 @@ export function createStores({ dataDir }) {
   });
   const recipes = createRecipes({ dataDir, enqueue, ingredients });
   const weeks = createWeeks({ dataDir, enqueue, recipes });
+  const preferences = createPreferences({ dataDir, enqueue });
   // An empty task runs after every write queued before it, so idle()
   // resolves once those writes are on disk.
   const idle = () => enqueue(() => {});
@@ -111,5 +113,5 @@ export function createStores({ dataDir }) {
     });
   }
 
-  return { idle, ingredients, read, recipes, transaction, weeks };
+  return { idle, ingredients, preferences, read, recipes, transaction, weeks };
 }

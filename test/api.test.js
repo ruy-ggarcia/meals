@@ -555,6 +555,66 @@ describe("PATCH /api/recipes/:id", () => {
   });
 });
 
+describe("GET /api/preferences", () => {
+  test("returns an empty text at first", async () => {
+    const res = await request(app).get("/api/preferences");
+
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /application\/json/);
+    assert.deepEqual(res.body, { text: "" });
+  });
+
+  test("returns 500 when the file is corrupt", async () => {
+    await writeDataFile(dataDir(), "v2/preferences.json", "{ not json");
+
+    const res = await request(app).get("/api/preferences");
+
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { error: "Internal server error" });
+  });
+});
+
+describe("PUT /api/preferences", () => {
+  test("saves a text and returns it on the next read", async () => {
+    const text = "No pork.\nCafé con leche.";
+
+    const saved = await request(app).put("/api/preferences").send({ text });
+    const read = await request(app).get("/api/preferences");
+
+    assert.equal(saved.status, 200);
+    assert.deepEqual(saved.body, { text });
+    assert.deepEqual(read.body, { text });
+  });
+
+  const INVALID_BODIES = [
+    ["an empty object", {}],
+    ["a text that isn't a string", { text: 1 }],
+    ["another field", { text: "a", other: 1 }],
+    ["a text of 10001 characters", { text: "a".repeat(10001) }],
+  ];
+  for (const [label, body] of INVALID_BODIES) {
+    test(`rejects ${label} with 400`, async () => {
+      const res = await request(app).put("/api/preferences").send(body);
+
+      assertJsonError(res, 400, label);
+      assert.equal(res.body.error, '"text" must be a string of at most 10000 characters.');
+    });
+  }
+
+  test("rejects a request without a body with 400", async () => {
+    assertJsonError(await request(app).put("/api/preferences"), 400, "no body");
+  });
+
+  test("returns 500 when the file is corrupt", async () => {
+    await writeDataFile(dataDir(), "v2/preferences.json", "{ not json");
+
+    const res = await request(app).put("/api/preferences").send({ text: "No pork." });
+
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { error: "Internal server error" });
+  });
+});
+
 describe("GET /api/ingredients", () => {
   test("returns an empty catalog at first", async () => {
     const res = await request(app).get("/api/ingredients");

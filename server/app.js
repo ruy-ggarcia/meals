@@ -39,11 +39,11 @@ function logRequests(logger) {
 }
 
 /**
- * @param {{ ingredients?: any, recipes?: any, weeks?: any }} stores
+ * @param {{ ingredients?: any, preferences?: any, recipes?: any, weeks?: any }} stores
  * @param {{ dataDir?: string, logger?: import("./logger.js").Logger, version?: string }} [options]
  */
 export function createApp(
-  { ingredients, recipes, weeks },
+  { ingredients, preferences, recipes, weeks },
   { dataDir, logger = silentLogger, version } = {},
 ) {
   const app = express();
@@ -71,6 +71,10 @@ export function createApp(
     res.json({ ingredients: await ingredients.list() });
   });
 
+  app.get("/api/preferences", async (_req, res) => {
+    res.json({ text: await preferences.read() });
+  });
+
   // From here on, every route that passes req.body to a store: Express 5
   // leaves req.body undefined when there is no JSON body. The stores
   // validate what they get and throw the errors that the handler below maps.
@@ -88,6 +92,10 @@ export function createApp(
 
   app.patch("/api/ingredients/:id", async (req, res) => {
     res.json(await ingredients.update(req.params.id, req.body));
+  });
+
+  app.put("/api/preferences", async (req, res) => {
+    res.json({ text: await preferences.save(req.body) });
   });
 
   app.get("/api/weeks/:week", async (req, res) => {

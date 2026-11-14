@@ -7,6 +7,9 @@
     "MAX_SERVINGS": 99,
     "MIN_SERVINGS": 0.5
   },
+  "preferences": {
+    "MAX_PREFERENCES": 10000
+  },
   "recipe": {
     "MAX_INGREDIENTS": 50,
     "MAX_QUANTITY": 10000,
