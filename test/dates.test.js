@@ -9,11 +9,13 @@ process.env.TZ = "Europe/Madrid";
 const {
   addDays,
   addWeeks,
+  dateIdOf,
   dayIndex,
   formatDayDate,
   formatFullDate,
   formatLongDate,
   formatWeekRange,
+  formatWeekStart,
   isWeekId,
   weekIdOf,
   weekStart,
@@ -28,6 +30,12 @@ describe("dayIndex", () => {
     for (let day = 21; day <= 27; day++) {
       assert.equal(dayIndex(new Date(2026, 8, day)), day - 21, `September ${day}`);
     }
+  });
+});
+
+describe("dateIdOf", () => {
+  test("gives the local date after midnight while UTC is on the day before", () => {
+    assert.equal(dateIdOf(new Date(2026, 0, 6, 0, 30)), "2026-01-06");
   });
 });
 
@@ -110,6 +118,12 @@ describe("formatWeekRange", () => {
     assert.equal(plain(formatWeekRange("2026-09-21")), "Sep 21 – 27, 2026");
     assert.equal(plain(formatWeekRange("2026-09-28")), "Sep 28 – Oct 4, 2026");
     assert.equal(plain(formatWeekRange("2026-12-28")), "Dec 28, 2026 – Jan 3, 2027");
+  });
+});
+
+describe("formatWeekStart", () => {
+  test("returns the short month and the day of the Monday", () => {
+    assert.equal(formatWeekStart("2026-11-16"), "Nov 16");
   });
 });
 

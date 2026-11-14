@@ -1,7 +1,8 @@
 // Checks of what causes an effect only a phone shows. A headless browser
 // can't zoom in or open a keyboard, so these assertions check the cause the
 // phone reacts to: the size of the text of a field, the touch action of a
-// button, the focused element, and the input mode.
+// button, the focused element, and the input mode. A larger text size, which
+// a phone sets in its settings, is emulated with `zoomText`.
 
 import { expect } from "@playwright/test";
 
@@ -116,4 +117,19 @@ export async function expectKeyboardOpen(locator) {
 /** Checks that the field asks for the keyboard with digits and a decimal separator. */
 export async function expectDecimalKeyboard(locator) {
   await expect(locator).toHaveAttribute("inputmode", "decimal");
+}
+
+/**
+ * Makes the text of `locator` and of everything in it `factor` times as
+ * large, as a browser's text zoom does: it scales the sizes of the fonts,
+ * and not the sizes in pixels of the boxes.
+ */
+export async function zoomText(locator, factor) {
+  await locator.evaluate((root, scale) => {
+    const elements = [root, ...root.querySelectorAll("*")];
+    const sizes = elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    for (const [index, element] of elements.entries()) {
+      /** @type {HTMLElement} */ (element).style.fontSize = `${sizes[index] * scale}px`;
+    }
+  }, factor);
 }

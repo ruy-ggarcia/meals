@@ -377,7 +377,8 @@ when it changed. If the **BYOK** section has a problem, such as a model that
 isn't from the list, **Done** saves nothing and says what to fix. A saved
 key that the app couldn't check doesn't keep you from saving the family
 preferences. If a save fails, **Settings** stays open and shows why under
-its section.
+its section. When a save turns the assistant on or off, the page shows or
+hides the assistant's round button at once, without a reload.
 
 **Settings** never shows the key again. Once a key is saved, the **BYOK**
 section says "A key is saved." instead of the key field, with two buttons:
@@ -393,6 +394,84 @@ server.", and can't change them. See
 [Configure the server](#configure-the-server).
 
 To close **Settings** without saving, click **Cancel** or press `Escape`.
+
+## Ask the assistant
+
+The assistant is a chat that plans menus and proposes changes to recipes and
+ingredients. It saves nothing until you apply its changes. When the
+assistant is set up, a round button in the lower right corner of every page
+opens it. On a phone, the button sits on the line of the tab bar, to its
+right. With a keyboard, press `Tab` once at the start of any page to reach
+**Ask the assistant**, which opens it too. To set up the assistant, see
+[Change the settings](#change-the-settings).
+
+To ask the assistant, do the following:
+
+1. Click the round button.
+1. On a touch screen, the window opens without the on-screen keyboard: tap
+   the message field. Type your message, such as `Plan next week`. On the
+   meal plan, the assistant knows which week you see. An empty conversation
+   shows a few examples: click one to put it in the message field, and then
+   edit it or send it.
+1. Optional: to attach files, such as a school menu, click the paper clip
+   button. You can attach up to 5 PDF, JPEG, or PNG files, and up to 20 MB
+   in one conversation. Each PDF can have up to 10 MB, and each JPEG or PNG
+   image up to 7 MB. To remove a file before you send it, click the button
+   next to its name.
+1. Press `Enter`, or click the send button with the up arrow. To add a line
+   without sending, press `Shift+Enter`.
+
+The round button is hidden while the window is open. On a wide screen, the
+window opens in the lower right corner, and the page behind it stays usable.
+When the meal plan keeps room for all seven days beside the window, such as
+on a laptop with the sidebar hidden, the page makes room for the window,
+which can narrow a little to fit. On a phone, and on a screen 500 px tall
+or less, such as a phone in landscape, the window opens as a sheet over the
+dimmed page, and the page behind it takes no taps until you collapse the
+window.
+
+While the assistant answers, the window shows "Thinking…", and you can type
+but not send. If the answer fails, click **Retry** to ask again. When the
+conversation is too long for the assistant, the window offers **New
+conversation** instead of **Retry**.
+
+The changes that the assistant proposes are pending changes. A card above the
+message field summarizes them: how many slots of each week change, and each
+recipe and ingredient to create, change, archive, or restore. On a screen
+500 px tall or less, the card shows these counts in one line. To see each
+change, click **View details**, which lists the changes under the lines of
+the summary. Then do one of the following:
+
+- To save every pending change, click **Apply**. The conversation shows what
+  the app saved, such as "Applied: 35 slots, 4 recipes, and 6 ingredients.",
+  with a link to each week of the menus that the meal plan doesn't show. On
+  a phone, the link shows the first day of that week whose menu changed.
+  When the window is a sheet, the link also collapses it, so you see the
+  week. The page shows the new data without a reload. On the meal plan, if a
+  slot isn't saved yet, or the slot editor or the shopping list is open, the
+  new data shows when you change the week. If someone changed a slot, a
+  recipe, or an ingredient by hand after the assistant proposed a change to
+  it, the app saves nothing, and **View details** shows the problem on that
+  change. Tell the assistant about it in your next message. If **Apply**
+  fails after it saved part of the changes, the card says so: check the meal
+  plan before you apply again, or click **Discard**.
+- To drop every pending change, click **Discard**. If there are more than
+  three pending changes, the app asks first. The conversation shows that you
+  discarded them.
+
+To collapse the window, click the button with the down arrow or press
+`Escape`. On a phone in landscape, you can also tap the dimmed page above
+the sheet. The round button shows again. The conversation stays, also when
+you open another page. The window stays open on the other pages that you
+open in the same tab, and a new visit, such as opening the app from the Home
+Screen again, starts with the window collapsed. While the window is
+collapsed, a red mark on the round button shows a reply that you haven't
+seen or pending changes.
+
+To start over, click **New conversation**, the button with the pencil. If
+the conversation has pending changes, the app asks first, because a new
+conversation loses them. A conversation also ends after 24 hours without a
+message, **Apply**, or **Discard**, and when the server restarts.
 
 ## Configure the server
 
@@ -700,6 +779,8 @@ docs/
 e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js               # Meal plan page: grid, week changes, and saves.
+  assistant-view.js    # What the assistant's window shows: pending changes, the mark, and attachment checks.*
+  assistant.js         # The assistant's button and window: messages, pending changes, and polling.
   catalog-list.js      # List logic shared by the Recipes and Ingredients pages.
   combobox.js          # The filter-and-pick field of the editors.
   dates.js             # Date helpers.*
@@ -755,7 +836,7 @@ server/
     setup.js          # The provider, from the environment or the settings.
     tools.js          # The tools that the model calls.
     turn.js           # A turn: model calls and tool calls until an answer.
-  app.js         # HTTP API (Express), static files, and the health check.
+  app.js         # HTTP API (Express), the pages, static files, and the health check.
   errors.js      # Errors for bad input, which app.js maps to HTTP statuses.
   files.js       # JSON files and the write queue. The only module that touches disk.
   healthcheck.js # The image's health check.

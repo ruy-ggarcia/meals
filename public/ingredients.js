@@ -97,6 +97,8 @@ function load() {
 
 setUpShell();
 retryLoadButton.addEventListener("click", load);
+// The assistant applied changes, which can add or change ingredients.
+window.addEventListener("meals:data-changed", () => load());
 // Unconfirmed changes in the editor would be lost: ask before leaving.
 window.addEventListener("beforeunload", (event) => {
   if (editor.hasChanges()) event.preventDefault();

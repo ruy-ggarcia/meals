@@ -98,6 +98,8 @@ let ingredients = [];
 let requestedWeek;
 /** True while a week change runs, so two changes never overlap. */
 let changingWeek = false;
+/** True when the assistant applied changes during a week change, which may show older data. */
+let reloadDue = false;
 /** True when the user chose Leave Without Saving in the open leave alert. */
 let leaveChosen = false;
 /** The day headers and the day bar buttons, which mark a day with a slot that wasn't saved. */
@@ -488,9 +490,16 @@ async function loadWeek(week) {
   });
 }
 
+// Puts the week in the hash, and announces it with `meals:week-shown`, after a
+// week change and after one that was refused. replaceState fires no
+// hashchange, so the assistant's window learns the week from the event.
 function syncHash() {
+  if (!requestedWeek) return;
   // replaceState adds no history entry, so Back doesn't step through weeks.
-  if (requestedWeek) history.replaceState(null, "", `#${requestedWeek}`);
+  history.replaceState(null, "", `#${requestedWeek}`);
+  window.dispatchEvent(
+    new window.CustomEvent("meals:week-shown", { detail: { week: requestedWeek } }),
+  );
 }
 
 function setChangingWeek(changing) {
@@ -544,9 +553,20 @@ function askToLeave(keys, place) {
   });
 }
 
+// The week that the hash names, by its Monday, and the day, when the hash
+// names one after the week, as the links of the assistant's window do, such
+// as `#2026-09-28/wed`. Undefined when the hash names no week, or no day
+// after it.
+function placeInHash() {
+  const [week, day, ...rest] = location.hash.slice(1).split("/");
+  if (!isWeekId(week) || rest.length > 0) return undefined;
+  if (day === undefined) return { week };
+  return DAYS.some((entry) => entry.id === day) ? { week, day } : undefined;
+}
+
 // Shows `week` without ever dropping an unsaved menu silently. On mobile, the
-// selected day stays the same unless `selectToday` is set.
-async function goToWeek(week, { selectToday = false } = {}) {
+// selected day stays the same unless `selectToday` is set or `day` names one.
+async function goToWeek(week, { selectToday = false, day = undefined } = {}) {
   if (changingWeek || editor.isOpen() || shopping.isOpen()) return;
   // Disabling the clicked button (a week bar button or Retry) moves focus to
   // <body>; remember it so it can be refocused afterward.
@@ -561,6 +581,7 @@ async function goToWeek(week, { selectToday = false } = {}) {
       await loadWeek(week);
     }
     if (selectToday) selectDay(todayId());
+    else if (day) selectDay(day);
     markToday(); // covers the case where the target week was already shown
   } finally {
     setChangingWeek(false);
@@ -571,7 +592,39 @@ async function goToWeek(week, { selectToday = false } = {}) {
       focused.focus();
     }
     syncHash(); // also undoes a hash edit that was cancelled or ignored
+    reloadIfDue();
   }
+}
+
+// The assistant applied changes: the week on screen loads again to show
+// them, unless a slot isn't saved or the slot editor is open, because the
+// load would replace their menus, or the shopping list is open. The next
+// week change shows the new data. During a week change, the week loads again
+// once the change ends.
+async function reloadWeek() {
+  if (changingWeek) {
+    reloadDue = true;
+    return;
+  }
+  const { week } = grid.dataset;
+  if (week === undefined || grid.hidden) return;
+  if (editor.isOpen() || shopping.isOpen()) return;
+  if (saves.unconfirmed(shownKeys()).length > 0) return;
+  setChangingWeek(true);
+  try {
+    await loadWeek(week);
+  } finally {
+    setChangingWeek(false);
+    reloadIfDue();
+  }
+}
+
+// Loads the week again when the assistant applied changes during the week
+// change that just ended.
+function reloadIfDue() {
+  if (!reloadDue) return;
+  reloadDue = false;
+  reloadWeek();
 }
 
 setUpShell();
@@ -590,11 +643,15 @@ document
   .getElementById("today")
   .addEventListener("click", () => goToWeek(weekIdOf(new Date()), { selectToday: true }));
 shoppingButton.addEventListener("click", openShoppingList);
+window.addEventListener("meals:data-changed", reloadWeek);
 window.addEventListener("hashchange", () => {
-  const week = location.hash.slice(1);
+  const place = placeInHash();
   // The week never changes behind an open dialog, or while it changes.
-  if (isWeekId(week) && !changingWeek && !editor.isOpen() && !shopping.isOpen()) goToWeek(week);
-  else syncHash();
+  if (place && !changingWeek && !editor.isOpen() && !shopping.isOpen()) {
+    goToWeek(place.week, { day: place.day });
+  } else {
+    syncHash();
+  }
 });
 leaveAlert.querySelector(".stay").addEventListener("click", () => leaveAlert.close());
 leaveAlert.querySelector(".leave").addEventListener("click", () => {
@@ -617,10 +674,13 @@ for (const link of /** @type {NodeListOf<HTMLAnchorElement>} */ (
     event.preventDefault();
     if (changingWeek || editor.isOpen() || shopping.isOpen()) return;
     setChangingWeek(true);
+    let leaving = false;
     try {
-      if (await leaveLoadedWeek("this page")) location.assign(link.href);
+      leaving = await leaveLoadedWeek("this page");
+      if (leaving) location.assign(link.href);
     } finally {
       setChangingWeek(false);
+      if (!leaving) reloadIfDue();
     }
   });
 }
@@ -637,5 +697,5 @@ document.addEventListener("visibilitychange", () => {
   else markToday(); // the day may have changed while the page was hidden
 });
 
-const hashWeek = location.hash.slice(1);
-goToWeek(isWeekId(hashWeek) ? hashWeek : weekIdOf(new Date()));
+const place = placeInHash();
+goToWeek(place?.week ?? weekIdOf(new Date()), { day: place?.day });

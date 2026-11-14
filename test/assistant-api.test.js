@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { beforeEach, describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import request from "supertest";
-import { createApp } from "../server/app.js";
+import { createApp, markAssistantEnabled } from "../server/app.js";
 import { createConversations } from "../server/assistant/conversations.js";
 import { ProviderError } from "../server/assistant/providers/errors.js";
 import { createAssistantSetup } from "../server/assistant/setup.js";
@@ -22,6 +23,7 @@ const NOON = new Date(2026, 10, 16, 12).getTime();
 const MB = 1024 * 1024;
 const UNKNOWN = "00000000-0000-4000-8000-000000000000";
 const KEY = "sk-test-0123456789";
+const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
 const onion = { id: "onion", name: "Onion", unit: "g", measures: [], archived: false };
 const soup = {
@@ -146,27 +148,33 @@ function assertJsonError(res, status, label) {
 }
 
 /**
- * Each route of a conversation, with a body for the ones that need one.
- * @type {["get" | "post" | "delete", string, object?][]}
+ * Adds to the describe block that calls it the tests that a route of a
+ * conversation answers 404 without an assistant and for an unknown
+ * conversation. `suffix` follows the conversation's ID in the path, and
+ * `body` is sent when the route needs one.
+ * @param {"get" | "post" | "delete"} method
+ * @param {string} suffix
+ * @param {object} [body]
  */
-const CONVERSATION_ROUTES = [
-  ["get", ""],
-  ["post", "/messages", { text: "Hi." }],
-  ["post", "/retry"],
-  ["post", "/apply", { revision: 0 }],
-  ["post", "/discard"],
-  ["delete", ""],
-];
+function testNotFound(method, suffix, body) {
+  const send = (app) => {
+    const req = request(app)[method](`/api/assistant/conversations/${UNKNOWN}${suffix}`);
+    return body === undefined ? req : req.send(body);
+  };
 
-/**
- * Sends the request of `route` for the conversation `id`.
- * @param {any} app
- * @param {(typeof CONVERSATION_ROUTES)[number]} route
- * @param {string} id
- */
-function send(app, [method, suffix, body], id) {
-  const req = request(app)[method](`/api/assistant/conversations/${id}${suffix}`);
-  return body === undefined ? req : req.send(body);
+  test("answers 404 without an assistant", async () => {
+    const res = await send(createApp(createStores({ dataDir: dataDir() })));
+
+    assert.equal(res.status, 404);
+    assert.deepEqual(res.body, { error: "Not found" });
+  });
+
+  test("answers 404 when the conversation is unknown", async (t) => {
+    const res = await send(setup(t).app);
+
+    assertJsonError(res, 404, "unknown conversation");
+    assert.deepEqual(res.body, { error: `Unknown conversation: ${UNKNOWN}` });
+  });
 }
 
 describe("GET /api/assistant", () => {
@@ -194,37 +202,86 @@ describe("GET /api/assistant", () => {
   });
 });
 
-describe("/api/assistant/conversations", () => {
-  const bare = () => createApp(createStores({ dataDir: dataDir() }));
+// Each page, by its path, and the file that it serves.
+const PAGES = [
+  ["/", "index.html"],
+  ["/index.html", "index.html"],
+  ["/recipes.html", "recipes.html"],
+  ["/ingredients.html", "ingredients.html"],
+];
 
-  test("answers 404 to a new conversation without an assistant", async () => {
-    const res = await request(bare()).post("/api/assistant/conversations");
+describe("markAssistantEnabled", () => {
+  test("marks a root whose start tag has other attributes", () => {
+    const page = '<!doctype html>\n<html class="app" lang="es">\n<head></head>\n</html>\n';
+
+    assert.equal(
+      markAssistantEnabled(page),
+      '<!doctype html>\n<html class="app" lang="es" data-assistant-enabled>\n<head></head>\n</html>\n',
+    );
+  });
+
+  test("marks a root whose start tag has no attributes", () => {
+    assert.equal(
+      markAssistantEnabled("<html><body></body></html>"),
+      "<html data-assistant-enabled><body></body></html>",
+    );
+  });
+});
+
+/** Checks that the root of `page`, its `<html>` start tag, has `data-assistant-enabled`. */
+function assertMarked(page) {
+  const root = page.match(/<html\b[^>]*>/)?.[0];
+  assert.match(root ?? "", /\sdata-assistant-enabled[\s>]/, `the root is ${root}`);
+}
+
+for (const [pagePath, file] of PAGES) {
+  describe(`GET ${pagePath}`, () => {
+    const page = () => readFile(path.join(PUBLIC_DIR, file), "utf8");
+
+    test("answers the page as it is while the assistant is off", async (t) => {
+      const res = await request((await setupWithSettings(t)).app).get(pagePath);
+
+      assert.equal(res.status, 200);
+      assert.match(res.headers["content-type"], /^text\/html/);
+      assert.equal(res.text, await page());
+    });
+
+    test("marks the root of the page while the assistant is on", async (t) => {
+      const res = await request(setup(t).app).get(pagePath);
+
+      assert.equal(res.status, 200);
+      assertMarked(res.text);
+    });
+
+    test("marks the root of the page once a key turns the assistant on", async (t) => {
+      const { app } = await setupWithSettings(t);
+      await request(app)
+        .put("/api/assistant/settings")
+        .send({ provider: "anthropic", model: "model-1", apiKey: KEY });
+
+      const res = await request(app).get(pagePath);
+
+      assertMarked(res.text);
+    });
+
+    test("asks the browser to check the page again before each use", async (t) => {
+      const res = await request(setup(t).app).get(pagePath);
+
+      assert.equal(res.headers["cache-control"], "no-cache");
+    });
+  });
+}
+
+describe("POST /api/assistant/conversations", () => {
+  test("answers 404 without an assistant", async () => {
+    const res = await request(createApp(createStores({ dataDir: dataDir() }))).post(
+      "/api/assistant/conversations",
+    );
 
     assert.equal(res.status, 404);
     assert.deepEqual(res.body, { error: "Not found" });
   });
 
-  for (const route of CONVERSATION_ROUTES) {
-    const [method, suffix] = route;
-    const label = `${method.toUpperCase()} .../:id${suffix}`;
-
-    test(`answers 404 to ${label} without an assistant`, async () => {
-      const res = await send(bare(), route, UNKNOWN);
-
-      assert.equal(res.status, 404);
-      assert.deepEqual(res.body, { error: "Not found" });
-    });
-
-    test(`answers 404 to ${label} when the conversation is unknown`, async (t) => {
-      const res = await send(setup(t).app, route, UNKNOWN);
-
-      assertJsonError(res, 404, label);
-      assert.deepEqual(res.body, { error: `Unknown conversation: ${UNKNOWN}` });
-    });
-  }
-});
-
-describe("POST /api/assistant/conversations", () => {
   test("answers 201 with the ID of a new conversation", async (t) => {
     const { app, assistant } = setup(t);
 
@@ -237,6 +294,8 @@ describe("POST /api/assistant/conversations", () => {
 });
 
 describe("GET /api/assistant/conversations/:id", () => {
+  testNotFound("get", "");
+
   test("returns the messages, the status, and the pending changes", async (t) => {
     const context = setup(t, [{ text: "Hello." }]);
     const id = await converse(context, { text: "Hi." });
@@ -308,6 +367,8 @@ describe("GET /api/assistant/conversations/:id", () => {
 });
 
 describe("POST /api/assistant/conversations/:id/messages", () => {
+  testNotFound("post", "/messages", { text: "Hi." });
+
   test("answers 202 while the turn still runs", async (t) => {
     const held = heldStep();
     const { app } = setup(t, [held.step]);
@@ -394,6 +455,8 @@ describe("POST /api/assistant/conversations/:id/messages", () => {
 });
 
 describe("POST /api/assistant/conversations/:id/retry", () => {
+  testNotFound("post", "/retry");
+
   test("answers 202 and runs the failed message again", async (t) => {
     const context = setup(t, [new Error("The provider is down."), { text: "Hello." }]);
     const id = await converse(context, { text: "Hi." });
@@ -411,6 +474,8 @@ describe("POST /api/assistant/conversations/:id/retry", () => {
 });
 
 describe("POST /api/assistant/conversations/:id/apply", () => {
+  testNotFound("post", "/apply", { revision: 0 });
+
   test("answers 200 with applied true and saves the pending changes", async (t) => {
     const context = setup(t, LEEK_STEPS);
     const id = await converse(context, { text: "Add leek." });
@@ -497,6 +562,8 @@ describe("POST /api/assistant/conversations/:id/apply", () => {
 });
 
 describe("POST /api/assistant/conversations/:id/discard", () => {
+  testNotFound("post", "/discard");
+
   test("answers 200 and removes the pending changes", async (t) => {
     const context = setup(t, LEEK_STEPS);
     const id = await converse(context, { text: "Add leek." });
@@ -510,6 +577,8 @@ describe("POST /api/assistant/conversations/:id/discard", () => {
 });
 
 describe("DELETE /api/assistant/conversations/:id", () => {
+  testNotFound("delete", "");
+
   test("answers 204 and ends the conversation", async (t) => {
     const { app } = setup(t);
     const id = await create(app);

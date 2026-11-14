@@ -5,6 +5,7 @@
 // every width. Each open loads the saved settings again, so the dialog never
 // shows settings that another device has replaced.
 
+import { checkAssistant, refreshAssistant } from "./assistant.js";
 import { createElement, focusIsFree, onBackdropClick } from "./dom.js";
 import { getJson, sendJson } from "./http.js";
 
@@ -184,21 +185,6 @@ function isShown(element) {
 /** Whether the requests for models `a` and `b` ask the same, and neither is null. */
 function sameRequest(a, b) {
   return a !== null && b !== null && a.provider === b.provider && a.apiKey === b.apiKey;
-}
-
-/**
- * Whether the server says that the assistant is on, or undefined when the
- * check fails. Settings opens without the answer: the family preferences and
- * the BYOK section don't depend on it.
- * @returns {Promise<boolean | undefined>}
- */
-async function assistantEnabled() {
-  try {
-    return (await getJson("/api/assistant")).enabled;
-  } catch (error) {
-    console.error("Couldn't check the assistant:", error);
-    return undefined;
-  }
 }
 
 /**
@@ -566,7 +552,9 @@ export function setUpSettings() {
       const [preferences, settings, enabled] = await Promise.all([
         getJson("/api/preferences"),
         getJson(ASSISTANT_SETTINGS_URL),
-        assistantEnabled(),
+        // Settings opens without its answer: the family preferences and the
+        // BYOK section don't depend on it.
+        checkAssistant(),
       ]);
       show(preferences.text, settings, enabled);
     } catch (error) {
@@ -630,6 +618,11 @@ export function setUpSettings() {
     const { status, body } = response;
     if (status === 200) {
       takeAssistantSettings(body);
+      // A save can turn the assistant on or off: the page shows or hides its
+      // button without a reload, and the section its hint.
+      refreshAssistant().then((enabled) => {
+        if (enabled !== undefined) parts.offHint.hidden = enabled;
+      });
       return true;
     }
     console.error("Couldn't save the assistant settings:", new Error(`HTTP ${status}`));
