@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
+import * as conversations from "../server/assistant/conversations.js";
 import * as ingredients from "../server/ingredients.js";
 import * as preferences from "../server/preferences.js";
 import * as quantities from "../server/quantities.js";
@@ -49,5 +50,11 @@ describe("server/ingredients.js", () => {
 describe("server/preferences.js", () => {
   test("has the preferences limit of the shared table", () => {
     assertLimits(preferences, "preferences");
+  });
+});
+
+describe("server/assistant/conversations.js", () => {
+  test("has the attachment limits of the shared table", () => {
+    assertLimits(conversations, "attachment");
   });
 });
