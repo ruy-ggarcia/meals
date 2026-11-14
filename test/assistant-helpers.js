@@ -95,3 +95,57 @@ export async function refusingBaseUrl() {
 export function never() {
   return new Promise(() => {});
 }
+
+/** @typedef {import("../server/assistant/providers/errors.js").Provider} Provider */
+/** @typedef {import("../server/assistant/providers/errors.js").Message} Message */
+/** @typedef {import("../server/assistant/providers/errors.js").Tool} Tool */
+/** @typedef {import("../server/assistant/providers/errors.js").ToolCall} ToolCall */
+
+/**
+ * What a step of a script answers. The text defaults to "", the tool calls
+ * to none, and the usage to zero tokens.
+ * @typedef {{ text?: string, toolCalls?: ToolCall[], usage?: { inputTokens: number, outputTokens: number } }} ScriptedAnswer
+ */
+
+/**
+ * @typedef {{ system: string, messages: Message[], tools: Tool[], signal?: AbortSignal }} ProviderRequest
+ */
+
+/**
+ * A provider that answers from a script instead of a model. Each call takes
+ * the next step, in order: an answer, an `Error` to reject with, or a
+ * function that gets the request, signal included, and returns an answer. A
+ * call beyond the script rejects with an error that says so.
+ *
+ * `calls` records a deep copy of each request without its signal, so a later
+ * change to the conversation can't change what a call sent.
+ *
+ * @param {(ScriptedAnswer | Error | ((request: ProviderRequest) => ScriptedAnswer | Promise<ScriptedAnswer>))[]} steps
+ * @returns {Provider & { calls: { system: string, messages: Message[], tools: Tool[] }[] }}
+ */
+export function scriptedProvider(steps) {
+  /** @type {{ system: string, messages: Message[], tools: Tool[] }[]} */
+  const calls = [];
+  return {
+    name: "anthropic",
+    model: "scripted",
+    calls,
+    async complete(request) {
+      const { system, messages, tools } = request;
+      calls.push(structuredClone({ system, messages, tools }));
+      const step = steps[calls.length - 1];
+      if (step === undefined) {
+        throw new Error(
+          `The script has ${steps.length} steps, but the provider got call ${calls.length}.`,
+        );
+      }
+      if (step instanceof Error) throw step;
+      const answer = typeof step === "function" ? await step(request) : step;
+      return {
+        text: answer.text ?? "",
+        toolCalls: answer.toolCalls ?? [],
+        usage: answer.usage ?? { inputTokens: 0, outputTokens: 0 },
+      };
+    },
+  };
+}
