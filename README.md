@@ -331,8 +331,16 @@ The server reads the following environment variables:
 
 | Variable   | Default  | Description                           |
 |------------|----------|---------------------------------------|
+| `ASSISTANT_API_KEY` | None | The API key of the assistant's provider. |
+| `ASSISTANT_MODEL` | None | The identifier of the model at the provider. |
+| `ASSISTANT_PROVIDER` | None | The provider of the assistant: `anthropic` or `openai`. |
 | `DATA_DIR` | `./data` | The data directory. See [Data files](#data-files). |
 | `PORT`     | `3000`   | The port that the server listens on.  |
+
+The assistant is off unless all three `ASSISTANT_` variables are set. If only
+some of them are set, or `ASSISTANT_PROVIDER` names another provider, the
+server logs `assistant not configured` with the problem, and starts with the
+assistant off. The server never logs the API key.
 
 For example, to store data in `/srv/meals` and listen on port 8080, run the
 following command:
@@ -597,11 +605,22 @@ scripts/
   meals-restore-check   # Checks that the latest backup restores.
   units-check.sh        # Verifies the systemd units with systemd-analyze.
 server/
+  assistant/
+    providers/
+      anthropic.js    # The adapter of the Anthropic Messages API.
+      errors.js       # The common shape of a provider, and its errors.
+      openai.js       # The adapter of the OpenAI Responses API.
+    config.js         # Reads the assistant's environment variables.
+    conversations.js  # Conversations in memory, their turns, and Apply.
+    instructions.js   # The system instructions of the model.
+    pending.js        # Pending changes and the data that they would save.
+    tools.js          # The tools that the model calls.
+    turn.js           # A turn: model calls and tool calls until an answer.
   app.js         # HTTP API (Express), static files, and the health check.
   errors.js      # Errors for bad input, which app.js maps to HTTP statuses.
   files.js       # JSON files and the write queue. The only module that touches disk.
   healthcheck.js # The image's health check.
-  index.js       # Startup: reads DATA_DIR and PORT, and stops on SIGINT and SIGTERM.
+  index.js       # Startup: reads the environment variables, and stops on SIGINT and SIGTERM.
   ingredients.js # The ingredient catalog: unique names, units, measures, and archiving.
   logger.js      # Logs one JSON object per line.
   names.js       # Name rules shared by recipes and ingredients.
@@ -841,3 +860,112 @@ Request body: `{ "items": [{ "recipeId": "RECIPE_ID", "servings": 1.5 }] }`
 - Each menu item has exactly the keys `recipeId` and `servings`.
 - Each `recipeId` is an existing recipe, archived or not, and appears once.
 - Each `servings` is a multiple of 0.5 from 0.5 to 99.
+
+### Check the assistant
+
+`GET /api/assistant`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "enabled": true }` when the assistant is on, and `{ "enabled": false }` when it's off. |
+
+When the assistant is off, every other route under `/api/assistant` returns
+`404`.
+
+The server keeps each conversation in memory. A conversation has the shape
+`{ "id", "status", "error", "messages", "pending" }`:
+
+- `status` is `idle`, `working` while the assistant answers, or `failed`
+  when the last message failed.
+- `error` is only present when `status` is `failed`: `limit` when the turn
+  ran for 30 tool rounds or 3 minutes, `too_long` when the conversation is
+  too long for the model, or `provider` for any other failure, such as a
+  rejected API key or no network.
+- `messages` is a list of `{ "role", "text" }`, where `role` is `user` or
+  `assistant`. A user message can also have `"attachments"`, the names of its
+  files, and `"failed": true`.
+- `pending` is the list of pending changes, each with a `target`, a `kind`
+  of `menu`, `recipe`, or `ingredient`, the names of the recipes and
+  ingredients that it uses, and a `problem` after a rejected apply.
+
+### Start a conversation
+
+`POST /api/assistant/conversations`
+
+| Status | Meaning |
+|--------|---------|
+| `201`  | The body is `{ "id": "ID" }`. When the server already keeps 20 conversations, the one with the oldest activity ends. |
+
+### Get a conversation
+
+`GET /api/assistant/conversations/ID`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is the conversation. The server doesn't log this request. |
+| `404`  | No conversation has that ID, for example because it expired after 24 hours without activity, or because the server restarted. |
+
+### Send a message
+
+`POST /api/assistant/conversations/ID/messages`
+
+Request body:
+`{ "text": "TEXT", "attachments": [{ "name": "NAME", "mediaType": "TYPE", "data": "BASE64" }], "week": "WEEK" }`,
+where `attachments` is optional and defaults to `[]`, and `week` is the week
+that the page shows, also optional. This route accepts a body of up to 30 MB;
+every other route accepts up to 100 KB.
+
+| Status | Meaning |
+|--------|---------|
+| `202`  | The assistant answers the message in the background. The body is `{}`. Get the conversation until its `status` isn't `working`. |
+| `400`  | The message breaks one of the following rules. |
+| `404`  | No conversation has that ID. |
+| `409`  | The assistant is still answering, or the pending changes are being applied. |
+
+- The message has text or at least one attachment.
+- It has at most 5 attachments, each with a name, and with `data` in
+  standard base64.
+- Each file is a PDF, a JPEG, or a PNG, as its first bytes show, of at most
+  10 MB.
+- The attachments of the conversation total at most 20 MB. A new
+  conversation frees the space.
+- `week` is a valid week identifier.
+
+### Retry a message
+
+`POST /api/assistant/conversations/ID/retry`
+
+| Status | Meaning |
+|--------|---------|
+| `202`  | The assistant answers the failed message again in the background. The body is `{}`. |
+| `404`  | No conversation has that ID. |
+| `409`  | The last message didn't fail, the assistant is still answering, or the pending changes are being applied. |
+
+### Apply the pending changes
+
+`POST /api/assistant/conversations/ID/apply`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The server saved every pending change. The body is `{ "applied": true }`. |
+| `404`  | No conversation has that ID. |
+| `409`  | The server saved nothing. If a pending change is invalid against the data as it is now, for example because someone edited its target by hand, the body is `{ "error", "problems" }`, where `problems` is a list of `{ "target", "message" }`, and the conversation keeps its pending changes. Otherwise, the assistant is still answering, or the pending changes are already being applied. |
+
+### Discard the pending changes
+
+`POST /api/assistant/conversations/ID/discard`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The server removed every pending change. The body is `{}`. |
+| `404`  | No conversation has that ID. |
+| `409`  | The assistant is still answering, or the pending changes are being applied. |
+
+### End a conversation
+
+`DELETE /api/assistant/conversations/ID`
+
+| Status | Meaning |
+|--------|---------|
+| `204`  | The conversation ended, and the server canceled its answer in progress. |
+| `404`  | No conversation has that ID. |

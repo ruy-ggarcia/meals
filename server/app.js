@@ -8,6 +8,9 @@ import { isSlot, isWeekId } from "./weeks.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
+/** The path of the read of one conversation with the assistant. */
+const CONVERSATION_PATH = /^\/api\/assistant\/conversations\/[^/]+$/;
+
 /** The path of a request, without its query string. */
 function pathOf(req) {
   return req.originalUrl.split("?")[0];
@@ -27,6 +30,9 @@ function logRequests(logger) {
       // Docker checks the health every 30 seconds, and every second while the
       // container starts. Log only the failures.
       if (path === "/api/health" && res.statusCode === 200) return;
+      // The assistant's window reads its conversation every second during a
+      // turn. Log only the failures, as for the health check.
+      if (req.method === "GET" && CONVERSATION_PATH.test(path) && res.statusCode === 200) return;
       const ms = Math.round(performance.now() - started);
       // An aborted response never got its status, so log the abort instead.
       if (!res.writableFinished) {
@@ -40,15 +46,39 @@ function logRequests(logger) {
 }
 
 /**
+ * Without `assistant`, `GET /api/assistant` says that the assistant is off,
+ * and every other assistant route answers 404.
  * @param {{ ingredients?: any, preferences?: any, recipes?: any, weeks?: any }} stores
- * @param {{ dataDir?: string, logger?: import("./logger.js").Logger, version?: string }} [options]
+ * @param {{
+ *   assistant?: ReturnType<typeof import("./assistant/conversations.js").createConversations>,
+ *   dataDir?: string,
+ *   logger?: import("./logger.js").Logger,
+ *   version?: string,
+ * }} [options]
  */
 export function createApp(
   { ingredients, preferences, recipes, weeks },
-  { dataDir, logger = silentLogger, version } = {},
+  { assistant, dataDir, logger = silentLogger, version } = {},
 ) {
   const app = express();
   app.use("/api", logRequests(logger));
+
+  // A message to the assistant carries its attachments as base64 in JSON: up
+  // to 20 MB of files, about 27 MB once encoded. Only this route accepts a
+  // body that large, so it comes before the parser of every other route,
+  // which keeps the default limit of 100 kB. A turn runs in the background,
+  // so the route answers at once, and the page reads the conversation.
+  if (assistant) {
+    app.post(
+      "/api/assistant/conversations/:id/messages",
+      express.json({ limit: "30mb" }),
+      (req, res) => {
+        assistant.send(req.params.id, req.body);
+        res.status(202).json({});
+      },
+    );
+  }
+
   app.use(express.json());
 
   // Healthy means the server can read, write, and enter the data directory.
@@ -119,6 +149,49 @@ export function createApp(
     }
     res.json(await weeks.saveSlot(week, day, meal, req.body?.items));
   });
+
+  app.get("/api/assistant", (_req, res) => {
+    res.json({ enabled: assistant !== undefined });
+  });
+
+  // The conversations raise the errors of server/errors.js, which the
+  // handler below maps, such as 404 for an unknown conversation.
+  if (assistant) {
+    app.post("/api/assistant/conversations", (_req, res) => {
+      res.status(201).json(assistant.create());
+    });
+
+    app.get("/api/assistant/conversations/:id", async (req, res) => {
+      res.json(await assistant.view(req.params.id));
+    });
+
+    app.post("/api/assistant/conversations/:id/retry", (req, res) => {
+      assistant.retry(req.params.id);
+      res.status(202).json({});
+    });
+
+    app.post("/api/assistant/conversations/:id/apply", async (req, res) => {
+      const result = await assistant.apply(req.params.id);
+      if ("problems" in result) {
+        res.status(409).json({
+          error: "The pending changes couldn't be applied.",
+          problems: result.problems,
+        });
+        return;
+      }
+      res.json(result);
+    });
+
+    app.post("/api/assistant/conversations/:id/discard", (req, res) => {
+      assistant.discard(req.params.id);
+      res.json({});
+    });
+
+    app.delete("/api/assistant/conversations/:id", (req, res) => {
+      assistant.end(req.params.id);
+      res.status(204).end();
+    });
+  }
 
   // Any other /api path: JSON 404 (the API only ever answers JSON).
   app.use("/api", (_req, res) => {

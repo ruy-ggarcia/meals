@@ -4,6 +4,11 @@ name: meals
 services:
   app:
     cap_drop: [ALL]
+    # The assistant's variables, API key included, when the file exists. Only
+    # deployer and the docker group can read it, unlike .env.
+    env_file:
+      - path: ./assistant.env
+        required: false
     image: ${MEALS_IMAGE:?MEALS_IMAGE is empty because no version is deployed}
     init: true
     ports: ["${MEALS_PORT:?MEALS_PORT must be set}:3000"]

@@ -139,6 +139,7 @@ The installer creates the following:
     data/           # The data directory, mounted at /data in the container
     scripts/        # The meals-* scripts and their shared functions
     .env            # The deployed version and its settings
+    assistant.env   # Optional: the assistant's provider, model, and API key
     compose.yaml    # The app service
   ```
 
@@ -165,6 +166,74 @@ installation, see
 
 A release updates the app, but not the host tools. When a release changes
 `deploy/` or `scripts/`, run the installer again from that release.
+
+## Turn on the assistant
+
+The assistant is off until you give the app a provider, a model, and an API
+key. The provider is Anthropic or OpenAI. The key goes in its own file,
+`/opt/server/meals/assistant.env`, which only `deployer` and the `docker`
+group can read. Don't put it in `.env`: every user of the host can read
+that file.
+
+To turn on the assistant, do the following:
+
+1. Create the file, owned by `deployer:docker` with mode `0640`, and open
+   it:
+
+   ```bash
+   sudo install -o deployer -g docker -m 0640 /dev/null /opt/server/meals/assistant.env
+   sudoedit /opt/server/meals/assistant.env
+   ```
+
+1. Enter the three variables, and save the file:
+
+   ```none
+   ASSISTANT_API_KEY=API_KEY
+   ASSISTANT_MODEL=MODEL
+   ASSISTANT_PROVIDER=PROVIDER
+   ```
+
+   Replace `API_KEY` with the key from the provider's console, `MODEL` with
+   the model's identifier at the provider, and `PROVIDER` with `anthropic`
+   or `openai`. The model must accept tools, PDF files, and images.
+1. If the host tools come from a release without the assistant, run the
+   installer of a release with it, as in
+   [Install the host tools](#install-the-host-tools). The installer brings
+   the `compose.yaml` that reads `assistant.env`.
+1. Restart the app, so that it reads the file:
+
+   ```bash
+   cd /opt/server/meals && sudo -u deployer docker compose --project-directory /opt/server/meals --file /opt/server/meals/compose.yaml up --detach
+   ```
+
+1. Check the `server started` line of the app:
+
+   ```bash
+   docker compose --project-directory /opt/server/meals logs --no-log-prefix app \
+     | jq -c 'select(.msg == "server started" or .msg == "assistant not configured")'
+   ```
+
+   The last `server started` line has `"assistant":"anthropic"` or
+   `"assistant":"openai"`. If it has `"assistant":"off"`, an `assistant not
+   configured` line before it names the problem, such as a missing variable.
+   Fix the file, and restart the app again.
+
+To turn off the assistant, delete `assistant.env`, and restart the app.
+
+Before you turn on the assistant, consider the following:
+
+- The provider receives the assistant's instructions, the family
+  preferences, the messages and their attachments, and whatever the
+  assistant reads to answer: recipes, ingredients, and menus. The app sends
+  attachments inside each request, and never stores files at the provider.
+- The API key stays in the app's environment. The app never shows it in a
+  response or writes it to a log.
+- The provider bills by use, and anyone who reaches the app can use the
+  assistant. Set a monthly spending limit in the provider's console.
+- The host needs outbound HTTPS to the provider: `api.anthropic.com` or
+  `api.openai.com`.
+- The assistant doesn't change the rule to keep the host reachable only from
+  a private network.
 
 ## Deployments
 
@@ -462,6 +531,11 @@ The `docker` commands need membership in the `docker` group, or `sudo`:
 
 The app logs a failed health check as `health check failed` with the error
 code, such as `EACCES`, and a failure to start as `server failed to start`.
+It logs a problem with the assistant variables, such as a missing one, as
+`assistant not configured` with the problem, and a message that the assistant couldn't answer as `assistant
+turn failed` with the cause, such as a rejected API key. Each answer of the
+assistant also logs one `assistant turn` line, with the provider, the model,
+the token counts, and the duration, and never the content.
 To list only the app's errors, run the following command:
 
 ```bash

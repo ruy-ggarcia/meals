@@ -151,6 +151,37 @@ export function scriptedProvider(steps) {
 }
 
 /**
+ * A step of `scriptedProvider` that holds its call until the call's signal
+ * aborts, and then rejects with the signal's reason. `called` resolves when
+ * the call starts, and `aborted` turns true when its signal aborts.
+ *
+ * @returns {{ called: Promise<void>, readonly aborted: boolean, step: (request: ProviderRequest) => Promise<never> }}
+ */
+export function heldStep() {
+  /** @type {PromiseWithResolvers<void>} */
+  const called = Promise.withResolvers();
+  let aborted = false;
+  return {
+    called: called.promise,
+    get aborted() {
+      return aborted;
+    },
+    step: ({ signal }) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => {
+            aborted = true;
+            reject(signal.reason);
+          },
+          { once: true },
+        );
+        called.resolve();
+      }),
+  };
+}
+
+/**
  * @typedef {object} Clock
  * @property {() => number} now The time in milliseconds since the epoch.
  * @property {(fn: () => void, ms: number) => any} setTimeout

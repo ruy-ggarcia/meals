@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { silentLogger } from "../server/logger.js";
 import { start } from "../server/start.js";
 import { createStores } from "../server/stores.js";
+import { heldStep, scriptedProvider } from "./assistant-helpers.js";
 import { startTestServer, useDataDir, within } from "./backend-helpers.js";
 
 const INDEX = fileURLToPath(new URL("../server/index.js", import.meta.url));
@@ -75,6 +76,14 @@ describe("start", () => {
     t.after(() => server.stop());
 
     assert.equal(server.address, "127.0.0.1");
+  });
+
+  test("turns the assistant on when it gets a provider", async (t) => {
+    const server = await startTestServer(t, dataDir(), { provider: scriptedProvider([]) });
+
+    const res = await fetch(`http://127.0.0.1:${server.port}/api/assistant`);
+
+    assert.deepEqual(await res.json(), { enabled: true });
   });
 
   test("rejects when it can't create the data directory", async (t) => {
@@ -193,6 +202,31 @@ describe("stop", () => {
     await within(post.socketClosed, "The server didn't close the keep-alive connection");
   });
 
+  test("cancels a turn that waits for the provider", async () => {
+    const held = heldStep();
+    const server = await start({
+      dataDir: dataDir(),
+      host: "127.0.0.1",
+      logger: silentLogger,
+      port: 0,
+      provider: scriptedProvider([held.step]),
+      version: "1.2.3",
+    });
+    const base = `http://127.0.0.1:${server.port}/api/assistant/conversations`;
+    const { id } = await (await fetch(base, { method: "POST" })).json();
+    const sent = await fetch(`${base}/${id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "Hi." }),
+    });
+    assert.equal(sent.status, 202);
+    await within(held.called, "The turn never called the provider");
+
+    await within(server.stop(), "stop() waited for the provider");
+
+    assert.equal(held.aborted, true, "the provider call is still running");
+  });
+
   test("rejects with the error of the server when it can't close", async () => {
     const server = await start({
       dataDir: dataDir(),
@@ -212,14 +246,24 @@ describe("stop", () => {
  * Runs `node server/index.js` in the data directory of the test, with the
  * environment variables ENV, and kills it when the test ends. `entries` holds
  * the lines of its standard output parsed as JSON, and a line that isn't JSON
- * as `{ notJson: line }`.
+ * as `{ notJson: line }`. `logged(msg)` resolves to the first entry whose
+ * message is `msg`, once the process writes it.
  * @param {import("node:test").TestContext} t
  * @param {Record<string, string>} env
  * @param {string[]} [nodeArgs] The options of `node`, before the script.
  */
 function runIndex(t, env, nodeArgs = []) {
   const child = spawn(process.execPath, [...nodeArgs, INDEX], {
-    env: { ...process.env, DATA_DIR: dataDir(), ...env },
+    // An empty variable is an unset one, so the assistant of the machine
+    // that runs the tests stays off unless a test turns it on.
+    env: {
+      ...process.env,
+      ASSISTANT_API_KEY: "",
+      ASSISTANT_MODEL: "",
+      ASSISTANT_PROVIDER: "",
+      DATA_DIR: dataDir(),
+      ...env,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(() => {
@@ -262,11 +306,26 @@ function runIndex(t, env, nodeArgs = []) {
   exited.catch(() => {});
   // The same for `first`, which rejects when the first line isn't JSON.
   first.catch(() => {});
+  /** @param {string} msg */
+  function logged(msg) {
+    return new Promise((resolve) => {
+      // Registered after the parser above, so each line is in `entries` by now.
+      const check = () => {
+        const entry = entries.find((candidate) => candidate.msg === msg);
+        if (entry === undefined) return;
+        lines.off("line", check);
+        resolve(entry);
+      };
+      lines.on("line", check);
+      check();
+    });
+  }
   return {
     child,
     entries,
     exited,
     first,
+    logged,
     get stderr() {
       return stderr;
     },
@@ -319,11 +378,61 @@ describe("server/index.js", () => {
         version: PACKAGE_VERSION,
         port: entry.port,
         dataDir: dataDir(),
+        assistant: "off",
       },
     );
     // The logged port is the one that answers.
     const health = await fetch(`http://127.0.0.1:${entry.port}/api/health`);
     assert.equal(health.status, 200);
+  });
+
+  for (const provider of ["anthropic", "openai"]) {
+    test(`turns the assistant on and logs ${provider} when it's configured`, async (t) => {
+      const server = runIndex(t, {
+        ASSISTANT_API_KEY: "sk-test-key",
+        ASSISTANT_MODEL: "model-1",
+        ASSISTANT_PROVIDER: provider,
+        PORT: "0",
+      });
+
+      const entry = await server.first;
+
+      assert.equal(entry.msg, "server started");
+      assert.equal(entry.assistant, provider);
+      const res = await fetch(`http://127.0.0.1:${entry.port}/api/assistant`);
+      assert.deepEqual(await res.json(), { enabled: true });
+    });
+  }
+
+  test("logs the problem and starts with the assistant off when it's incomplete", async (t) => {
+    const server = runIndex(t, {
+      ASSISTANT_API_KEY: "sk-test-key",
+      ASSISTANT_PROVIDER: "anthropic",
+      PORT: "0",
+    });
+    const started = await within(server.logged("server started"), "The server never started");
+
+    assert.deepEqual(
+      server.entries.map(({ level, msg, problem, assistant }) => ({
+        level,
+        msg,
+        problem,
+        assistant,
+      })),
+      [
+        {
+          level: "error",
+          msg: "assistant not configured",
+          problem: server.entries[0].problem,
+          assistant: undefined,
+        },
+        { level: "info", msg: "server started", problem: undefined, assistant: "off" },
+      ],
+    );
+    assert.match(server.entries[0].problem, /ASSISTANT_MODEL/);
+    assert.equal(server.stdout.includes("sk-test-key"), false, "the key is in the log");
+    const res = await fetch(`http://127.0.0.1:${started.port}/api/assistant`);
+    assert.deepEqual(await res.json(), { enabled: false });
   });
 
   test("registers the SIGINT and SIGTERM handlers before it logs its start", async (t) => {
