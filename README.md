@@ -978,10 +978,13 @@ The server keeps each conversation in memory. A conversation has the shape
 `POST /api/assistant/conversations/ID/messages`
 
 Request body:
-`{ "text": "TEXT", "attachments": [{ "name": "NAME", "mediaType": "TYPE", "data": "BASE64" }], "week": "WEEK" }`,
-where `attachments` is optional and defaults to `[]`, and `week` is the week
-that the page shows, also optional. This route accepts a body of up to 30 MB;
-every other route accepts up to 100 KB.
+`{ "text": "TEXT", "attachments": [{ "name": "NAME", "mediaType": "TYPE", "data": "BASE64" }], "week": "WEEK", "today": "DATE" }`,
+where `attachments` is optional and defaults to `[]`, `week` is the week
+that the page shows, also optional, and `today` is the browser's local date
+as `YYYY-MM-DD`, also optional. The assistant reads `today` as the current
+date when it's at most one day from the server's date, and the server's date
+otherwise. This route accepts a body of up to 30 MB; every other route
+accepts up to 100 KB.
 
 | Status | Meaning |
 |--------|---------|
@@ -998,6 +1001,7 @@ every other route accepts up to 100 KB.
 - The attachments of the conversation total at most 20 MB. A new
   conversation frees the space.
 - `week` is a valid week identifier.
+- `today` is a valid date as `YYYY-MM-DD`.
 
 ### Retry a message
 

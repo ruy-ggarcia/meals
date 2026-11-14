@@ -281,6 +281,7 @@ describe("POST /api/assistant/conversations/:id/messages", () => {
       { attachments: ["a.pdf", "b.pdf", "c.pdf"].map((name) => pdfFile(name, 7 * MB)) },
     ],
     ["a week that isn't a Monday", { text: "Hi.", week: "2026-11-17" }],
+    ["a today that isn't a date", { text: "Hi.", today: "11/16/2026" }],
   ];
   for (const [label, body] of BAD_MESSAGES) {
     test(`rejects ${label} with 400`, async (t) => {
