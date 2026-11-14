@@ -239,6 +239,11 @@ export async function setUpAssistant() {
   let timer;
   /** True when the page was hidden while the window waited to read again. */
   let paused = false;
+  /**
+   * True from a message or a Retry that the server accepted until a read
+   * shows the conversation: the assistant answers, whatever `view` says.
+   */
+  let answering = false;
   /** Counts the reads, so only the answer of the latest one shows. */
   let reads = 0;
   /** What the log shows: one key per message, and the state of the answer. */
@@ -270,6 +275,7 @@ export async function setUpAssistant() {
     store(SEEN_KEY, null);
     view = EMPTY;
     settling = false;
+    answering = false;
     detailsOpen = false;
   }
 
@@ -288,7 +294,8 @@ export async function setUpAssistant() {
   }
 
   // Reads the conversation and shows it, and reads it again while the
-  // assistant answers. A failed read shows nothing: the next one may work.
+  // assistant answers. A failed read shows nothing: while the assistant
+  // answers, the next one may work; otherwise, the next action reads again.
   async function read() {
     clearTimeout(timer);
     timer = undefined;
@@ -303,7 +310,7 @@ export async function setUpAssistant() {
       if (error.status === 404) {
         forgetConversation();
         render();
-      } else {
+      } else if (answering || view.status === "working") {
         readLater();
       }
       return;
@@ -311,6 +318,7 @@ export async function setUpAssistant() {
     if (current !== reads) return;
     view = next;
     settling = false;
+    answering = false;
     render();
     if (view.status === "working") readLater();
   }
@@ -506,6 +514,7 @@ export async function setUpAssistant() {
         response = await postMessage(body);
       }
       if (response.status === 202) {
+        answering = true;
         // What the user typed or attached during the upload stays for the
         // next message.
         if (field.value === typed) field.value = "";
@@ -564,7 +573,8 @@ export async function setUpAssistant() {
   async function retryTurn() {
     const response = await post("retry", "Couldn't retry");
     if (response === undefined) return;
-    if (response.status !== 202) showProblem(errorOf(response.body, "Couldn't retry. Try again."));
+    if (response.status === 202) answering = true;
+    else showProblem(errorOf(response.body, "Couldn't retry. Try again."));
     read();
   }
 

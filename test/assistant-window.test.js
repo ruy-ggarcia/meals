@@ -3,10 +3,10 @@
 // the harness.
 //
 // The window reads the conversation again a second after each answer while
-// the assistant answers, and after a failed read. A test that leaves either
-// state mocks setTimeout before the answer, so no read ever waits for real
-// time, and no timer outlives the test. After that, it waits with settle(),
-// because tick() waits on setTimeout too.
+// the assistant answers, and after a failed read during an answer. A test
+// that leaves either state mocks setTimeout before the answer, so no read
+// ever waits for real time, and no timer outlives the test. After that, it
+// waits with settle(), because tick() waits on setTimeout too.
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -615,20 +615,55 @@ describe("assistant window", () => {
     assert.equal(assistantWindow().hidden, true);
   });
 
-  test("reads again after a failed read and shows nothing", async (t) => {
+  test("reads again after a failed read while the assistant answers", async (t) => {
     await openWithAssistant(t, { stored: STORED });
     mockTimers(t);
+    server.requestFor("GET", CONVERSATION_URL).respond(200, conversation({ status: "working" }));
+    await settle();
+    t.mock.timers.tick(1000);
+    await settle();
 
     server.requestFor("GET", CONVERSATION_URL).fail();
     await settle();
     t.mock.timers.tick(1000);
     await settle();
 
-    assert.equal(readCount(), 2);
-    assert.equal(log().textContent, "");
+    assert.equal(readCount(), 3);
+    assert.equal(log().textContent, "Thinking…");
     assert.equal(problemText(), "");
     server.requestFor("GET", CONVERSATION_URL).respond(200, conversation());
     await settle();
+  });
+
+  test("reads again after a failed read that follows a sent message", async (t) => {
+    await openConversation(t, conversation());
+    assistantButton().click();
+    const message = await send("Plan next week.");
+    mockTimers(t);
+    message.respond(202, {});
+    await settle();
+
+    server.requestFor("GET", CONVERSATION_URL).fail();
+    await settle();
+    t.mock.timers.tick(1000);
+    await settle();
+
+    assert.equal(readCount(), 3);
+    server.requestFor("GET", CONVERSATION_URL).respond(200, conversation());
+    await settle();
+  });
+
+  test("stops reading after a failed read while the assistant is idle", async (t) => {
+    await openWithAssistant(t, { stored: STORED });
+    mockTimers(t);
+
+    server.requestFor("GET", CONVERSATION_URL).fail();
+    await settle();
+    t.mock.timers.tick(5000);
+    await settle();
+
+    assert.equal(readCount(), 1);
+    assert.equal(log().textContent, "");
   });
 
   test("pauses reading while the page is hidden", async (t) => {
