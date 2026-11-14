@@ -599,6 +599,20 @@ document
   .getElementById("today")
   .addEventListener("click", () => goToWeek(weekIdOf(new Date()), { selectToday: true }));
 shoppingButton.addEventListener("click", openShoppingList);
+// The assistant applied changes: the week on screen loads again to show
+// them, unless a slot isn't saved or the slot editor is open, because the
+// load would replace their menus. The next week change shows the new data.
+window.addEventListener("meals:data-changed", async () => {
+  const { week } = grid.dataset;
+  if (week === undefined || grid.hidden || changingWeek || editor.isOpen()) return;
+  if (saves.unconfirmed(shownKeys()).length > 0) return;
+  setChangingWeek(true);
+  try {
+    await loadWeek(week);
+  } finally {
+    setChangingWeek(false);
+  }
+});
 window.addEventListener("hashchange", () => {
   const week = location.hash.slice(1);
   // The week never changes behind an open dialog, or while it changes.

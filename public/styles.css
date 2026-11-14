@@ -2272,3 +2272,466 @@ select.measure-field {
   color: var(--label2);
   font-size: 13px;
 }
+
+/* ---------- Assistant ---------- */
+
+/* The round button in the lower right corner, inside the safe areas, and the
+   window that it opens. Both float above the toolbar and the sidebar, and
+   below the modal dialogs, which the browser puts in the top layer. */
+.assistant-button {
+  position: fixed;
+  z-index: 7;
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  bottom: calc(var(--safe-bottom) + 16px);
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 28px;
+  color: var(--tint);
+  transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+.assistant-button:active {
+  transform: scale(0.94);
+}
+
+/* .glass makes this rule as specific as the icon rules above it. */
+.assistant-button.glass svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* A reply that you haven't seen, or pending changes. */
+.assistant-button .mark {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--red-fill);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* Wide screens: anchored to the lower right corner, above the button, and
+   below the toolbar. */
+.assistant-window {
+  position: fixed;
+  z-index: 7;
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  bottom: calc(var(--safe-bottom) + 84px);
+  display: flex;
+  flex-direction: column;
+  width: min(400px, calc(100% - 32px));
+  height: min(640px, calc(100% - var(--safe-top) - var(--safe-bottom) - 148px));
+  border-radius: 28px;
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-ring);
+  overflow: hidden;
+  transition:
+    opacity 0.2s,
+    transform 0.2s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+
+@starting-style {
+  .assistant-window {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.assistant-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px 20px;
+}
+
+.assistant-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.assistant-header .icon-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+}
+
+/* The messages sit on solid surfaces, so their text keeps its contrast over
+   any page. */
+.assistant-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 4px 12px 12px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.message,
+.thinking,
+.turn-failure {
+  flex: none;
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.message {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 9px 13px;
+}
+
+.message.from-user {
+  align-self: flex-end;
+  background: var(--tint-fill);
+  color: #fff;
+}
+
+.message.failed {
+  box-shadow: 0 0 0 2px var(--red-fill);
+}
+
+.message-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-attachments {
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 13px;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.thinking {
+  align-self: flex-start;
+  margin: 0;
+  padding: 9px 13px;
+  color: var(--label2);
+}
+
+.turn-failure {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 14px;
+  color: var(--red);
+}
+
+.turn-failure p {
+  flex: 1;
+  margin: 0;
+}
+
+.retry-turn {
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--tint-soft);
+  color: var(--tint);
+  font-weight: 600;
+}
+
+/* The pending changes, fixed above the message field. Only the details
+   scroll, so Discard and Apply stay in view. */
+.pending-card {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  max-height: 55%;
+  margin: 0 12px 8px;
+  padding: 12px 14px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+}
+
+.pending-card > * {
+  flex: none;
+}
+
+.pending-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pending-summary,
+.pending-details,
+.pending-change-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pending-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.pending-label {
+  color: var(--label2);
+}
+
+.pending-detail {
+  font-weight: 500;
+  text-align: end;
+}
+
+.view-details {
+  align-self: flex-start;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tint);
+  font-weight: 600;
+}
+
+.pending-details {
+  flex: 0 1 auto;
+  min-height: 0;
+  border-top: 0.5px solid var(--sep);
+  overflow-y: auto;
+}
+
+.pending-change {
+  padding: 8px 0;
+}
+
+.pending-change + .pending-change {
+  border-top: 0.5px solid var(--sep);
+}
+
+.pending-change-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.pending-change-lines {
+  color: var(--label2);
+  font-size: 14px;
+}
+
+.pending-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: var(--red);
+  font-size: 14px;
+}
+
+.pending-problem .warning-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pending-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.pending-actions button {
+  flex: 1;
+  height: 44px;
+  margin: 0;
+  border: 0;
+  border-radius: 22px;
+  font-weight: 600;
+}
+
+.pending-actions .discard {
+  background: var(--fill);
+  color: var(--red);
+}
+
+.pending-actions .apply {
+  background: var(--tint-fill);
+  box-shadow: var(--tint-ring);
+  color: #fff;
+}
+
+.pending-actions button:disabled,
+.message-row button:disabled,
+.retry-turn:disabled {
+  opacity: 0.4;
+}
+
+.message-composer {
+  flex: none;
+  padding: 0 12px 12px;
+}
+
+.assistant-problem {
+  margin: 0 6px 8px;
+  color: var(--red);
+  font-size: 13px;
+}
+
+.assistant-problem:empty {
+  display: none;
+}
+
+.attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  padding-left: 14px;
+  border-radius: 22px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remove-attachment {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--label2);
+  font-size: 20px;
+}
+
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 26px;
+  background: var(--surface);
+}
+
+.message-row:focus-within {
+  box-shadow: 0 0 0 2px var(--tint);
+}
+
+.message-field {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 160px;
+  margin: 0;
+  padding: 11px 4px;
+  border: 0;
+  background: transparent;
+  /* 17 px, so iPhone doesn't zoom into the field. */
+  font-size: 17px;
+  line-height: 1.3;
+  resize: none;
+  field-sizing: content;
+}
+
+/* The row shows the focus of the field. */
+.message-field:focus-visible {
+  outline: none;
+}
+
+.message-row .icon-button {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  border: 0;
+  border-radius: 22px;
+}
+
+.message-row .attach {
+  background: transparent;
+  color: var(--label2);
+}
+
+.message-row .send {
+  background: var(--tint-fill);
+  color: #fff;
+}
+
+.message-row .icon-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* The end of the page scrolls above the button. */
+body:has(> .assistant-button) .page {
+  padding-bottom: 100px;
+}
+
+/* Phones: the button sits above the tab bar, and the window is a sheet that
+   leaves the toolbar visible. You collapse it to use the page. */
+@media (max-width: 699.98px) {
+  .assistant-button {
+    bottom: calc(max(calc(var(--safe-bottom) - 10px), 14px) + 76px);
+  }
+
+  /* The sheet covers the button: its header collapses it. */
+  .assistant-button[aria-expanded="true"] {
+    visibility: hidden;
+  }
+
+  .assistant-window {
+    top: calc(var(--safe-top) + 58px);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: auto;
+    border-radius: 38px 38px 0 0;
+  }
+
+  .message-composer {
+    padding-bottom: calc(var(--safe-bottom) + 12px);
+  }
+
+  body:has(> .assistant-button) .page {
+    padding-bottom: calc(var(--safe-bottom) + 178px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .assistant-button,
+  .assistant-window {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-button,
+  .assistant-window {
+    transition: none;
+  }
+}

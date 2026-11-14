@@ -28,7 +28,9 @@ let window;
 
 /**
  * Opens the recipe book, with `fetchOptions` for the fake server, and
- * answers its load with an empty book.
+ * answers its load with an empty book. When the test answers the assistant's
+ * checks, the page's own check at load says that the assistant is off, so
+ * the page adds no assistant window.
  *
  * @param {import("node:test").TestContext} t
  * @param {Parameters<typeof fakeFetch>[0]} [fetchOptions]
@@ -40,6 +42,9 @@ async function openRecipeBook(t, fetchOptions) {
     script: "recipes.js",
     fetch: server.fetch,
   }));
+  if (fetchOptions?.assistant === "manual") {
+    await respondTo(server, "GET", "/api/assistant", 200, { enabled: false });
+  }
   await respondTo(server, "GET", "/api/recipes", 200, { recipes: [] });
   await respondTo(server, "GET", "/api/ingredients", 200, { ingredients: [] });
 }

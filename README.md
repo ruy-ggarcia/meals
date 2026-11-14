@@ -343,6 +343,53 @@ To change the family preferences, do the following:
 
 To close **Settings** without saving, click **Cancel** or press `Escape`.
 
+## Ask the assistant
+
+The assistant is a chat that plans menus and proposes changes to recipes and
+ingredients. It saves nothing until you apply its changes. When the server
+has the assistant set up, a round button in the lower right corner of every
+page opens it. On a phone, the button sits above the tab bar. See
+[Configure the server](#configure-the-server).
+
+To ask the assistant, do the following:
+
+1. Click the round button. On a wide screen, the window opens in the lower
+   right corner, and the page behind it stays usable. On a phone, it opens
+   as a sheet.
+1. Type your message, such as `Plan next week`. On the meal plan, the
+   assistant knows which week you see.
+1. Optional: to attach files, such as a school menu, click the paper clip
+   button. You can attach up to 5 PDF, JPEG, or PNG files of up to 10 MB
+   each, and up to 20 MB in one conversation. To remove a file before you
+   send it, click the button next to its name.
+1. Press `Enter`, or click the send button with the up arrow. To add a line
+   without sending, press `Shift+Enter`.
+
+While the assistant answers, the window shows "Thinking…", and you can type
+but not send. If the answer fails, click **Retry** to ask again.
+
+The changes that the assistant proposes are pending changes. A card above the
+message field summarizes them: how many slots of each week change, and each
+recipe and ingredient to create, change, archive, or restore. To see each
+change, click **View details**. Then do one of the following:
+
+- To save every pending change, click **Apply**. The page shows the new data
+  without a reload. If someone changed a slot, a recipe, or an ingredient by
+  hand after the assistant proposed a change to it, the app saves nothing,
+  and **View details** shows the problem on that change. Tell the assistant
+  about it in your next message.
+- To drop every pending change, click **Discard**.
+
+To collapse the window, click the button with the down arrow, press `Escape`,
+or click the round button again. The conversation stays, also when you open
+another page. While the window is collapsed, a red mark on the round button
+shows a reply that you haven't seen or pending changes.
+
+To start over, click **New conversation**, the button with the plus sign. If
+the conversation has pending changes, the app asks first, because a new
+conversation loses them. A conversation also ends after 24 hours without a
+message, **Apply**, or **Discard**, and when the server restarts.
+
 ## Configure the server
 
 The server reads the following environment variables:
@@ -586,6 +633,8 @@ docs/
 e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
   app.js               # Meal plan page: grid, week changes, and saves.
+  assistant-view.js    # What the assistant's window shows: pending changes, the mark, and attachment checks.*
+  assistant.js         # The assistant's button and window: messages, pending changes, and polling.
   catalog-list.js      # List logic shared by the Recipes and Ingredients pages.
   combobox.js          # The filter-and-pick field of the editors.
   dates.js             # Date helpers.*
