@@ -78,17 +78,16 @@ export async function stubProviderServer(t, handler) {
 }
 
 /**
- * Returns the base URL of a port of `127.0.0.1` that refuses connections: a
- * server listened on it and closed before this returns.
+ * A `fetch` that rejects as Node.js's fetch does when the connection is
+ * refused: a `TypeError` whose cause is the system error ECONNREFUSED. It
+ * never opens a connection, so no other test can take its place.
  *
- * @returns {Promise<string>}
+ * @type {typeof globalThis.fetch}
  */
-export async function refusingBaseUrl() {
-  const server = http.createServer();
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(undefined)));
-  const { port } = /** @type {import("node:net").AddressInfo} */ (server.address());
-  await new Promise((resolve) => server.close(() => resolve(undefined)));
-  return `http://127.0.0.1:${port}`;
+export async function refusingFetch() {
+  throw new TypeError("fetch failed", {
+    cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }),
+  });
 }
 
 /** A promise that never settles, for a handler that holds its answer. */

@@ -2,12 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { ProviderError } from "../server/assistant/providers/errors.js";
 import { createOpenAIProvider } from "../server/assistant/providers/openai.js";
-import {
-  never,
-  refusingBaseUrl,
-  rejectsWithKind,
-  stubProviderServer,
-} from "./assistant-helpers.js";
+import { never, refusingFetch, rejectsWithKind, stubProviderServer } from "./assistant-helpers.js";
 
 const KEY = "sk-test-secret";
 const MODEL = "gpt-test";
@@ -332,7 +327,7 @@ describe("server/assistant/providers/openai.js", () => {
     const provider = createOpenAIProvider({
       apiKey: KEY,
       model: MODEL,
-      baseUrl: await refusingBaseUrl(),
+      fetch: refusingFetch,
     });
     await rejectsWithKind(
       provider.complete({ system: SYSTEM, messages: HELLO, tools: TOOLS }),
@@ -387,9 +382,7 @@ describe("server/assistant/providers/openai.js", () => {
       }),
     ];
     const providers = (await Promise.all(failures)).map(({ provider }) => provider);
-    providers.push(
-      createOpenAIProvider({ apiKey: KEY, model: MODEL, baseUrl: await refusingBaseUrl() }),
-    );
+    providers.push(createOpenAIProvider({ apiKey: KEY, model: MODEL, fetch: refusingFetch }));
     for (const provider of providers) {
       const error = await provider.complete({ system: SYSTEM, messages: HELLO, tools: TOOLS }).then(
         () => assert.fail("expected a rejection"),
@@ -421,7 +414,7 @@ describe("server/assistant/providers/openai.js", () => {
     const provider = createOpenAIProvider({
       apiKey: KEY,
       model: MODEL,
-      baseUrl: await refusingBaseUrl(),
+      fetch: refusingFetch,
     });
     const error = await rejectsWithKind(
       provider.complete({ system: SYSTEM, messages: HELLO, tools: TOOLS }),
