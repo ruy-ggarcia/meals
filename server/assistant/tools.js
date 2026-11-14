@@ -82,7 +82,7 @@ export const TOOLS = [
   },
   {
     name: "propose_ingredient",
-    description: `Proposes an ingredient to create, change, archive, or restore. Without id, it creates an ingredient and needs name and unit. With the id of an ingredient, stored or pending, it changes that ingredient with the fields that you send. To archive or restore, send only id and archived. The unit of an existing ingredient can't change, so don't send another unit for it. It returns the target, the id, and the ingredient as it would be saved. ${NOT_SAVED} ${LIMITS}`,
+    description: `Proposes an ingredient to create, change, archive, or restore. Without id, it creates an ingredient and needs name and unit. With the id of an ingredient, stored or pending, it changes that ingredient with the fields that you send. The fields that you send merge into a pending change of the same ingredient, so send only what changes. To archive or restore, send only id and archived. The unit of an existing ingredient can't change, so don't send another unit for it. It returns the target, the id, and the ingredient as it would be saved. ${NOT_SAVED} ${LIMITS}`,
     parameters: {
       type: "object",
       properties: {
@@ -145,7 +145,7 @@ export const TOOLS = [
   },
   {
     name: "propose_recipe",
-    description: `Proposes a recipe to create, change, archive, or restore. Without id, it creates a recipe and needs name. With the id of a recipe, stored or pending, it changes that recipe with the fields that you send. To archive or restore, send only id and archived. A quantity is what one serving needs. Its ingredients must exist in the catalog, stored or pending. It returns the target, the id, and the recipe as it would be saved. ${NOT_SAVED} ${LIMITS}`,
+    description: `Proposes a recipe to create, change, archive, or restore. Without id, it creates a recipe and needs name. With the id of a recipe, stored or pending, it changes that recipe with the fields that you send. The fields that you send merge into a pending change of the same recipe, so send only what changes. To archive or restore, send only id and archived. A quantity is what one serving needs. Its ingredients must exist in the catalog, stored or pending. It returns the target, the id, and the recipe as it would be saved. ${NOT_SAVED} ${LIMITS}`,
     parameters: {
       type: "object",
       properties: {
@@ -296,17 +296,17 @@ function fieldsOf(input) {
 }
 
 // What the proposal of `kind` stages: a create with the fields, or a change
-// of the entry `id`. The fields of a pending create merge with the ones sent,
-// because staging a pending create replaces it, and a model that renames it
-// sends only the name.
+// of the entry `id`. The fields sent merge into the fields or the changes of
+// a pending change of the same entry, because staging it again replaces it,
+// and a model that renames it sends only the name.
 function proposalOf(kind, input, pending) {
   const sent = fieldsOf(input);
   if (input.id === undefined) return { kind, fields: sent };
-  const create = pending.find(
-    (change) => change.kind === kind && change.id === input.id && change.action === "create",
-  );
-  if (create) return { kind, id: input.id, fields: { ...create.fields, ...sent } };
-  return { kind, id: input.id, changes: sent };
+  const earlier = pending.find((change) => change.kind === kind && change.id === input.id);
+  if (earlier?.action === "create") {
+    return { kind, id: input.id, fields: { ...earlier.fields, ...sent } };
+  }
+  return { kind, id: input.id, changes: { ...earlier?.changes, ...sent } };
 }
 
 async function proposeEntry(kind, { stores, pending }, input) {

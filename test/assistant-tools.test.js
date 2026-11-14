@@ -175,6 +175,44 @@ describe("runTool", () => {
     );
   });
 
+  test("keeps the earlier changes of a pending recipe update on a rename", async () => {
+    const changed = await succeed(
+      "propose_recipe",
+      { id: "soup", ingredients: [{ ingredientId: "onion", quantity: 80 }] },
+      { stores: stores(), pending: [] },
+    );
+
+    const renamed = await succeed(
+      "propose_recipe",
+      { id: "soup", name: "Onion soup" },
+      { stores: stores(), pending: changed.pending },
+    );
+
+    assert.deepEqual(
+      [renamed.output.recipe.name, renamed.output.recipe.ingredients],
+      ["Onion soup", [{ ingredientId: "onion", quantity: 80 }]],
+    );
+  });
+
+  test("keeps the earlier changes of a pending ingredient update on a rename", async () => {
+    const changed = await succeed(
+      "propose_ingredient",
+      { id: "onion", measures: [{ name: "medium", amount: 150 }] },
+      { stores: stores(), pending: [] },
+    );
+
+    const renamed = await succeed(
+      "propose_ingredient",
+      { id: "onion", name: "Red onion" },
+      { stores: stores(), pending: changed.pending },
+    );
+
+    assert.deepEqual(
+      [renamed.output.ingredient.name, renamed.output.ingredient.measures],
+      ["Red onion", changed.output.ingredient.measures],
+    );
+  });
+
   test("never puts the pending list in the output of a proposal", async () => {
     const { output } = await succeed(
       "propose_ingredient",
