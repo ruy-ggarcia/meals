@@ -346,11 +346,12 @@ The image sets `DATA_DIR` to `/data` and `PORT` to `3000`. See
 
 ## Data files
 
-The meal plan, the recipe book, and the ingredient catalog live in the
-`v2/` directory inside the data directory, which is `data/` unless you set
-`DATA_DIR`:
+The meal plan, the recipe book, the ingredient catalog, and the family
+preferences live in the `v2/` directory inside the data directory, which is
+`data/` unless you set `DATA_DIR`:
 
 - `v2/ingredients.json` holds the ingredient catalog.
+- `v2/preferences.json` holds the family preferences, as `{ "text": "..." }`.
 - `v2/recipes.json` holds the recipe book.
 - `v2/weeks/` holds one file per week, named after the week's Monday, for
   example `v2/weeks/2026-09-21.json`. The server creates a week's file on
@@ -361,8 +362,8 @@ Git ignores the `data/` directory.
 On the host, backups are automatic. See
 [Backups](docs/deployment.md#backups).
 
-If a week file, `recipes.json`, or `ingredients.json` contains invalid JSON,
-the app shows an error, such as `Couldn't load the meal plan.`, and doesn't
+If a week file, `preferences.json`, `recipes.json`, or `ingredients.json`
+contains invalid JSON, the app shows an error, such as `Couldn't load the meal plan.`, and doesn't
 overwrite the file. To recover, do the following:
 
 1. Restore a backup copy of the file, or fix the JSON by hand.
@@ -604,6 +605,7 @@ server/
   ingredients.js # The ingredient catalog: unique names, units, measures, and archiving.
   logger.js      # Logs one JSON object per line.
   names.js       # Name rules shared by recipes and ingredients.
+  preferences.js # The family preferences: one free text.
   quantities.js  # Quantity limits shared by recipes and measures.
   recipes.js     # The recipe book: unique names, ingredients, and archiving.
   shapes.js      # Shape checks shared by the stores.
@@ -794,6 +796,25 @@ The server returns `400`, and changes nothing, in the following cases:
 - A recipe uses the old unit, `measureName` matches no measure, and the
   ingredient already has 20 measures.
 - Any converted amount, before rounding, falls outside 0.01 to 10000.
+
+### Get the family preferences
+
+`GET /api/preferences`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "text": "TEXT" }`. `TEXT` is empty until the first save. |
+
+### Save the family preferences
+
+`PUT /api/preferences`
+
+Request body: `{ "text": "TEXT" }`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The text was saved. The body is `{ "text": "TEXT" }`. |
+| `400`  | The body isn't exactly `{ "text": string }`, or the text has more than 10,000 characters. |
 
 ### Get a week
 
