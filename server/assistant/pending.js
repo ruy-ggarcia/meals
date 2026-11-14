@@ -87,6 +87,18 @@ export function targetOf(change) {
   return `${change.kind}:${change.id}`;
 }
 
+/**
+ * How the user interface names the slot of `day` and `meal`, such as
+ * "Tuesday dinner", or `undefined` when either is unknown.
+ * @param {string} day
+ * @param {string} meal
+ * @returns {string | undefined}
+ */
+export function slotName(day, meal) {
+  if (!Object.hasOwn(DAY_NAMES, day) || !Object.hasOwn(MEAL_NAMES, meal)) return undefined;
+  return `${DAY_NAMES[day]} ${MEAL_NAMES[meal]}`;
+}
+
 function isStoreError(error) {
   return STORE_ERRORS.some((type) => error instanceof type);
 }
@@ -173,9 +185,7 @@ function applyRecipe(state, all, known, change) {
 function applyMenu(state, weeks, recipeIds, change) {
   const { week, day, meal } = change;
   if (!isDeepStrictEqual(storedItems(state, week, day, meal), change.base)) {
-    throw new ConflictError(
-      `${DAY_NAMES[day]} ${MEAL_NAMES[meal]} changed after the assistant proposed this.`,
-    );
+    throw new ConflictError(`${slotName(day, meal)} changed after the assistant proposed this.`);
   }
   return { ...weeks, [week]: withSlot(weeks[week], day, meal, change.items, recipeIds) };
 }
