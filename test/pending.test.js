@@ -177,7 +177,7 @@ describe("stage", () => {
       id: `soup-${index}`,
       name: `Soup ${index}`,
     }));
-    const state = stateOf({ recipes });
+    const state = stateOf({ recipes, weeks: { [WEEK]: blankWeek() } });
     const items = recipes.map((recipe) => ({ recipeId: recipe.id, servings: 1 }));
 
     assert.throws(
@@ -187,7 +187,7 @@ describe("stage", () => {
   });
 
   test("rejects a menu item with 0.25 servings", () => {
-    const state = stateOf({ recipes: [soup] });
+    const state = stateOf({ recipes: [soup], weeks: { [WEEK]: blankWeek() } });
     const items = [{ recipeId: "soup", servings: 0.25 }];
 
     assert.throws(
@@ -317,6 +317,15 @@ describe("nextState", () => {
     assert.deepEqual(result.state.weeks[WEEK].tue.dinner.items, items);
   });
 
+  test("throws RangeError when a menu names a week that the state doesn't hold", () => {
+    const changes = [{ kind: "menu", week: WEEK, day: "tue", meal: "dinner", items: [], base: [] }];
+
+    assert.throws(() => nextState(stateOf(), changes), {
+      name: "RangeError",
+      message: `Week ${WEEK} isn't loaded.`,
+    });
+  });
+
   test("skips a change that breaks a rule and applies the rest", () => {
     const changes = [
       { kind: "recipe", action: "create", id: "stew", fields: { name: "Pumpkin Soup" } },
@@ -367,7 +376,10 @@ describe("withdraw", () => {
 
 describe("weeksOf", () => {
   test("lists each week that the menus name once, from the earliest", () => {
-    const state = stateOf({ recipes: [soup] });
+    const state = stateOf({
+      recipes: [soup],
+      weeks: { [WEEK]: blankWeek(), [NEXT_WEEK]: blankWeek() },
+    });
     const items = [{ recipeId: "soup", servings: 1 }];
     const changes = staged(
       state,

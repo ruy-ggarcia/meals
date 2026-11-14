@@ -103,10 +103,13 @@ function isStoreError(error) {
   return STORE_ERRORS.some((type) => error instanceof type);
 }
 
-// The stored items of the slot, or an empty list when the week or the slot is
-// missing.
+// The stored items of the slot, or an empty list when the slot is missing.
+// A week that nobody planned is still in `state.weeks`, so a missing one means
+// that the caller didn't load it: reading it as empty would let Apply report
+// a week as saved without writing it.
 function storedItems(state, week, day, meal) {
-  return state.weeks[week]?.[day]?.[meal]?.items ?? [];
+  if (state.weeks[week] === undefined) throw new RangeError(`Week ${week} isn't loaded.`);
+  return state.weeks[week][day]?.[meal]?.items ?? [];
 }
 
 // Throws when the target of an update, one of `stored`, changed after the
