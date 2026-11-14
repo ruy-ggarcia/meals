@@ -394,13 +394,13 @@ message, **Apply**, or **Discard**, and when the server restarts.
 
 The server reads the following environment variables:
 
-| Variable   | Default  | Description                           |
-|------------|----------|---------------------------------------|
-| `ASSISTANT_API_KEY` | None | The API key of the assistant's provider. |
-| `ASSISTANT_MODEL` | None | The identifier of the model at the provider. |
-| `ASSISTANT_PROVIDER` | None | The provider of the assistant: `anthropic` or `openai`. |
-| `DATA_DIR` | `./data` | The data directory. See [Data files](#data-files). |
-| `PORT`     | `3000`   | The port that the server listens on.  |
+| Variable             | Default  | Description                                             |
+|----------------------|----------|---------------------------------------------------------|
+| `ASSISTANT_API_KEY`  | None     | The API key of the assistant's provider.                |
+| `ASSISTANT_MODEL`    | None     | The identifier of the model at the provider.            |
+| `ASSISTANT_PROVIDER` | None     | The provider of the assistant: `anthropic` or `openai`. |
+| `DATA_DIR`           | `./data` | The data directory. See [Data files](#data-files).      |
+| `PORT`               | `3000`   | The port that the server listens on.                    |
 
 The assistant is off unless all three `ASSISTANT_` variables are set. If only
 some of them are set, or `ASSISTANT_PROVIDER` names another provider, the
@@ -971,7 +971,7 @@ The server keeps each conversation in memory. A conversation has the shape
 
 | Status | Meaning |
 |--------|---------|
-| `200`  | The body is the conversation. The server doesn't log this request. |
+| `200`  | The body is the conversation. The server doesn't log a successful request. |
 | `404`  | No conversation has that ID, for example because it expired after 24 hours without activity, or because the server restarted. |
 
 ### Send a message

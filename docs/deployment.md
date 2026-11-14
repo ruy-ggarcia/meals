@@ -104,9 +104,10 @@ the next version.
 
 ## Install the host tools
 
-The host needs Docker Engine with the Compose plugin, `curl`, `flock`,
-`gzip`, `jq`, and `tar`. On Ubuntu, usually only `jq` is missing. To install
-it, run `sudo apt install jq`.
+The host needs Docker Engine with the Compose plugin 2.24 or later, `curl`,
+`flock`, `gzip`, `jq`, and `tar`. On Ubuntu, usually only `jq` is missing. To
+install it, run `sudo apt install jq`. To see the version of the Compose
+plugin, run `docker compose version`.
 
 To install the host tools, or to update them to a release, do the
 following:
@@ -541,7 +542,9 @@ code, such as `EACCES`, and a failure to start as `server failed to start`.
 It logs a problem with the assistant variables, such as a missing one, as
 `assistant not configured` with the problem, and a message that the
 assistant couldn't answer as `assistant turn failed` with the cause, such as
-a rejected API key. Each answer of the assistant also logs one
+a rejected API key. A tool of the assistant that fails on the server, for
+example because it can't read a data file, logs `assistant tool failed` with
+the tool and the error. Each answer of the assistant also logs one
 `assistant turn` line, with the provider, the model, the token counts, and
 the duration, and never the content.
 To list only the app's errors, run the following command:
