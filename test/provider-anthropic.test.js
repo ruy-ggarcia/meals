@@ -175,6 +175,19 @@ describe("server/assistant/providers/anthropic.js", () => {
     ]);
   });
 
+  test("leaves out an assistant message without text or tool calls", async (t) => {
+    const { provider, requests } = await useStub(t);
+    await provider.complete({
+      system: SYSTEM,
+      tools: TOOLS,
+      messages: [...HELLO, { role: "assistant", text: "", toolCalls: [] }, ...HELLO],
+    });
+    assert.deepEqual(
+      requests[0].body.messages.map((message) => message.role),
+      ["user", "user"],
+    );
+  });
+
   test("leaves out the text block of a message without text", async (t) => {
     const { provider, requests } = await useStub(t);
     const pdf = { name: "menu.pdf", mediaType: "application/pdf", data: "JVBERi0xLjQ=" };
@@ -290,6 +303,15 @@ describe("server/assistant/providers/anthropic.js", () => {
     );
   });
 
+  test("rejects with other when the model declines to answer", async (t) => {
+    const { provider } = await useStub(t, { body: { ...ANSWER, stop_reason: "refusal" } });
+    const error = await rejectsWithKind(
+      provider.complete({ system: SYSTEM, messages: HELLO, tools: TOOLS }),
+      "other",
+    );
+    assert.equal(error.message, "The model declined to answer.");
+  });
+
   test("rejects with other when the output limit cuts the answer", async (t) => {
     const { provider } = await useStub(t, { body: { ...ANSWER, stop_reason: "max_tokens" } });
     await rejectsWithKind(
@@ -378,5 +400,46 @@ describe("server/assistant/providers/anthropic.js", () => {
       assert.ok(!error.message.includes(KEY), error.message);
       assert.ok(!error.stack.includes(KEY), error.stack);
     }
+  });
+
+  test("never puts a key with a control character in an error message", async (t) => {
+    // fetch rejects such a header value with an error that quotes it.
+    for (const apiKey of ["sk-test\nsecret", "sk-test\u0000secret"]) {
+      const { baseUrl } = await stubProviderServer(t, () => ({ body: ANSWER }));
+      const provider = createAnthropicProvider({ apiKey, model: MODEL, baseUrl });
+      const error = await rejectsWithKind(
+        provider.complete({ system: SYSTEM, messages: HELLO, tools: TOOLS }),
+        "network",
+      );
+      assert.ok(!error.message.includes(apiKey), error.message);
+      assert.ok(!error.stack.includes(apiKey), error.stack);
+    }
+  });
+
+  test("names only the error code in a network error", async () => {
+    const provider = createAnthropicProvider({
+      apiKey: KEY,
+      model: MODEL,
+      baseUrl: await refusingBaseUrl(),
+    });
+    const error = await rejectsWithKind(
+      provider.complete({ system: SYSTEM, messages: HELLO, tools: TOOLS }),
+      "network",
+    );
+    assert.equal(error.message, "Network error: ECONNREFUSED");
+  });
+
+  test("keeps the provider's message whole when the key is empty", async (t) => {
+    const message = "messages: text content blocks must be non-empty";
+    const { baseUrl } = await stubProviderServer(t, () => ({
+      status: 400,
+      body: apiError("invalid_request_error", message),
+    }));
+    const provider = createAnthropicProvider({ apiKey: "", model: MODEL, baseUrl });
+    const error = await rejectsWithKind(
+      provider.complete({ system: SYSTEM, messages: HELLO, tools: TOOLS }),
+      "other",
+    );
+    assert.equal(error.message, message);
   });
 });

@@ -58,7 +58,7 @@ export function createAnthropicProvider({
             description,
             input_schema: parameters,
           })),
-          messages: messages.map(toApiMessage),
+          messages: messages.flatMap(toApiMessages),
         },
         signal,
         timeoutMs,
@@ -86,15 +86,18 @@ function isTooLong(status, error) {
 }
 
 /**
+ * A message becomes one message of the API, or none for an assistant message
+ * without text or tool calls, whose empty content the API rejects.
+ *
  * @param {Message} message
  */
-function toApiMessage(message) {
+function toApiMessages(message) {
   if (message.role === "user") {
     /** @type {object[]} */
     const content = message.attachments.map(toApiAttachment);
     // The API rejects an empty text block.
     if (message.text !== "") content.push({ type: "text", text: message.text });
-    return { role: "user", content };
+    return [{ role: "user", content }];
   }
   if (message.role === "assistant") {
     const content = [];
@@ -104,17 +107,19 @@ function toApiMessage(message) {
       // empty one, and its result already holds the error.
       content.push({ type: "tool_use", id: call.id, name: call.name, input: call.input ?? {} });
     }
-    return { role: "assistant", content };
+    return content.length === 0 ? [] : [{ role: "assistant", content }];
   }
-  return {
-    role: "user",
-    content: message.results.map((result) => ({
-      type: "tool_result",
-      tool_use_id: result.id,
-      content: result.output,
-      is_error: result.isError,
-    })),
-  };
+  return [
+    {
+      role: "user",
+      content: message.results.map((result) => ({
+        type: "tool_result",
+        tool_use_id: result.id,
+        content: result.output,
+        is_error: result.isError,
+      })),
+    },
+  ];
 }
 
 /**
@@ -133,6 +138,9 @@ function toApiAttachment({ mediaType, data }) {
  * @returns {Answer}
  */
 function fromApiAnswer(answer) {
+  if (answer.stop_reason === "refusal") {
+    throw new ProviderError("other", "The model declined to answer.");
+  }
   if (answer.stop_reason === "max_tokens") {
     throw new ProviderError("other", "The answer reached the output limit");
   }

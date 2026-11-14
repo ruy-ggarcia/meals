@@ -69,7 +69,8 @@ function isTooLong(status, error) {
 }
 
 /**
- * A message becomes one or more items of the input.
+ * A message becomes one or more items of the input, or none for an
+ * assistant message without text or tool calls.
  *
  * @param {Message} message
  */
@@ -129,9 +130,13 @@ function fromApiAnswer(answer) {
     throw new ProviderError("other", `The answer is ${answer.status}: ${reason}`);
   }
   const output = Array.isArray(answer.output) ? answer.output : [];
-  const text = output
+  const parts = output
     .filter((item) => item.type === "message")
-    .flatMap((item) => item.content ?? [])
+    .flatMap((item) => item.content ?? []);
+  if (parts.some((part) => part.type === "refusal")) {
+    throw new ProviderError("other", "The model declined to answer.");
+  }
+  const text = parts
     .filter((part) => part.type === "output_text" && part.text !== "")
     .map((part) => part.text)
     .join("\n\n");

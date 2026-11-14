@@ -112,9 +112,10 @@ export async function postJson({
     if (timeout.aborted) {
       throw new ProviderError("timeout", `No answer within ${timeoutMs} ms`);
     }
-    // fetch wraps the system error, such as ECONNREFUSED, in its cause.
-    const cause = error?.cause ?? error;
-    throw new ProviderError("network", `Network error: ${cause?.message ?? cause}`);
+    // Only the code of the system error, such as ECONNREFUSED: the message of
+    // an error of fetch can quote a header, and so the key.
+    const code = errorCode(error);
+    throw new ProviderError("network", code ? `Network error: ${code}` : "Network error");
   }
   const answer = parseJson(text);
   if (status < 200 || status > 299) {
@@ -122,7 +123,7 @@ export async function postJson({
     const providerMessage = answer?.error?.message;
     const message =
       kind !== "auth" && typeof providerMessage === "string" && providerMessage !== ""
-        ? providerMessage.replaceAll(apiKey, "[key]")
+        ? withoutKey(providerMessage, apiKey)
         : `HTTP ${status}`;
     throw new ProviderError(kind, message);
   }
@@ -144,6 +145,27 @@ function kindOfStatus(status, error, isTooLong) {
   if (status >= 500) return "overloaded";
   if (isTooLong(status, error)) return "too_long";
   return "other";
+}
+
+/**
+ * Returns `message` with every copy of `apiKey` replaced. An empty key
+ * leaves it as it is, since it would match between every two characters.
+ */
+function withoutKey(message, apiKey) {
+  return apiKey ? message.replaceAll(apiKey, "[key]") : message;
+}
+
+/**
+ * Returns the code of the system error behind a failure of fetch, such as
+ * ECONNREFUSED, or undefined when it has none. fetch wraps the system error
+ * in its cause, and a connection that tried several addresses wraps one per
+ * address in an AggregateError.
+ */
+function errorCode(error) {
+  const cause = error?.cause ?? error;
+  if (typeof cause?.code === "string") return cause.code;
+  const first = cause instanceof AggregateError ? cause.errors[0] : undefined;
+  return typeof first?.code === "string" ? first.code : undefined;
 }
 
 /** Returns the value of the JSON `text`, or undefined if it isn't JSON. */
