@@ -174,8 +174,8 @@ The assistant is off until you give the app a provider, a model, and an API
 key. The provider is Anthropic or OpenAI. The model must accept tools, PDF
 files, and images.
 
-You can set up the assistant in the app, in **Settings**, or on the host, in
-`/opt/server/meals/assistant.env`., in `/opt/server/meals/assistant.env`.
+You can set up the assistant in the app, in the **BYOK** section of
+**Settings**, or on the host, in `/opt/server/meals/assistant.env`.
 
 In **Settings**, a change applies at once, without a restart. The app keeps
 the key in plain text in `v2/assistant.json` in the data directory. It

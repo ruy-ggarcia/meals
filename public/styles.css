@@ -114,7 +114,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   color: inherit;
   font: inherit;
   letter-spacing: inherit;
@@ -331,10 +332,32 @@ svg {
   padding: calc(var(--safe-top) + 12px) 16px 0 12px;
   /* Only the controls take clicks: the page scrolls under the gaps. */
   pointer-events: none;
+  container: toolbar / inline-size;
 }
 
 .toolbar > * {
   pointer-events: auto;
+}
+
+/* On a wide screen, a toolbar narrower than a content of 900 px, less its
+   padding, such as beside the sidebar on an iPad upright, shows Shopping
+   list as its icon only, as phones do. */
+@media (min-width: 700px) {
+  @container toolbar (width < 872px) {
+    #shopping-list {
+      width: 40px;
+      padding: 0;
+    }
+
+    #shopping-list .button-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
 }
 
 /* The page fades and blurs under the toolbar. */
@@ -609,25 +632,12 @@ svg {
     border-radius: 22px;
   }
 
-  /* Today goes to the right, next to the shopping list. */
-  #today {
-    margin-left: auto;
-  }
-
   .page {
     padding: calc(var(--safe-top) + 58px) 16px calc(var(--safe-bottom) + 110px);
   }
 }
 
 /* ---------- Meal plan ---------- */
-
-.week-short {
-  display: none;
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 
 /* The save summary: a pill that says the week is saving or saved, or a
    Retry button for the slots that weren't saved. */
@@ -878,8 +888,9 @@ svg {
 
 /* Wide screens: the week as a grid, one row per meal under its name. */
 @media (min-width: 700px) {
+  /* The week range shortens with an ellipsis when the toolbar is crowded. */
   .week-bar {
-    flex: none;
+    flex: 0 1 auto;
   }
 
   .toolbar > .save-summary {
@@ -1075,10 +1086,6 @@ svg {
 @media (max-width: 699.98px) {
   .week-switcher {
     padding: 0;
-  }
-
-  .week-short {
-    display: block;
   }
 
   .toolbar > .save-summary {
@@ -2180,4 +2187,225 @@ select.measure-field {
 
 .archive:disabled {
   opacity: 0.4;
+}
+
+/* ---------- Settings ---------- */
+
+/* Why Settings didn't open: a row in the page's content, like the page's own
+   load errors. */
+.settings-message {
+  max-width: 720px;
+  margin: 14px auto;
+  padding: 12px 16px;
+  border-radius: var(--card-radius);
+  background: var(--surface);
+  color: var(--red);
+  /* Scrolled into view, it stops below the toolbar, where the page starts. */
+  scroll-margin-top: calc(var(--safe-top) + 68px);
+}
+
+.settings-message:empty {
+  display: none;
+}
+
+/* On wide screens, the dialog is as tall as the screen allows, up to a
+   limit, so the field has room above the BYOK section. On phones, the sheet
+   already fills the screen. */
+@media (min-width: 700px) {
+  .settings-dialog {
+    height: min(680px, calc(100% - var(--safe-top) - 80px));
+  }
+}
+
+/* The Assistant section, and in it the card and its field, fill the height
+   that the BYOK section leaves. On a short screen, the sheet scrolls
+   instead. */
+.assistant-section {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.assistant-section > * {
+  flex-shrink: 0;
+}
+
+.assistant-section > .section-title:first-child {
+  padding-top: 10px;
+}
+
+/* The heading of a section with a note at its trailing side, which wraps
+   below it when the sheet is narrow. */
+.section-heading {
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+
+.section-heading > * {
+  margin: 0;
+  font: inherit;
+}
+
+.section-heading > .section-note {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.preferences-card {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+}
+
+.preferences-field {
+  flex: 1;
+  width: 100%;
+  min-height: 160px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  font-size: 17px;
+  line-height: 1.35;
+  resize: none;
+}
+
+/* Short screens, such as a phone in landscape: the field is shorter, so the
+   count and the hint below it stay in view. */
+@media (max-height: 500px) {
+  .preferences-field {
+    min-height: 96px;
+  }
+}
+
+/* The card clips what overflows it, so the ring goes inside. */
+.preferences-field:focus-visible {
+  outline-offset: -2px;
+}
+
+.preferences-field:disabled {
+  opacity: 0.4;
+}
+
+.field-hint {
+  margin: 0;
+  padding: 7px 6px 0;
+  color: var(--label2);
+  font-size: 13px;
+}
+
+/* An empty live region stays in the accessibility tree, so screen readers
+   announce the count that it gets. It takes no space. */
+.characters-left:empty {
+  padding: 0;
+}
+
+/* A label above each control of Settings, as small as the hints, so the
+   field of the family preferences keeps most of the sheet. */
+.field-label {
+  display: block;
+  margin: 0;
+  padding: 10px 6px 6px;
+  color: var(--label2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.provider-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.name-field:disabled {
+  opacity: 0.4;
+}
+
+/* The line about the saved key, with its buttons at the trailing side, which
+   wrap below it when the sheet is narrow. */
+.saved-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  min-height: 52px;
+  padding: 6px 6px 6px 16px;
+}
+
+.key-status {
+  margin: 0;
+  font-size: 16px;
+}
+
+.key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.key-action {
+  height: 40px;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--tint);
+  font-weight: 600;
+}
+
+.remove-key {
+  color: var(--red);
+}
+
+.key-action:disabled {
+  opacity: 0.4;
+}
+
+/* What the check of the key found, with Check Again at the trailing side
+   after a failure. */
+.model-check {
+  display: flex;
+  align-items: center;
+  gap: 0 8px;
+}
+
+.model-check .field-message {
+  flex: 1;
+}
+
+.check-again {
+  margin-left: auto;
+}
+
+/* The provider and the model that the server sets, read-only. */
+.settings-summary {
+  margin: 0;
+}
+
+.summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 14px 16px;
+}
+
+.summary-row + .summary-row {
+  border-top: 0.5px solid var(--sep);
+}
+
+.summary-row dt {
+  flex: none;
+}
+
+.summary-row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--label2);
+  overflow-wrap: anywhere;
+  text-align: right;
 }

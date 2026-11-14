@@ -206,14 +206,13 @@ describe("meal plan", () => {
     ]);
   });
 
-  test("shows the week range in the toolbar and a short range on phones", async (t) => {
+  test("shows the week range in the toolbar", async (t) => {
     await openWeek(t, { week: "2026-09-28" });
 
     assert.equal(
       plain(page.document.getElementById("week-range").textContent),
       "Sep 28 – Oct 4, 2026",
     );
-    assert.equal(page.document.getElementById("week-short").textContent, "Sep 28 – Oct 4");
   });
 
   test("names the selected day and its date in the day heading", async (t) => {

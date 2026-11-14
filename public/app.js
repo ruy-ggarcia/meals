@@ -8,7 +8,6 @@ import {
   formatDayDate,
   formatFullDate,
   formatLongDate,
-  formatShortWeekRange,
   formatWeekRange,
   isWeekId,
   weekIdOf,
@@ -79,7 +78,6 @@ const loadError = document.getElementById("load-error");
 const retryLoadButton = document.getElementById("retry-load");
 const weekBar = document.getElementById("week-bar");
 const weekRange = document.getElementById("week-range");
-const weekShort = document.getElementById("week-short");
 const saveSummaries = document.querySelectorAll(".save-summary");
 const saveAnnouncement = document.getElementById("save-announcement");
 const leaveAlert = /** @type {HTMLDialogElement} */ (document.getElementById("leave-alert"));
@@ -560,7 +558,6 @@ async function goToWeek(week, { selectToday = false } = {}) {
       requestedWeek = week;
       syncHash();
       weekRange.textContent = formatWeekRange(week);
-      weekShort.textContent = formatShortWeekRange(week);
       await loadWeek(week);
     }
     if (selectToday) selectDay(todayId());

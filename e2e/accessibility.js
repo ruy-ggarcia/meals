@@ -142,6 +142,16 @@ export const STATES = [
       await expect(ingredientEditorOf(page, "Edit ingredient")).toBeVisible();
     },
   },
+  {
+    title: "settings",
+    role: "dialog",
+    async open({ page }) {
+      await page.goto("/recipes.html");
+      await expect(page.getByRole("button", { name: "Edit Omelette", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+    },
+  },
 ];
 
 /**

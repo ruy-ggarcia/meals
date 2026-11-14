@@ -13,7 +13,6 @@ const {
   formatDayDate,
   formatFullDate,
   formatLongDate,
-  formatShortWeekRange,
   formatWeekRange,
   isWeekId,
   weekIdOf,
@@ -111,14 +110,6 @@ describe("formatWeekRange", () => {
     assert.equal(plain(formatWeekRange("2026-09-21")), "Sep 21 – 27, 2026");
     assert.equal(plain(formatWeekRange("2026-09-28")), "Sep 28 – Oct 4, 2026");
     assert.equal(plain(formatWeekRange("2026-12-28")), "Dec 28, 2026 – Jan 3, 2027");
-  });
-});
-
-describe("formatShortWeekRange", () => {
-  test("leaves out the year", () => {
-    assert.equal(plain(formatShortWeekRange("2026-09-21")), "Sep 21 – 27");
-    assert.equal(plain(formatShortWeekRange("2026-09-28")), "Sep 28 – Oct 4");
-    assert.equal(plain(formatShortWeekRange("2026-12-28")), "Dec 28 – Jan 3");
   });
 });
 
