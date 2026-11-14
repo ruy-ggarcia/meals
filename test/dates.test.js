@@ -9,6 +9,7 @@ process.env.TZ = "Europe/Madrid";
 const {
   addDays,
   addWeeks,
+  dateIdOf,
   dayIndex,
   formatDayDate,
   formatFullDate,
@@ -29,6 +30,12 @@ describe("dayIndex", () => {
     for (let day = 21; day <= 27; day++) {
       assert.equal(dayIndex(new Date(2026, 8, day)), day - 21, `September ${day}`);
     }
+  });
+});
+
+describe("dateIdOf", () => {
+  test("gives the local date after midnight while UTC is on the day before", () => {
+    assert.equal(dateIdOf(new Date(2026, 0, 6, 0, 30)), "2026-01-06");
   });
 });
 

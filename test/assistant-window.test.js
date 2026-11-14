@@ -331,7 +331,8 @@ describe("assistant window", () => {
     await answer("POST", "/api/assistant/conversations", 201, { id: ID });
 
     const message = server.requestFor("POST", `${CONVERSATION_URL}/messages`);
-    assert.deepEqual(message.body, { text: "Plan next week.", attachments: [] });
+    const { today: _, ...sent } = message.body;
+    assert.deepEqual(sent, { text: "Plan next week.", attachments: [] });
     assert.equal(stored("meals.assistant.conversation"), ID);
     message.respond(202, {});
     await answer("GET", CONVERSATION_URL, 200, conversation());
@@ -346,7 +347,8 @@ describe("assistant window", () => {
     await answer("POST", "/api/assistant/conversations", 201, { id: "c2" });
 
     const resent = server.requestFor("POST", "/api/assistant/conversations/c2/messages");
-    assert.deepEqual(resent?.body, { text: "Plan next week.", attachments: [] });
+    const { today: _, ...sent } = resent?.body ?? {};
+    assert.deepEqual(sent, { text: "Plan next week.", attachments: [] });
     resent.respond(202, {});
     await answer("GET", "/api/assistant/conversations/c2", 200, conversation());
   });
@@ -358,6 +360,18 @@ describe("assistant window", () => {
     const message = await send("Plan this week.");
 
     assert.equal(message.body.week, WEEK);
+    message.respond(202, {});
+    await answer("GET", CONVERSATION_URL, 200, conversation());
+  });
+
+  test("sends the browser's local date as today", async (t) => {
+    await openConversation(t, conversation());
+    assistantButton().click();
+    t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 10, 16, 12).getTime() });
+
+    const message = await send("Plan tomorrow.");
+
+    assert.equal(message.body.today, "2026-11-16");
     message.respond(202, {});
     await answer("GET", CONVERSATION_URL, 200, conversation());
   });

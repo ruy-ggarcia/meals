@@ -13,6 +13,7 @@ import {
   pendingDetail,
   summarize,
 } from "./assistant-view.js";
+import { dateIdOf } from "./dates.js";
 import { createElement, createWarningIcon, focusIsFree } from "./dom.js";
 import { getJson, sendJson, UPLOAD_TIMEOUT_MS } from "./http.js";
 
@@ -504,7 +505,9 @@ export async function setUpAssistant() {
         })),
       );
       const week = displayedWeek(location);
-      const body = { text, attachments, ...(week && { week }) };
+      // The server has no time zone: the browser's date is the family's.
+      const today = dateIdOf(new Date());
+      const body = { text, attachments, ...(week && { week }), today };
       let response = await postMessage(body);
       // The server doesn't know the conversation anymore, for example after
       // a restart: the message starts a new one.
