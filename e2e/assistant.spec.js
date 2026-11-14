@@ -191,6 +191,14 @@ test.describe("assistant", () => {
       await expect(page.getByRole("banner")).toHaveClass(/\btoolbar\b/);
     });
 
+    test("keeps the empty alert of the window in the accessibility tree", async ({ page }) => {
+      await openWeek(page, CURRENT_WEEK, CURRENT_RANGE);
+
+      await openAssistant(page);
+
+      await expect(assistantWindow(page).getByRole("alert")).toHaveText("");
+    });
+
     test("focuses the message field on open, and the button on Escape", async ({ page }) => {
       await openWeek(page, CURRENT_WEEK, CURRENT_RANGE);
 

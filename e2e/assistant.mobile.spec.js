@@ -12,6 +12,22 @@ import { sectionsOf } from "./navigation.js";
 // without one doesn't have.
 const SAFE_BOTTOM = 34;
 
+/**
+ * Gives the page a bottom inset of `bottom` pixels, as a phone with a home
+ * indicator does. A browser has none.
+ */
+async function setSafeBottom(page, bottom) {
+  await page.evaluate((value) => {
+    document.documentElement.style.setProperty("--safe-bottom", `${value}px`);
+  }, bottom);
+}
+
+/** The bottom edge of the message field, in pixels from the top of the viewport. */
+async function fieldBottom(page) {
+  const box = await messageField(page).boundingBox();
+  return box.y + box.height;
+}
+
 /** Opens the meal plan, and waits until its grid shows. */
 async function openMealPlan(page) {
   await page.goto(`/#${CURRENT_WEEK}`);
@@ -55,24 +71,24 @@ test.describe("assistant", () => {
 
   test("keeps the message field above the bottom safe area", async ({ page }) => {
     await openMealPlan(page);
-    // A browser has no home indicator, so give the page the inset of an iPhone.
-    await page.evaluate((bottom) => {
-      document.documentElement.style.setProperty("--safe-bottom", `${bottom}px`);
-    }, SAFE_BOTTOM);
-
-    await openAssistant(page);
-
-    const limit = page.viewportSize().height - SAFE_BOTTOM;
+    await setSafeBottom(page, 0);
+    const chat = await openAssistant(page);
+    const { height } = page.viewportSize();
+    // The sheet rises into place.
     await expect
-      .poll(
-        async () => {
-          const box = await messageField(page).boundingBox();
-          return box.y + box.height <= limit;
-        },
-        {
-          message: `the bottom edge of the message field must be at most ${limit}px = the viewport height - the ${SAFE_BOTTOM}px inset of the home indicator`,
-        },
-      )
+      .poll(async () => {
+        const box = await chat.boundingBox();
+        return Math.round(box.y + box.height);
+      })
+      .toBe(height);
+    const before = await fieldBottom(page);
+
+    await setSafeBottom(page, SAFE_BOTTOM);
+
+    await expect
+      .poll(async () => Math.abs(before - (await fieldBottom(page)) - SAFE_BOTTOM) <= 1, {
+        message: `the bottom edge of the message field must rise by the ${SAFE_BOTTOM}px inset of the home indicator, within 1px, from ${before}px`,
+      })
       .toBe(true);
   });
 });

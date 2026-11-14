@@ -41,9 +41,9 @@ const BUTTON_MARKUP =
   '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4c4.7 0 8.5 3.1 8.5 7s-3.8 7-8.5 7c-1 0-2-.1-2.9-.4L5 19.5l1.2-3.4C4.6 14.8 3.5 13 3.5 11c0-3.9 3.8-7 8.5-7z"/></svg>';
 
 // static markup, never user text. The card of the pending changes takes its
-// name from aria-label, not from aria-labelledby on its heading: after the
-// window shows pending changes, Firefox crashes when a script reads the
-// card's ariaLabelledByElements, as accessibility checkers do.
+// name from aria-label, not from aria-labelledby on its heading: Firefox
+// crashed in testing when axe read the card's ariaLabelledByElements after
+// the window showed pending changes.
 const WINDOW_MARKUP = `
   <div class="assistant-header">
     <h2 class="assistant-title">Assistant</h2>
