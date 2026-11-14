@@ -366,7 +366,9 @@ To ask the assistant, do the following:
    without sending, press `Shift+Enter`.
 
 While the assistant answers, the window shows "Thinking…", and you can type
-but not send. If the answer fails, click **Retry** to ask again.
+but not send. If the answer fails, click **Retry** to ask again. When the
+conversation is too long for the assistant, the window offers no **Retry**:
+start a new conversation instead.
 
 The changes that the assistant proposes are pending changes. A card above the
 message field summarizes them: how many slots of each week change, and each
@@ -374,16 +376,20 @@ recipe and ingredient to create, change, archive, or restore. To see each
 change, click **View details**. Then do one of the following:
 
 - To save every pending change, click **Apply**. The page shows the new data
-  without a reload. If someone changed a slot, a recipe, or an ingredient by
-  hand after the assistant proposed a change to it, the app saves nothing,
-  and **View details** shows the problem on that change. Tell the assistant
-  about it in your next message.
+  without a reload. On the meal plan, if a slot isn't saved yet or the slot
+  editor is open, the new data shows when you change the week. If someone
+  changed a slot, a recipe, or an ingredient by hand after the assistant
+  proposed a change to it, the app saves nothing, and **View details** shows
+  the problem on that change. Tell the assistant about it in your next
+  message.
 - To drop every pending change, click **Discard**.
 
 To collapse the window, click the button with the down arrow, press `Escape`,
-or click the round button again. The conversation stays, also when you open
-another page. While the window is collapsed, a red mark on the round button
-shows a reply that you haven't seen or pending changes.
+or click the round button again. On a phone, the round button is hidden while
+the window is open, so use the button with the down arrow. The conversation
+stays, also when you open another page. While the window is collapsed, a red
+mark on the round button shows a reply that you haven't seen or pending
+changes.
 
 To start over, click **New conversation**, the button with the plus sign. If
 the conversation has pending changes, the app asks first, because a new
