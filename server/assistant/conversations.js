@@ -73,6 +73,8 @@ const MB = 1024 * 1024;
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_BYTES = 10 * MB;
 const MAX_CONVERSATION_BYTES = 20 * MB;
+const MAX_TEXT = 20000;
+const MAX_NAME = 255;
 const DAY_MS = 86_400_000;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -162,6 +164,11 @@ function attachmentOf(attachment, index) {
       ? attachment.name.split(/[/\\]/).at(-1)
       : "";
   if (name === "") throw new ValidationError(`attachments[${index}] needs a name.`);
+  if (name.length > MAX_NAME) {
+    throw new ValidationError(
+      `"${name.slice(0, 40)}…" has a name longer than ${MAX_NAME} characters.`,
+    );
+  }
   const { data } = attachment;
   // Decoding is lenient, so data that doesn't encode back the same isn't
   // base64, and its size would be wrong.
@@ -197,6 +204,9 @@ function userEntryOf(message, usedBytes) {
   const trimmed = text.trim();
   if (trimmed === "" && attachments.length === 0) {
     throw new ValidationError("A message needs text or an attachment.");
+  }
+  if (trimmed.length > MAX_TEXT) {
+    throw new ValidationError(`A message holds at most ${MAX_TEXT} characters.`);
   }
   if (attachments.length > MAX_ATTACHMENTS) {
     throw new ValidationError(`A message holds at most ${MAX_ATTACHMENTS} attachments.`);

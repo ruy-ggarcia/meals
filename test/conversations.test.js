@@ -651,6 +651,40 @@ describe("server/assistant/conversations.js", () => {
     const file = { name: "folder/", mediaType: "application/pdf", data: pdf() };
     rejectsMessage(t, { text: "", attachments: [file] }, "attachments[0] needs a name.");
   });
+  test("rejects a text of 20001 characters after trimming", (t) => {
+    rejectsMessage(
+      t,
+      { text: ` ${"a".repeat(20_001)} ` },
+      "A message holds at most 20000 characters.",
+    );
+  });
+
+  test("accepts a text of 20000 characters after trimming", async (t) => {
+    const { conversations } = setup(t, [{ text: "Got it." }]);
+
+    const id = await converse(conversations, { text: ` ${"a".repeat(20_000)} ` });
+
+    assert.equal((await conversations.view(id)).messages[0].text.length, 20_000);
+  });
+
+  test("rejects an attachment name of 256 characters", (t) => {
+    const name = `${"a".repeat(252)}.pdf`;
+    rejectsMessage(
+      t,
+      { text: "", attachments: [pdfFile(name, 64)] },
+      `"${"a".repeat(40)}…" has a name longer than 255 characters.`,
+    );
+  });
+
+  test("accepts an attachment name of 255 characters", async (t) => {
+    const { conversations } = setup(t, [{ text: "Got it." }]);
+    const name = `${"a".repeat(251)}.pdf`;
+
+    const id = await converse(conversations, { text: "", attachments: [pdfFile(name, 64)] });
+
+    assert.deepEqual((await conversations.view(id)).messages[0].attachments, [name]);
+  });
+
   test("accepts a file of exactly 10 MB", async (t) => {
     const { conversations } = setup(t, [{ text: "Got it." }]);
 
