@@ -84,11 +84,11 @@ export async function stubProviderServer(t, handler) {
  *
  * @type {typeof globalThis.fetch}
  */
-export async function refusingFetch() {
+export const refusingFetch = async () => {
   throw new TypeError("fetch failed", {
     cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }),
   });
-}
+};
 
 /** A promise that never settles, for a handler that holds its answer. */
 export function never() {
