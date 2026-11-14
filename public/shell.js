@@ -1,7 +1,8 @@
 // The shell that every page shares: the section links, which wide screens
 // show as a sidebar and phones as a tab bar, the choice to hide or show the
-// sidebar, and the Settings button in the toolbar. Each page calls
-// setUpShell() when it starts.
+// sidebar, and the Settings buttons: in the toolbar on wide screens, and on
+// the line of the large title on phones. Each page calls setUpShell() when
+// it starts.
 
 import { setUpSettings } from "./settings.js";
 

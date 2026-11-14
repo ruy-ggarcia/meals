@@ -107,6 +107,7 @@ describe("settings", () => {
     settingsButton().click();
 
     assert.equal(settingsButton().disabled, true);
+    assert.equal(titleLineButton().disabled, true);
     await respondTo(server, "GET", "/api/preferences", 200, { text: SAVED });
     assert.equal(settingsButton().disabled, false);
   });

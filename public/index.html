@@ -82,13 +82,9 @@
     </header>
 
     <div class="page">
-      <div id="load-error" class="load-error" role="alert" hidden>
-        <span>Couldn't load the meal plan.</span>
-        <button type="button" id="retry-load">Retry</button>
-      </div>
-
-      <!-- Only visible on phones. Filled by app.js. -->
-      <div id="day-heading" class="day-heading" hidden>
+      <!-- Only visible on phones. Filled by app.js. The line of the title, with its Settings
+           button, shows even before a week loads; the rest waits for the week. -->
+      <div id="day-heading" class="day-heading">
         <div class="title-line">
           <!-- biome-ignore lint/a11y/useHeadingContent: app.js sets the day when a week loads. -->
           <h2 class="day-title"></h2>
@@ -96,11 +92,17 @@
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.1 4.7L14.3 2.5L17.1 3.7L16.4 6.1L17.9 7.6L20.3 6.9L21.5 9.7L19.3 10.9L19.3 13.1L21.5 14.3L20.3 17.1L17.9 16.4L16.4 17.9L17.1 20.3L14.3 21.5L13.1 19.3L10.9 19.3L9.7 21.5L6.9 20.3L7.6 17.9L6.1 16.4L3.7 17.1L2.5 14.3L4.7 13.1L4.7 10.9L2.5 9.7L3.7 6.9L6.1 7.6L7.6 6.1L6.9 3.7L9.7 2.5L10.9 4.7Z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
-        <p class="day-subtitle">
+        <p class="day-subtitle" hidden>
           <span class="day-date"></span><span class="today-mark" hidden> · Today</span>
         </p>
-        <div class="save-summary"></div>
+        <div class="save-summary" hidden></div>
       </div>
+
+      <div id="load-error" class="load-error" role="alert" hidden>
+        <span>Couldn't load the meal plan.</span>
+        <button type="button" id="retry-load">Retry</button>
+      </div>
+
       <nav id="day-bar" class="day-bar" aria-label="Day" hidden></nav>
 
       <!-- Wide screens: the 7 days side by side, one row per meal. Phones: one day, stacked. Filled by app.js. -->

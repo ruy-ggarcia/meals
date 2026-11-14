@@ -470,7 +470,13 @@ async function loadWeek(week) {
   await withLoadState({
     loadError,
     retryButton: retryLoadButton,
-    content: [dayHeading, dayBar, grid],
+    // The line of the day's title stays, for its Settings button.
+    content: [
+      dayHeading.querySelector(".day-subtitle"),
+      dayHeading.querySelector(".save-summary"),
+      dayBar,
+      grid,
+    ],
     errorMessage: "Couldn't load the meal plan:",
     run: async () => {
       // The recipe book and the ingredient catalog load with every week, so

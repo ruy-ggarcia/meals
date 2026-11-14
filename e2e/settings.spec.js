@@ -107,6 +107,25 @@ test.describe("settings", () => {
     ).toBeFocused();
   });
 
+  test("opens from the meal plan of a phone after the week fails to load", async ({
+    consoleErrors,
+    page,
+  }) => {
+    await useWidth(page, PHONES[0].width);
+    await page.route("**/api/weeks/*", (route) => route.abort("connectionrefused"));
+    // The failed load logs its error, as the browser does the failed request.
+    consoleErrors.allowed = true;
+    await page.goto("/");
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Couldn't load the meal plan." }),
+    ).toBeVisible();
+
+    await expect(settingsButton(page)).toHaveCount(1);
+    await settingsButton(page).click();
+
+    await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  });
+
   for (const { name, open } of PAGES) {
     test(`shows one Settings button on the ${name}, in the toolbar when wide`, async ({ page }) => {
       await open(page);
