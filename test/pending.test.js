@@ -230,6 +230,63 @@ describe("stage", () => {
     );
   });
 
+  test("rejects a menu item whose recipe is archived", () => {
+    const archived = { ...soup, archived: true };
+    const state = stateOf({ recipes: [archived], weeks: { [WEEK]: blankWeek() } });
+    const items = [{ recipeId: "soup", servings: 2 }];
+
+    assert.throws(
+      () => stage(state, [], { kind: "menu", week: WEEK, day: "tue", meal: "dinner", items }),
+      {
+        name: "ValidationError",
+        message: '"Pumpkin Soup" is archived. Restore it first, or choose an active recipe.',
+      },
+    );
+  });
+
+  test("keeps an archived recipe that the slot already holds", () => {
+    const archived = { ...soup, archived: true };
+    const items = [{ recipeId: "soup", servings: 2 }];
+    const state = stateOf({
+      recipes: [archived],
+      weeks: { [WEEK]: weekWith("tue", "dinner", items) },
+    });
+    const servings = [{ recipeId: "soup", servings: 4 }];
+
+    const { changes } = stage(state, [], {
+      kind: "menu",
+      week: WEEK,
+      day: "tue",
+      meal: "dinner",
+      items: servings,
+    });
+
+    assert.deepEqual(changes[0].items, servings);
+  });
+
+  test("rejects a recipe line whose ingredient is archived", () => {
+    const state = stateOf({ ingredients: [{ ...onion, archived: true }] });
+    const ingredients = [{ ingredientId: "onion", quantity: 50 }];
+
+    assert.throws(
+      () => stage(state, [], { kind: "recipe", fields: { name: "Stew", ingredients } }),
+      {
+        name: "ValidationError",
+        message: '"Onion" is archived. Restore it first, or choose an active ingredient.',
+      },
+    );
+  });
+
+  test("keeps an archived ingredient that the recipe already uses", () => {
+    const stew = { ...soup, ingredients: [{ ingredientId: "onion", quantity: 50 }] };
+    const state = stateOf({ ingredients: [{ ...onion, archived: true }], recipes: [stew] });
+    const ingredients = [{ ingredientId: "onion", quantity: 80 }];
+
+    const { changes } = stage(state, [], { kind: "recipe", id: "soup", changes: { ingredients } });
+
+    assert.deepEqual(changes[0].changes, { ingredients });
+  });
+
   test("stages a change while another target has a problem", () => {
     const state = stateOf({ recipes: [soup] });
     const changes = staged(state, {
@@ -384,7 +441,7 @@ describe("weeksOf", () => {
     const changes = staged(
       state,
       { kind: "menu", week: NEXT_WEEK, day: "mon", meal: "lunch", items },
-      { kind: "recipe", id: "soup", changes: { archived: true } },
+      { kind: "recipe", id: "soup", changes: { name: "Squash Soup" } },
       { kind: "menu", week: WEEK, day: "tue", meal: "dinner", items },
       { kind: "menu", week: NEXT_WEEK, day: "wed", meal: "lunch", items },
     );

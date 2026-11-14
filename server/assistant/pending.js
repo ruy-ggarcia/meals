@@ -312,6 +312,46 @@ function changeOf(state, changes, proposal) {
   return { kind, action: "update", id, changes: withIds(proposal.changes, known), base: stored };
 }
 
+// The IDs, under `key`, of the entries of `list` that `base` doesn't hold.
+function addedIds(list, base, key) {
+  if (!Array.isArray(list)) return [];
+  const kept = new Set((Array.isArray(base) ? base : []).map((entry) => entry?.[key]));
+  return list
+    .filter((entry) => isPlainObject(entry) && !kept.has(entry[key]))
+    .map((entry) => entry[key]);
+}
+
+// What `change` adds that must be active: the recipes of a menu, or the
+// ingredients of a recipe, that its target doesn't hold already.
+function addedEntries(next, change) {
+  if (change.kind === "menu") {
+    const ids = addedIds(change.items, change.base, "recipeId");
+    return { noun: "recipe", entries: next.recipes.filter((entry) => ids.includes(entry.id)) };
+  }
+  if (change.kind !== "recipe") return { noun: "", entries: [] };
+  const lines =
+    change.action === "create" ? change.fields?.ingredients : change.changes?.ingredients;
+  const ids = addedIds(lines, change.base?.ingredients, "ingredientId");
+  return {
+    noun: "ingredient",
+    entries: next.ingredients.filter((entry) => ids.includes(entry.id)),
+  };
+}
+
+// Throws when `change` adds an archived recipe to a menu, or an archived
+// ingredient to a recipe, in `next`, the data that the changes would save:
+// only active entries can be added, and keeping one that the target already
+// holds is fine. The stores accept archived IDs, so Apply doesn't check this.
+function checkActive(next, change) {
+  const { noun, entries } = addedEntries(next, change);
+  const archived = entries.find((entry) => entry.archived);
+  if (archived) {
+    throw new ValidationError(
+      `"${archived.name}" is archived. Restore it first, or choose an active ${noun}.`,
+    );
+  }
+}
+
 /**
  * Adds the change of `proposal` to `changes`, in place of the change of the
  * same target if there's one. Without `id`, an ingredient or a recipe is a
@@ -319,7 +359,8 @@ function changeOf(state, changes, proposal) {
  * create. With the ID of a stored entry, it's an update. A new measure of an
  * ingredient gets its ID here too. Throws the error of the new change when
  * it breaks a rule against `state` and the other changes, whose own problems
- * don't stop it.
+ * don't stop it, or when it adds an archived recipe to a menu or an archived
+ * ingredient to a recipe.
  * @param {State} state
  * @param {PendingChange[]} changes
  * @param {Proposal} proposal
@@ -330,8 +371,10 @@ export function stage(state, changes, proposal) {
   const target = targetOf(change);
   const index = changes.findIndex((candidate) => targetOf(candidate) === target);
   const next = index === -1 ? [...changes, change] : changes.with(index, change);
-  const failure = compute(state, next).failures.find((candidate) => candidate.target === target);
+  const computed = compute(state, next);
+  const failure = computed.failures.find((candidate) => candidate.target === target);
   if (failure) throw failure.error;
+  checkActive(computed.state, change);
   return { changes: next, change };
 }
 
