@@ -437,11 +437,14 @@ On the host, backups are automatic. See
 
 If a week file, `preferences.json`, `recipes.json`, or `ingredients.json`
 contains invalid JSON, the app shows an error, such as
-`Couldn't load the meal plan.`, and doesn't overwrite the file. To recover,
-do the following:
+`Couldn't load the meal plan.`, and doesn't overwrite the file. For an
+invalid `preferences.json`, the gear button of **Settings** shows
+`Couldn't load the settings. Try again.`, and the assistant can't answer. To
+recover, do the following:
 
 1. Restore a backup copy of the file, or fix the JSON by hand.
-1. In the app, click **Retry**.
+1. In the app, click **Retry**. For the family preferences, click the gear
+   button again.
 
 If you restore an older `recipes.json` or `ingredients.json`, the app hides
 what the restored file doesn't have: menu items whose recipe is missing, and
