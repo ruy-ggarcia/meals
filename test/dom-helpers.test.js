@@ -12,8 +12,11 @@ import {
   openMarkup,
   openPage,
   respondTo,
+  useQuietConsole,
   waitFor,
 } from "./dom-helpers.js";
+
+const quiet = useQuietConsole();
 
 const GLOBALS = ["document", "fetch", "history", "location", "window"];
 
@@ -125,6 +128,7 @@ describe("cleanup", () => {
     const { page, server } = await openRecipesPage();
     server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
     server.requestFor("GET", "/api/ingredients").fail();
+    quiet.expect(1); // The page logs the failed load.
 
     await page.cleanup();
   });
