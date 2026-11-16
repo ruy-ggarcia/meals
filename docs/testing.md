@@ -110,12 +110,12 @@ that the level below it can't.
 Static checks read the code without running it:
 
 - [Biome](https://biomejs.dev) checks the format and the lint rules of the
-  JavaScript, and [ShellCheck](https://www.shellcheck.net) checks the shell
-  scripts. [actionlint](https://github.com/rhysd/actionlint) checks the
-  workflows, and [hadolint](https://github.com/hadolint/hadolint) checks the
-  `Dockerfile`. `npm run lint` runs all four, and the `ci` job runs it on
-  every pull request. `scripts/install-lint-tools.sh` downloads the pinned
-  versions of actionlint and hadolint and verifies their checksums.
+  JavaScript, CSS, and JSON files, and
+  [ShellCheck](https://www.shellcheck.net) checks the shell scripts.
+  [actionlint](https://github.com/rhysd/actionlint) checks the workflows, and
+  [hadolint](https://github.com/hadolint/hadolint) checks the `Dockerfile`.
+  `npm run lint` runs all four, and the `ci` job runs it on every pull
+  request.
 - [TypeScript](https://www.typescriptlang.org) checks the types of the
   JavaScript in `e2e/`, `public/`, `server/`, and `test/`, and in
   `playwright.config.js`, without a build step: it reads the
@@ -187,9 +187,9 @@ End-to-end tests check the whole system as a person or the host uses it:
 - `scripts/host-acceptance.sh` installs the host tools for real on a
   disposable GitHub-hosted runner, deploys published releases, backs up,
   restores, and restarts Docker. `.github/workflows/host.yml` runs it on pull
-  requests that change `deploy/` or `scripts/`, every week, and by hand. The
-  weekly run catches changes outside the repository, such as a new runner
-  image or a change in GitHub or GHCR.
+  requests that change `deploy/`, `scripts/`, or the workflow itself, every
+  week, and by hand. The weekly run catches changes outside the repository,
+  such as a new runner image or a change in GitHub or GHCR.
 
 ### Exploratory
 
