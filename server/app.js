@@ -42,6 +42,13 @@ function logRequests(logger) {
     const started = performance.now();
     res.on("close", () => {
       const path = pathOf(req);
+      const ms = Math.round(performance.now() - started);
+      // An aborted response never got its status, so log the abort instead.
+      // It keeps the default status 200, so it comes before the quiet ones.
+      if (!res.writableFinished) {
+        logger.info("request", { method: req.method, path, aborted: true, ms });
+        return;
+      }
       // Docker checks the health every 30 seconds, and every second while the
       // container starts. Log only the failures.
       if (path === "/api/health" && res.statusCode === 200) return;
@@ -53,12 +60,6 @@ function logRequests(logger) {
         CONVERSATION_PATH.test(path) &&
         (res.statusCode === 200 || res.statusCode === 304)
       ) {
-        return;
-      }
-      const ms = Math.round(performance.now() - started);
-      // An aborted response never got its status, so log the abort instead.
-      if (!res.writableFinished) {
-        logger.info("request", { method: req.method, path, aborted: true, ms });
         return;
       }
       logger.info("request", { method: req.method, path, status: res.statusCode, ms });
