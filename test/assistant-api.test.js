@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { mkdir, readFile } from "node:fs/promises";
+import net from "node:net";
 import path from "node:path";
 import { beforeEach, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -342,6 +344,58 @@ describe("GET /api/assistant/conversations/:id", () => {
     assert.deepEqual(
       entries.filter((entry) => entry.method === "GET"),
       [],
+    );
+  });
+
+  test("logs a read that the client aborts as aborted", async () => {
+    const { entries, logger } = collectingLogger();
+    /** @type {PromiseWithResolvers<void>} */
+    const logged = Promise.withResolvers();
+    /** @type {PromiseWithResolvers<void>} */
+    const reading = Promise.withResolvers();
+    /** @type {PromiseWithResolvers<void>} */
+    const release = Promise.withResolvers();
+    const loggingInfo = logger.info;
+    logger.info = (msg, fields) => {
+      loggingInfo(msg, fields);
+      logged.resolve();
+    };
+    // Conversations whose read waits until the test releases it.
+    const assistant = /** @type {any} */ ({
+      enabled: () => true,
+      view: async () => {
+        reading.resolve();
+        await release.promise;
+        return {};
+      },
+    });
+    const app = createApp(createStores({ dataDir: dataDir() }), { assistant, logger });
+    const server = app.listen(0, "127.0.0.1");
+    await once(server, "listening");
+
+    try {
+      const socket = net.connect(server.address().port, "127.0.0.1");
+      socket.write(
+        `GET /api/assistant/conversations/${UNKNOWN} HTTP/1.1\r\nHost: localhost\r\n\r\n`,
+      );
+      await reading.promise;
+      socket.destroy();
+      await logged.promise;
+    } finally {
+      release.resolve();
+      server.close();
+    }
+
+    assert.deepEqual(
+      entries.map(({ msg, method, path, aborted }) => ({ msg, method, path, aborted })),
+      [
+        {
+          msg: "request",
+          method: "GET",
+          path: `/api/assistant/conversations/${UNKNOWN}`,
+          aborted: true,
+        },
+      ],
     );
   });
 
