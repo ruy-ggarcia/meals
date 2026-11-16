@@ -591,33 +591,24 @@ Before you commit, check your changes:
    npm test
    ```
 
-[Biome](https://biomejs.dev) checks the style of JavaScript, CSS, and JSON
-files. The settings are in `biome.json`.
-[ShellCheck](https://www.shellcheck.net) checks the shell scripts. The
-settings are in `.shellcheckrc`.
-[actionlint](https://github.com/rhysd/actionlint) checks the workflows in
-`.github/workflows/`, and [hadolint](https://github.com/hadolint/hadolint)
-checks the `Dockerfile`. `npm run lint` runs `scripts/install-lint-tools.sh`
-first. The script downloads the pinned version of each tool from its GitHub
-release into `.tools/bin`, which Git ignores, and checks the SHA-256
-checksum of the download. It skips a tool that's already installed. To
-ignore a hadolint rule, add a comment next to the instruction that explains
-why.
+For what `npm run lint` and `npm run typecheck` check, see
+[Static](docs/testing.md#static). The settings of Biome are in `biome.json`,
+and those of ShellCheck in `.shellcheckrc`. `npm run lint` runs
+`scripts/install-lint-tools.sh` first. The script downloads the pinned
+versions of actionlint and hadolint from their GitHub releases into
+`.tools/bin`, which Git ignores, and checks the SHA-256 checksum of each
+download. It skips a tool that's already installed. To ignore a hadolint
+rule, add a comment next to the instruction that explains why.
 
-[TypeScript](https://www.typescriptlang.org) checks the types of the
-JavaScript without compiling it: the app stays plain JavaScript. It reads
-the JSDoc comments in the `.js` files of `e2e/`, `public/`, `server/`, and
-`test/`, and in `playwright.config.js`. A
-`@param`, `@returns`, `@typedef`, or `@type` comment gives a function or a
+A `@param`, `@returns`, `@typedef`, or `@type` comment gives a function or a
 value the type that TypeScript can't infer. The settings are in
 `tsconfig.json`, and `tsconfig.browser.json` and `tsconfig.tests.json`
 extend it. `npm run typecheck` checks three sets of files, so that the
 globals of one environment don't hide a mistake in another: `server/` and
 `playwright.config.js` see only the Node.js types, `public/` sees only the
-browser types, and `e2e/` and `test/` see both. The check isn't `strict`.
-To fix an error, give the code the right type. Use `// @ts-expect-error`
-only with a comment that explains why the code is right and the type can't
-say so.
+browser types, and `e2e/` and `test/` see both. To fix an error, give the
+code the right type. Use `// @ts-expect-error` only with a comment that
+explains why the code is right and the type can't say so.
 
 If you change `e2e/`, `public/`, `server/`, or `playwright.config.js`, also
 run the browser tests:
@@ -636,11 +627,10 @@ run the browser tests:
    npm run test:e2e
    ```
 
-[Playwright](https://playwright.dev) runs the tests in `e2e/`. Each test
-starts its own server on a free port, with a new temporary data directory,
-so the tests never touch your data. The settings are in
-`playwright.config.js`, which defines five projects: three desktop browsers
-and two emulated phones.
+[Playwright](https://playwright.dev) runs the tests in `e2e/`, as
+[End to end](docs/testing.md#end-to-end) describes. The tests never touch
+your data. The settings are in `playwright.config.js`, which defines five
+projects: three desktop browsers and two emulated phones.
 
 To run the tests of one project, or of one file, pass it after `--`:
 
@@ -670,9 +660,7 @@ GitHub Actions runs three checks on every pull request and on every push to
 `main`. The workflow is in `.github/workflows/ci.yml`:
 
 - `ci` runs `npm run lint`, `npm run typecheck`, `npm test`, and
-  `npm run test:units` with Node.js 22. `npm run lint` checks the code, the
-  shell scripts, the workflows, and the `Dockerfile`. `npm run typecheck`
-  checks the types of the JavaScript.
+  `npm run test:units` with Node.js 22.
 - `e2e` runs `npm run test:e2e` with Node.js 22 in the
   [Playwright image](https://playwright.dev/docs/docker), which holds the
   browsers and the system packages that they need. A test that fails runs
@@ -683,17 +671,15 @@ GitHub Actions runs three checks on every pull request and on every push to
 
 `.github/workflows/host.yml` runs `host` on pull requests that change that
 file, `deploy/`, or `scripts/`, every Monday at 05:17 UTC, and when you run
-it by hand. `host` runs
-`scripts/host-acceptance.sh` on a GitHub-hosted runner, a new virtual
-machine for each job. The script installs the host tools for real, and
-checks them with the published releases from GitHub and GHCR: the
-installation and the timers, a second installation, moving the data of an
-earlier installation in, a deployment by hand and the resume, a backup and a
-restore, the restore check, a deployment that can't pull its image, and the
-app after the Docker daemon restarts. The weekly run catches changes outside
-the repository, such as a new runner image or a change in GitHub or GHCR.
-`host` isn't a required check, because its path filter skips most pull
-requests.
+it by hand. `host` runs `scripts/host-acceptance.sh` on a GitHub-hosted
+runner, a new virtual machine for each job, as
+[End to end](docs/testing.md#end-to-end) describes. The script installs the
+host tools for real, and checks them with the published releases from
+GitHub and GHCR: the installation and the timers, a second installation,
+moving the data of an earlier installation in, a deployment by hand and the
+resume, a backup and a restore, the restore check, a deployment that can't
+pull its image, and the app after the Docker daemon restarts. `host` isn't a
+required check, because its path filter skips most pull requests.
 
 You can't run `scripts/host-acceptance.sh` on your own machine, because it
 installs Meals for real. It refuses to run unless `GITHUB_ACTIONS` is
@@ -777,6 +763,8 @@ docs/
   testing.md            # Testing strategy: the levels of tests and their rules.
 e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
+  icons/               # The app's icons, for the browser tab and the Home Screen.
+  alert.js             # The alert that asks before an action that loses changes.
   app.js               # Meal plan page: grid, week changes, and saves.
   assistant-view.js    # What the assistant's window shows: pending changes, the mark, and attachment checks.*
   assistant.js         # The assistant's button and window: messages, pending changes, and polling.
@@ -790,6 +778,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   ingredient-editor.js # The ingredient editor dialog.
   ingredients.html     # Ingredients page.
   ingredients.js       # Ingredients page logic.
+  manifest.webmanifest # The name and icons of the app on the Home Screen.
   menus.js             # Menu functions.*
   messages.js          # Message text shared by the recipe and ingredient pages.*
   name-search.js       # Name matching and sorting.*
@@ -799,6 +788,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   recipes.js           # Recipe book page logic.
   saves.js             # Save logic.*
   settings.js          # The Settings dialog: the family preferences and the assistant's settings.
+  shell.js             # The parts that every page shares, such as the sidebar and the tab bar.
   shopping-dialog.js   # The shopping list dialog.
   shopping-list.js     # Computes the shopping list.*
   slot-editor.js       # The slot editor dialog.
@@ -852,6 +842,7 @@ server/
   stores.js      # Wires the stores to one write queue and to each other.
   weeks.js       # Weeks and the menu of each slot.
 test/              # Tests: node:test, with supertest for the API and happy-dom for the pages.
+  fixtures/        # Data files that the server and the page tests share, such as the limits.
   hooks/           # Code that tests preload with node --import, such as the time limits.
   stubs/           # Stub docker and curl for the host script tests.
 .dockerignore      # What the image build can read.
