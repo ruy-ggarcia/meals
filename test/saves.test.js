@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
+import { format } from "node:util";
 import { sameMenu } from "../public/menus.js";
 import { createSaves } from "../public/saves.js";
 import { tick, useQuietConsole, within } from "./dom-helpers.js";
@@ -83,7 +84,8 @@ afterEach((t) => {
   );
 });
 
-function setup({ timeoutMs = 1000 } = {}) {
+/** Creates the saves with `key` loaded with an empty menu. */
+function setup({ key = KEY, timeoutMs = 1000 } = {}) {
   const server = fakeServer();
   const menus = new Map(); // what each slot shows
   const statuses = new Map(); // the last status reported per slot
@@ -94,12 +96,21 @@ function setup({ timeoutMs = 1000 } = {}) {
     onStatus: (key, state) => statuses.set(key, state),
     timeoutMs,
   });
-  saves.loaded([[KEY, EMPTY]]);
-  menus.set(KEY, EMPTY);
+  saves.loaded([[key, EMPTY]]);
+  menus.set(key, EMPTY);
   return { saves, server, menus, statuses };
 }
 
 const KEY = "mon/lunch";
+
+// A key that the console would read as a directive in a format string.
+const PERCENT_KEY = "mon/%s";
+
+/** The line that the console prints for the only logged error. */
+function loggedLine() {
+  const [args] = quiet.calls();
+  return format(...args);
+}
 
 // Flushes a slot that changed and a slot that didn't.
 async function flushChangedAndUnchanged() {
@@ -271,6 +282,18 @@ describe("createSaves", () => {
       assert.equal(statuses.get(KEY), "saved");
     });
 
+    test("logs the slot key as written after a failed save", async () => {
+      quiet.expect(1);
+      const { saves, server, menus } = setup({ key: PERCENT_KEY });
+      menus.set(PERCENT_KEY, SOUP);
+      const failed = saves.queueSave(PERCENT_KEY);
+      await tick();
+      server.requests[0].fail();
+      await failed;
+
+      assert.match(loggedLine(), /^Couldn't save mon\/%s: TypeError: Network error/);
+    });
+
     test("gives up after the timeout", async () => {
       quiet.expect(1);
       const { saves, menus, statuses } = setup({ timeoutMs: 20 });
@@ -321,6 +344,18 @@ describe("createSaves", () => {
       assert.deepEqual(server.requests[0].body, SOUP);
       assert.equal(server.requests[0].keepalive, true);
       await server.drain();
+    });
+
+    test("logs the slot key as written after a failed save", async () => {
+      quiet.expect(1);
+      const { saves, server, menus } = setup({ key: PERCENT_KEY });
+      menus.set(PERCENT_KEY, SOUP);
+      saves.flush([PERCENT_KEY]);
+      await tick();
+      server.requests[0].fail();
+      await saves.settle();
+
+      assert.match(loggedLine(), /^Couldn't save mon\/%s on page hide: TypeError: Network error/);
     });
 
     test("skips an unchanged slot", async () => {

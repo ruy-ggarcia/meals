@@ -145,7 +145,7 @@ export function createCatalogList({ elements, noun, url, details, onChange, relo
       if (status !== 200) throw new Error(`HTTP ${status}`);
       entries = [...entries.filter((entry) => entry.id !== id), body];
     } catch (error) {
-      console.error(failure, error);
+      console.error("Couldn't restore the %s:", noun, error);
       rowMessages.set(id, failure);
     }
     busy.delete(id);

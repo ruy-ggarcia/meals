@@ -20,7 +20,7 @@ export async function sendArchive(url, noun, message) {
     if (status === 200) return body;
     throw new Error(`HTTP ${status}`);
   } catch (error) {
-    console.error(`Couldn't archive the ${noun}:`, error);
+    console.error("Couldn't archive the %s:", noun, error);
     message.textContent = `Couldn't archive the ${noun}. Try again.`;
     return undefined;
   }

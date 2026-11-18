@@ -96,7 +96,7 @@ export function createSaves({ fetch, url, readMenu, onStatus, timeoutMs }) {
       markConfirmed(key, menu, sequence);
       setStatus(key, "saved");
     } catch (error) {
-      console.error(`Couldn't save ${key}:`, error);
+      console.error("Couldn't save %s:", key, error);
       setStatus(key, "error"); // the slot keeps its menu
     } finally {
       inFlight.delete(key);
@@ -148,7 +148,7 @@ export function createSaves({ fetch, url, readMenu, onStatus, timeoutMs }) {
           if (statuses.get(key) === "error" && same(readMenu(key), menu)) setStatus(key, "idle");
         })
         .catch((error) => {
-          console.error(`Couldn't save ${key} on page hide:`, error);
+          console.error("Couldn't save %s on page hide:", key, error);
           // Show the error so the menu can be retried, but only if the menu is
           // still unsaved and no newer save is running.
           if (restore() && statuses.get(key) !== "saving") setStatus(key, "error");
