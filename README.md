@@ -527,8 +527,15 @@ except merge commits follow
 [Conventional Commits](https://www.conventionalcommits.org), because the
 commit type decides releases.
 
-Changes reach `main` only through pull requests that pass `ci`, `e2e`,
-`image`, and `conventional`.
+[CodeQL](https://codeql.github.com) code scanning analyzes every pull
+request except Dependabot's, and its `CodeQL` check fails when the pull
+request adds an alert on the lines that it changes. An alert on `main`
+outside those lines fails no pull request, so `.github/workflows/alerts.yml`
+runs `alerts` every day at 06:41 UTC, and when you run it by hand: it fails
+while `main` has an open alert.
+
+Changes reach `main` only through pull requests that pass `ci`, `CodeQL`,
+`conventional`, `e2e`, and `image`.
 Each pull request merges with a merge commit.
 
 On every push to `main`, `.github/workflows/release.yml` keeps a release
@@ -544,6 +551,7 @@ dependencies, the GitHub Actions, and the base image. The settings are in
 ```none
 .github/
   workflows/
+    alerts.yml          # Fails while main has an open code scanning alert.
     ci.yml              # Continuous integration: lint, tests, and the image.
     conventional.yml    # Checks pull request titles and commit subjects.
     host.yml            # Installs the host tools on a disposable runner and checks them.
