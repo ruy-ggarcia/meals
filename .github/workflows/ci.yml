@@ -37,6 +37,13 @@ jobs:
     name: e2e
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # The image holds the browsers and their system packages, so the job
+    # doesn't download them. Its tag matches @playwright/test in package.json,
+    # and test/workflows.test.js checks it. Docker pulls by the digest, so
+    # update both. The runner's user (1001) owns the workspace and HOME.
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe
+      options: --user 1001
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,7 +53,6 @@ jobs:
           cache: npm
           node-version: 22
       - run: npm ci
-      - run: npm run test:e2e:install
       - run: npm run test:e2e
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
