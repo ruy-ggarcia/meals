@@ -93,7 +93,10 @@ Static checks read the code without running it:
 - `test/systemd-units.test.js` checks that each host script that runs on a
   schedule has a service and a timer.
 - [CodeQL](https://codeql.github.com) code scanning on GitHub checks the
-  JavaScript and the workflows for security problems.
+  JavaScript and the workflows for security problems. Treat an alert as a
+  bug: fix it with a test that fails before the fix, or dismiss it in GitHub
+  with the reason when it's a false positive or a risk that doesn't apply to
+  Meals.
 
 ### Unit
 

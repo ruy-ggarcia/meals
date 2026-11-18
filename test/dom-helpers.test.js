@@ -9,6 +9,7 @@ import {
   fakeFetch,
   loadDialog,
   loadPage,
+  openMarkup,
   openPage,
   respondTo,
   waitFor,
@@ -50,6 +51,26 @@ describe("loadDialog", () => {
     );
 
     assertGlobalsRestored(before);
+  });
+
+  test("fails with the id when the page has no such dialog", async () => {
+    await assert.rejects(
+      loadDialog({ html: "index.html", id: "missing-dialog", script: "slot-editor.js" }),
+      { message: "public/index.html has no element with the id missing-dialog" },
+    );
+  });
+});
+
+describe("openMarkup", () => {
+  test("leaves no script element when an end tag holds a space", async () => {
+    const window = openMarkup(
+      '<!doctype html><html><body><p>Meals</p><script type="module" src="app.js"></script ></body></html>',
+    );
+    try {
+      assert.equal(window.document.querySelectorAll("script").length, 0);
+    } finally {
+      await window.happyDOM.close();
+    }
   });
 });
 

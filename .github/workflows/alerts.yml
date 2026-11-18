@@ -1,0 +1,33 @@
+name: Alerts
+
+# Fails while main has an open code scanning alert. The CodeQL check of a
+# pull request reports only the alerts on the lines that the pull request
+# changes, so an alert that a change moves to another line, or one that a
+# newer CodeQL finds in code that didn't change, shows only here.
+on:
+  schedule:
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  security-events: read
+
+jobs:
+  alerts:
+    name: alerts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check that main has no open code scanning alert
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          alerts=$(gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/code-scanning/alerts?ref=refs/heads/main&state=open&per_page=100" \
+            --jq '.[] | "#\(.number) \(.rule.id) \(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"')
+          if [ -n "$alerts" ]; then
+            echo "::error::main has open code scanning alerts. Fix each one, or dismiss it in GitHub with a reason."
+            echo "$alerts"
+            exit 1
+          fi
+          echo "main has no open code scanning alert."

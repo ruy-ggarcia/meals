@@ -4,8 +4,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, test } from "node:test";
-import { Window } from "happy-dom";
-import { fakeFetch, loadPage, tick } from "./dom-helpers.js";
+import { fakeFetch, loadPage, openMarkup, tick } from "./dom-helpers.js";
 import { blankWeek } from "./meal-plan-helpers.js";
 
 const PAGES = [
@@ -16,9 +15,7 @@ const PAGES = [
 
 async function loadMarkup(html) {
   const markup = await readFile(new URL(`../public/${html}`, import.meta.url), "utf8");
-  const window = new Window({ url: "http://localhost/" });
-  window.document.write(markup.replace(/<script[^>]*><\/script>/g, ""));
-  return window;
+  return openMarkup(markup);
 }
 
 let page;
