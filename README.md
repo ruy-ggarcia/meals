@@ -495,7 +495,9 @@ GitHub Actions runs three checks on every pull request and on every push to
   `npm run test:units` with Node.js 22. `npm run lint` checks the code, the
   shell scripts, the workflows, and the `Dockerfile`. `npm run typecheck`
   checks the types of the JavaScript.
-- `e2e` runs `npm run test:e2e` with Node.js 22. A test that fails runs
+- `e2e` runs `npm run test:e2e` with Node.js 22 in the
+  [Playwright image](https://playwright.dev/docs/docker), which holds the
+  browsers and the system packages that they need. A test that fails runs
   once more with a trace, and a test that passes only on that retry still
   fails the check. When the check fails, it uploads the Playwright report as
   the `playwright-report` artifact, which GitHub keeps for 7 days.
@@ -545,6 +547,37 @@ pull request up to date, and publishes a release when you merge it. See
 Every week, Dependabot opens pull requests that update the npm
 dependencies, the GitHub Actions, and the base image. The settings are in
 `.github/dependabot.yml`.
+
+Dependabot doesn't update the Playwright image of the `e2e` job. When it
+updates `@playwright/test`, the `ci` check of its pull request fails until
+the image has the same version. To update the image in the pull request, do
+the following:
+
+1. Check out the pull request's branch:
+
+   ```bash
+   gh pr checkout NUMBER
+   ```
+
+   Replace `NUMBER` with the number of the pull request.
+
+1. Get the digest of the image of the new version:
+
+   ```bash
+   docker buildx imagetools inspect --format '{{.Manifest.Digest}}' mcr.microsoft.com/playwright:vX.Y.Z-noble
+   ```
+
+   Replace `X.Y.Z` with the new version of `@playwright/test`.
+
+1. In `.github/workflows/ci.yml`, replace the version in the `image` of the
+   `e2e` job with `X.Y.Z`, and its digest with the output of the last
+   command. Docker pulls the image by its digest, so a new tag with an old
+   digest still runs the old browsers.
+1. Commit the change as
+   `build(deps-dev): update the Playwright image to X.Y.Z`, and push it.
+
+After your commit, Dependabot no longer rebases the pull request, and a
+`@dependabot recreate` comment discards your commit.
 
 ## Project structure
 
