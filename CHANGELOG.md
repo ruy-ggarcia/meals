@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/ruy-ggarcia/meals/compare/v0.4.0...v0.4.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* resolve the CodeQL alerts open on main ([aafb77a](https://github.com/ruy-ggarcia/meals/commit/aafb77afc2815223dad5718c1736d6a34b2b9f1b))
+* **ui:** log values as arguments of the console messages ([6c1e203](https://github.com/ruy-ggarcia/meals/commit/6c1e203faca9fe867ad76bd9cab50548e8602bfc))
+
 ## [0.4.0](https://github.com/ruy-ggarcia/meals/compare/v0.3.0...v0.4.0) (2026-11-09)
 
 
