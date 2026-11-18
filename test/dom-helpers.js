@@ -201,6 +201,22 @@ function installGlobals(window, fetch) {
 }
 
 /**
+ * Opens `markup`, a whole page, in a new happy-dom window at `url`, without
+ * its script elements: a test imports the page's module itself, fresh. The
+ * markup goes through DOMParser, which never loads or runs a script.
+ *
+ * @param {string} markup
+ * @param {string} [url]
+ */
+export function openMarkup(markup, url = "http://localhost/") {
+  const window = new Window({ url });
+  const page = new window.DOMParser().parseFromString(markup, "text/html");
+  for (const script of page.querySelectorAll("script")) script.remove();
+  window.document.write(`<!doctype html>${page.documentElement.outerHTML}`);
+  return window;
+}
+
+/**
  * Loads `html` (a file name under public/, such as "index.html"), installs
  * the globals `script` (a file name under public/, such as "app.js") reads
  * at the top level, and imports `script` fresh. `fetch` stands in for the
@@ -228,12 +244,7 @@ export async function loadPage({
   beforeScript = () => {},
 }) {
   const markup = await readFile(path.join(PUBLIC_DIR, html), "utf8");
-  // The page's own <script type="module"> tag is stripped: the test imports
-  // the module itself, fresh, below, instead of letting happy-dom load it.
-  const withoutScript = markup.replace(/<script type="module" src="[^"]+"><\/script>\n?/, "");
-
-  const window = new Window({ url });
-  window.document.write(withoutScript);
+  const window = openMarkup(markup, url);
   const { document } = window;
 
   const cleanup = installGlobals(window, fetch);
@@ -275,10 +286,13 @@ export async function openPage(t, options) {
  */
 export async function loadDialog({ html, id, script, fetch }) {
   const markup = await readFile(path.join(PUBLIC_DIR, html), "utf8");
-  const dialogMarkup = markup.match(new RegExp(`<dialog id="${id}"[\\s\\S]*?</dialog>`))[0];
-
   const window = new Window({ url: "http://localhost/" });
-  window.document.write(`<!doctype html><html><body>${dialogMarkup}</body></html>`);
+  const dialog = new window.DOMParser().parseFromString(markup, "text/html").getElementById(id);
+  if (!dialog) {
+    await window.happyDOM.close();
+    throw new Error(`public/${html} has no element with the id ${id}`);
+  }
+  window.document.write(`<!doctype html><html><body>${dialog.outerHTML}</body></html>`);
   const { document } = window;
 
   const cleanup = installGlobals(window, fetch);
