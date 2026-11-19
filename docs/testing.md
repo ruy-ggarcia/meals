@@ -11,10 +11,11 @@ test.
 
 - **No flaky tests.** A test pins the guarantee that it promises consistently
   and reproducibly, whatever the load of the machine that runs it. Time
-  limits catch an app that hangs, not a slow machine. If a check can't pass
-  every time, narrow what the test promises and say so in its name, even if
-  coverage drops. Never hide a test that only sometimes passes with a retry
-  or a skip.
+  limits catch an app that hangs, not a slow machine, as
+  [time limits in `npm test`](#time-limits-in-npm-test) describes. If a
+  check can't pass every time, narrow what the test promises and say so in
+  its name, even if coverage drops. Never hide a test that only sometimes
+  passes with a retry or a skip.
 - **One guarantee per test.** The test's name states one behavior, and the
   test can fail only when that behavior breaks.
 - **A name with one form.** The subject of a test goes once in a `describe`
@@ -54,6 +55,29 @@ than the default, for example:
 ```bash
 npm run test:e2e -- e2e/saves.spec.js --repeat-each=10 --workers=12
 ```
+
+### Time limits in `npm test`
+
+`npm test` preloads `test/hooks/test-timeout.js`, which gives each test and
+each hook a limit of its own:
+
+- Each `test()` and `it()`, with their `only`, `skip`, and `todo` variants,
+  and each `before()`, `after()`, `beforeEach()`, and `afterEach()` hook
+  gets 10 seconds, unless it sets its own `timeout` option.
+- A test file imports these functions by name, as in
+  `import { describe, test } from "node:test"`. A call of the default
+  export, as in `import test from "node:test"` and then `test()`, has no
+  limit.
+- A `describe` block has no limit, so the number of tests in a file doesn't
+  fail it on a loaded machine.
+- With `--test-timeout`, `npm test` also gives each file a backstop of 5
+  minutes, which catches a hang in what has no limit of its own, such as a
+  `t.after()` hook, a `describe` body, or the top-level code of the file.
+
+When a test or a hook times out, and something that it left open keeps its
+file from ending, a watchdog ends the file 2 seconds later and names the
+test or hook that hung. `test/hooks/test-timeout.js` describes how the
+limits and the watchdog work.
 
 ## Test pyramid
 

@@ -653,6 +653,7 @@ server/
   stores.js      # Wires the stores to one write queue and to each other.
   weeks.js       # Weeks and the menu of each slot.
 test/              # Tests: node:test, with supertest for the API and happy-dom for the pages.
+  hooks/           # Code that tests preload with node --import, such as the time limits.
   stubs/           # Stub docker and curl for the host script tests.
 .dockerignore      # What the image build can read.
 .release-please-manifest.json # The current version, for release-please.
