@@ -1,11 +1,30 @@
-import { access, constants } from "node:fs/promises";
+import { access, constants, readFile } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { ConflictError, NameConflictError, NotFoundError, ValidationError } from "./errors.js";
+import {
+  ConflictError,
+  NameConflictError,
+  NotFoundError,
+  PartialSaveError,
+  UpstreamError,
+  ValidationError,
+} from "./errors.js";
 import { silentLogger } from "./logger.js";
 import { isSlot, isWeekId } from "./weeks.js";
 
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
+
+/** The file of each page, by the paths that serve it. */
+const PAGE_FILES = {
+  "/": "index.html",
+  "/index.html": "index.html",
+  "/recipes.html": "recipes.html",
+  "/ingredients.html": "ingredients.html",
+};
+
+/** The path of the read of one conversation with the assistant. */
+const CONVERSATION_PATH = /^\/api\/assistant\/conversations\/[^/]+$/;
 
 /** The path of a request, without its query string. */
 function pathOf(req) {
@@ -23,13 +42,24 @@ function logRequests(logger) {
     const started = performance.now();
     res.on("close", () => {
       const path = pathOf(req);
+      const ms = Math.round(performance.now() - started);
+      // An aborted response never got its status, so log the abort instead.
+      // It keeps the default status 200, so it comes before the quiet ones.
+      if (!res.writableFinished) {
+        logger.info("request", { method: req.method, path, aborted: true, ms });
+        return;
+      }
       // Docker checks the health every 30 seconds, and every second while the
       // container starts. Log only the failures.
       if (path === "/api/health" && res.statusCode === 200) return;
-      const ms = Math.round(performance.now() - started);
-      // An aborted response never got its status, so log the abort instead.
-      if (!res.writableFinished) {
-        logger.info("request", { method: req.method, path, aborted: true, ms });
+      // The assistant's window reads its conversation every second during a
+      // turn. Log only the failures, as for the health check. A read that
+      // hasn't changed since the last one answers 304.
+      if (
+        req.method === "GET" &&
+        CONVERSATION_PATH.test(path) &&
+        (res.statusCode === 200 || res.statusCode === 304)
+      ) {
         return;
       }
       logger.info("request", { method: req.method, path, status: res.statusCode, ms });
@@ -39,15 +69,51 @@ function logRequests(logger) {
 }
 
 /**
- * @param {{ ingredients?: any, recipes?: any, weeks?: any }} stores
- * @param {{ dataDir?: string, logger?: import("./logger.js").Logger, version?: string }} [options]
+ * `page` with `data-assistant-enabled` at the end of the start tag of its
+ * root, the first `<html` tag, whatever attributes it has.
+ *
+ * @param {string} page
+ */
+export function markAssistantEnabled(page) {
+  return page.replace(/<html(?=[\s>])[^>]*/i, (tag) => `${tag} data-assistant-enabled`);
+}
+
+/**
+ * Without `assistant`, `GET /api/assistant` says that the assistant is off,
+ * and every route of the conversations answers 404. Without `setup`, the
+ * routes of the assistant's settings answer 404.
+ * @param {{ ingredients?: any, preferences?: any, recipes?: any, weeks?: any }} stores
+ * @param {{
+ *   assistant?: ReturnType<typeof import("./assistant/conversations.js").createConversations>,
+ *   dataDir?: string,
+ *   logger?: import("./logger.js").Logger,
+ *   setup?: ReturnType<typeof import("./assistant/setup.js").createAssistantSetup>,
+ *   version?: string,
+ * }} [options]
  */
 export function createApp(
-  { ingredients, recipes, weeks },
-  { dataDir, logger = silentLogger, version } = {},
+  { ingredients, preferences, recipes, weeks },
+  { assistant, dataDir, logger = silentLogger, setup, version } = {},
 ) {
   const app = express();
   app.use("/api", logRequests(logger));
+
+  // A message to the assistant carries its attachments as base64 in JSON: up
+  // to 20 MB of files, about 27 MB once encoded. Only this route accepts a
+  // body that large, so it comes before the parser of every other route,
+  // which keeps the default limit of 100 kB. A turn runs in the background,
+  // so the route answers at once, and the page reads the conversation.
+  if (assistant) {
+    app.post(
+      "/api/assistant/conversations/:id/messages",
+      express.json({ limit: "30mb" }),
+      (req, res) => {
+        assistant.send(req.params.id, req.body);
+        res.status(202).json({});
+      },
+    );
+  }
+
   app.use(express.json());
 
   // Healthy means the server can read, write, and enter the data directory.
@@ -71,6 +137,10 @@ export function createApp(
     res.json({ ingredients: await ingredients.list() });
   });
 
+  app.get("/api/preferences", async (_req, res) => {
+    res.json({ text: await preferences.read() });
+  });
+
   // From here on, every route that passes req.body to a store: Express 5
   // leaves req.body undefined when there is no JSON body. The stores
   // validate what they get and throw the errors that the handler below maps.
@@ -88,6 +158,10 @@ export function createApp(
 
   app.patch("/api/ingredients/:id", async (req, res) => {
     res.json(await ingredients.update(req.params.id, req.body));
+  });
+
+  app.put("/api/preferences", async (req, res) => {
+    res.json({ text: await preferences.save(req.body) });
   });
 
   app.get("/api/weeks/:week", async (req, res) => {
@@ -108,10 +182,82 @@ export function createApp(
     res.json(await weeks.saveSlot(week, day, meal, req.body?.items));
   });
 
+  app.get("/api/assistant", (_req, res) => {
+    res.json({ enabled: assistant?.enabled() ?? false });
+  });
+
+  // The settings never answer the key, only whether one is saved.
+  if (setup) {
+    app.get("/api/assistant/settings", async (_req, res) => {
+      res.json(await setup.read());
+    });
+
+    app.put("/api/assistant/settings", async (req, res) => {
+      res.json(await setup.save(req.body));
+    });
+
+    // The key travels in the body, never in the URL, which logs and
+    // histories keep.
+    app.post("/api/assistant/models", async (req, res) => {
+      res.json({ models: await setup.models(req.body) });
+    });
+  }
+
+  // The conversations raise the errors of server/errors.js, which the
+  // handler below maps, such as 404 for an unknown conversation.
+  if (assistant) {
+    app.post("/api/assistant/conversations", (_req, res) => {
+      res.status(201).json(assistant.create());
+    });
+
+    app.get("/api/assistant/conversations/:id", async (req, res) => {
+      res.json(await assistant.view(req.params.id));
+    });
+
+    app.post("/api/assistant/conversations/:id/retry", (req, res) => {
+      assistant.retry(req.params.id);
+      res.status(202).json({});
+    });
+
+    app.post("/api/assistant/conversations/:id/apply", async (req, res) => {
+      const result = await assistant.apply(req.params.id, req.body?.revision);
+      if ("problems" in result) {
+        res.status(409).json({
+          error: "The pending changes couldn't be applied.",
+          problems: result.problems,
+        });
+        return;
+      }
+      res.json(result);
+    });
+
+    app.post("/api/assistant/conversations/:id/discard", (req, res) => {
+      assistant.discard(req.params.id);
+      res.json({});
+    });
+
+    app.delete("/api/assistant/conversations/:id", (req, res) => {
+      assistant.end(req.params.id);
+      res.status(204).end();
+    });
+  }
+
   // Any other /api path: JSON 404 (the API only ever answers JSON).
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Not found" });
   });
+
+  // The pages carry whether the assistant is on, as the root's
+  // `data-assistant-enabled`, so the phone's tab bar has its place from the
+  // first paint. The browser checks a page again before each use, so the
+  // mark follows every change in Settings.
+  for (const [route, file] of Object.entries(PAGE_FILES)) {
+    app.get(route, async (_req, res) => {
+      const page = await readFile(path.join(PUBLIC_DIR, file), "utf8");
+      const marked = assistant?.enabled() ? markAssistantEnabled(page) : page;
+      res.set("Cache-Control", "no-cache").type("html").send(marked);
+    });
+  }
 
   app.use(express.static(PUBLIC_DIR));
 
@@ -119,6 +265,12 @@ export function createApp(
   // 4xx errors from body parsing (for example, malformed JSON -> 400) keep their status.
   // Keep all four parameters: Express identifies error handlers by arity.
   app.use((err, req, res, _next) => {
+    // The message of JSON.parse quotes the text around the error, which can
+    // be an API key, so it never goes back.
+    if (err.type === "entity.parse.failed") {
+      res.status(400).json({ error: "The body isn't valid JSON." });
+      return;
+    }
     if (err instanceof ValidationError) {
       res.status(400).json({ error: err.message });
       return;
@@ -135,6 +287,10 @@ export function createApp(
       res.status(409).json({ error: err.message });
       return;
     }
+    if (err instanceof UpstreamError) {
+      res.status(502).json({ error: err.message });
+      return;
+    }
     const status =
       Number.isInteger(err.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
     if (status === 500) {
@@ -144,7 +300,12 @@ export function createApp(
         error: err?.stack ?? String(err),
       });
     }
-    res.status(status).json({ error: status === 500 ? "Internal server error" : err.message });
+    // An apply that saved part of its changes says so, so the assistant's
+    // window can tell the user to check what's saved.
+    const partly = err instanceof PartialSaveError ? { code: "partly_saved" } : {};
+    res
+      .status(status)
+      .json({ error: status === 500 ? "Internal server error" : err.message, ...partly });
   });
 
   return app;

@@ -2,7 +2,7 @@
 // any other layer: the frontend tests, the host tests, and `e2e/` have their
 // own helpers.
 
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach } from "node:test";
@@ -62,8 +62,17 @@ export async function writeDataFile(dataDir, file, content) {
 }
 
 /**
+ * Stands in for the providers and their model lists of the server.
+ * @returns {never}
+ */
+function realProvider() {
+  throw new Error("A test called a real provider.");
+}
+
+/**
  * Starts the server on a free port of `127.0.0.1`, with no logs, and stops
- * it when the test `t` ends. `options` replace the defaults.
+ * it when the test `t` ends. Its providers and their model lists throw, so
+ * no test reaches a real provider. `options` replace the defaults.
  *
  * @param {import("node:test").TestContext} t
  * @param {string} dataDir
@@ -74,7 +83,9 @@ export async function startTestServer(t, dataDir, options = {}) {
     dataDir,
     host: "127.0.0.1",
     logger: silentLogger,
+    modelLists: { anthropic: realProvider, openai: realProvider },
     port: 0,
+    providerFactories: { anthropic: realProvider, openai: realProvider },
     version: "1.2.3",
     ...options,
   });
@@ -120,4 +131,23 @@ export async function within(promise, message, ms = 2000) {
  */
 export function skipAsRoot(reason) {
   return process.getuid?.() === 0 ? reason : false;
+}
+
+/**
+ * Sets the umask of the process to MASK until the test `t` ends, so a test
+ * of file modes doesn't depend on the umask of whoever runs it.
+ *
+ * @param {import("node:test").TestContext} t
+ * @param {number} mask
+ */
+export function useUmask(t, mask) {
+  const previous = process.umask(mask);
+  t.after(() => {
+    process.umask(previous);
+  });
+}
+
+/** The permission bits of FILE in octal, such as "640". */
+export async function modeOf(file) {
+  return ((await stat(file)).mode & 0o777).toString(8);
 }

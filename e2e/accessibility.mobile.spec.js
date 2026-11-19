@@ -22,7 +22,8 @@ const DAYS = [
  *
  * - `color-contrast`: in the light appearance, the green name of the current
  *   page in the tab bar (contrast 4.42 on the bar, and 4.5 is the minimum),
- *   and the red `Leave Without Saving` (4.21 on the gray sheet). On the
+ *   the red `Leave Without Saving` (4.21 on the gray sheet), and the green
+ *   `Retry` of a failed answer (4.35 on its green tint). On the
  *   meal plan and the alert, an iPhone doesn't report them, because axe
  *   can't read the background behind the glass of the bar and the alert.
  * - `label-content-name-mismatch`: the accessible name of a slot (`Monday,
@@ -39,6 +40,9 @@ const MEAL_PLAN = [
 const KNOWN = {
   "meal plan": { light: [SIDEBAR, ...MEAL_PLAN], dark: MEAL_PLAN },
   "alert about an unsaved meal": { light: ["color-contrast button.leave ×1"] },
+  "assistant window with an applied row and a failed answer": {
+    light: ["color-contrast button.failure-action ×1"],
+  },
   "recipe book": {
     light: [SIDEBAR, "label-content-name-mismatch button.entry ×7"],
     dark: ["label-content-name-mismatch button.entry ×7"],
@@ -95,4 +99,5 @@ test.describe("day bar", () => {
   });
 });
 
-defineAxeTests(knownFor);
+// The assistant's window is a sheet over the inert page, which axe skips.
+defineAxeTests(knownFor, { inertBehindWindow: true });

@@ -11,10 +11,11 @@ test.
 
 - **No flaky tests.** A test pins the guarantee that it promises consistently
   and reproducibly, whatever the load of the machine that runs it. Time
-  limits catch an app that hangs, not a slow machine. If a check can't pass
-  every time, narrow what the test promises and say so in its name, even if
-  coverage drops. Never hide a test that only sometimes passes with a retry
-  or a skip.
+  limits catch an app that hangs, not a slow machine, as
+  [time limits in `npm test`](#time-limits-in-npm-test) describes. If a
+  check can't pass every time, narrow what the test promises and say so in
+  its name, even if coverage drops. Never hide a test that only sometimes
+  passes with a retry or a skip.
 - **One guarantee per test.** The test's name states one behavior, and the
   test can fail only when that behavior breaks.
 - **A name with one form.** The subject of a test goes once in a `describe`
@@ -55,6 +56,41 @@ than the default, for example:
 npm run test:e2e -- e2e/saves.spec.js --repeat-each=10 --workers=12
 ```
 
+### Time limits in `npm test`
+
+`npm test` preloads `test/hooks/test-timeout.js`, which gives each test and
+each hook a limit of its own:
+
+- Each `test()` and `it()`, with their `only`, `skip`, and `todo` variants,
+  and each `before()`, `after()`, `beforeEach()`, and `afterEach()` hook
+  gets 10 seconds, unless it sets its own `timeout` option.
+- A test file imports these functions by name, as in
+  `import { describe, test } from "node:test"`. A call of the default
+  export, as in `import test from "node:test"` and then `test()`, has no
+  limit.
+- A `describe` block has no limit, so the number of tests in a file doesn't
+  fail it on a loaded machine.
+- With `--test-timeout`, `npm test` also gives each file a backstop of 5
+  minutes, which catches a hang in what has no limit of its own, such as a
+  `t.after()` hook, a `describe` body, or the top-level code of the file.
+
+When a test or a hook times out, and something that it left open keeps its
+file from ending, a watchdog ends the file 2 seconds later and names the
+test or hook that hung. `test/hooks/test-timeout.js` describes how the
+limits and the watchdog work.
+
+### Short failures of DOM objects
+
+A failed comparison of a happy-dom node or another DOM object, such as an
+event or a style, would block the process: Node.js formats the whole
+document for the message, and the limit of the test can't end it. So
+`npm test` also preloads `test/hooks/short-node-failures.js`, which puts a
+short text in place of each DOM object in the message of a failed
+comparison of `node:assert/strict`. The hook looks in arrays and plain
+objects, three levels deep: a DOM object inside a `Map`, or deeper than
+three levels, still blocks the process. The hook file describes how it
+works.
+
 ## Test pyramid
 
 The tests form a pyramid: many fast and isolated tests at the bottom, and few
@@ -74,12 +110,12 @@ that the level below it can't.
 Static checks read the code without running it:
 
 - [Biome](https://biomejs.dev) checks the format and the lint rules of the
-  JavaScript, and [ShellCheck](https://www.shellcheck.net) checks the shell
-  scripts. [actionlint](https://github.com/rhysd/actionlint) checks the
-  workflows, and [hadolint](https://github.com/hadolint/hadolint) checks the
-  `Dockerfile`. `npm run lint` runs all four, and the `ci` job runs it on
-  every pull request. `scripts/install-lint-tools.sh` downloads the pinned
-  versions of actionlint and hadolint and verifies their checksums.
+  JavaScript, CSS, and JSON files, and
+  [ShellCheck](https://www.shellcheck.net) checks the shell scripts.
+  [actionlint](https://github.com/rhysd/actionlint) checks the workflows, and
+  [hadolint](https://github.com/hadolint/hadolint) checks the `Dockerfile`.
+  `npm run lint` runs all four, and the `ci` job runs it on every pull
+  request.
 - [TypeScript](https://www.typescriptlang.org) checks the types of the
   JavaScript in `e2e/`, `public/`, `server/`, and `test/`, and in
   `playwright.config.js`, without a build step: it reads the
@@ -120,6 +156,11 @@ Integration tests check modules together with a real dependency, also in
   [happy-dom](https://github.com/capricorn86/happy-dom) with a fake server, so
   a test can click, type, and read the page. A test fails on a
   `console.error` call that it didn't declare, as the browser tests do.
+- No test of the assistant calls a real provider. The tests of the
+  conversations, the turns, and the routes use a scripted provider, which
+  answers with the text and the tool calls that the test sets. Each provider
+  adapter runs against a local stub server, which records each request and
+  answers in the provider's format.
 - For the deployment, `npm run test:image` builds the image and runs it
   through `deploy/compose.yaml` as the host does, and `npm run test:host`
   runs the `meals-*` scripts against real Docker in a temporary root.
@@ -135,14 +176,20 @@ End-to-end tests check the whole system as a person or the host uses it:
   page and dialog in the light and dark appearances. A request never times
   out in a browser test, so a test can hold it as long as it needs; a test
   that checks how the app gives up on a request uses `test.use({
-  requestTimeout: "real" })` and waits for the real 5 seconds. `npm run
-  test:e2e` runs them.
+  requestTimeout: "real" })` and waits for the real 5 seconds. The assistant
+  is off unless a test sets a script with `test.use({ assistant: { script:
+  [...] } })`. The server then answers with the scripted provider of
+  `e2e/assistant.js`, whose tool calls run on the test's data, and never
+  calls a real provider. Without a script, a key that a test saves in
+  **Settings** turns on a provider that fails every call. The server never
+  asks a real provider for its models either: each provider lists one
+  model. `npm run test:e2e` runs them.
 - `scripts/host-acceptance.sh` installs the host tools for real on a
   disposable GitHub-hosted runner, deploys published releases, backs up,
   restores, and restarts Docker. `.github/workflows/host.yml` runs it on pull
-  requests that change `deploy/` or `scripts/`, every week, and by hand. The
-  weekly run catches changes outside the repository, such as a new runner
-  image or a change in GitHub or GHCR.
+  requests that change `deploy/`, `scripts/`, or the workflow itself, every
+  week, and by hand. The weekly run catches changes outside the repository,
+  such as a new runner image or a change in GitHub or GHCR.
 
 ### Exploratory
 
@@ -151,6 +198,16 @@ and on an iPhone, with a written goal, such as the keyboard in the editors.
 The session finds what Playwright can't emulate. It never blocks a release:
 each finding becomes an issue, and its fix comes with a test at the lowest
 level that can prove it.
+
+Each session also checks the following:
+
+- **The on-screen keyboard and the assistant's sheet.** On an iPhone, open the
+  assistant's window on the meal plan: the keyboard stays closed. Tap the
+  message field, and type a message of several lines. The window's header
+  and the message field stay visible above the keyboard.
+- **Password managers and the API key.** In Safari on the Mac and on the
+  iPhone, save a key in the **BYOK** section of **Settings**. The browser
+  doesn't offer to save a password.
 
 ## Where a new test goes
 

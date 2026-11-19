@@ -12,6 +12,8 @@ import {
   validIngredients,
   validNewRecipe,
   withKnownIngredients,
+  withNewRecipe,
+  withRecipeChanges,
 } from "../server/recipes.js";
 
 const wrongShape =
@@ -526,5 +528,110 @@ describe("moveLines", () => {
     moveLines(all, "onion", "medium");
 
     assert.equal(moveLines(all, "onion", "medium"), 0);
+  });
+});
+
+describe("withNewRecipe", () => {
+  const known = new Map([["onion", new Set(["medium"])]]);
+  const soup = { id: "r1", name: "Soup", archived: false, ingredients: [line("gone", 1)] };
+
+  test("adds the recipe with the ID and returns it", () => {
+    const fields = { name: " Stew ", ingredients: [lineInMeasure("onion", "medium", 2)] };
+
+    const next = withNewRecipe([soup], fields, known, "r2");
+
+    const stew = {
+      id: "r2",
+      name: "Stew",
+      archived: false,
+      ingredients: [lineInMeasure("onion", "medium", 2)],
+    };
+    assert.deepEqual(next, { all: [soup, stew], recipe: stew });
+  });
+
+  test("rejects fields that POST /api/recipes rejects", () => {
+    assert.throws(
+      () => withNewRecipe([soup], { title: "Stew" }, known, "r2"),
+      invalid('Send "name" and, optionally, "ingredients".'),
+    );
+  });
+
+  test("rejects a name whose name key another recipe has", () => {
+    assert.throws(() => withNewRecipe([soup], { name: "SOUP" }, known, "r2"), {
+      name: "NameConflictError",
+      message: 'A recipe named "Soup" already exists.',
+      kind: "recipe",
+      entity: soup,
+    });
+  });
+
+  test("rejects an ingredient that isn't in the catalog", () => {
+    assert.throws(
+      () => withNewRecipe([soup], { name: "Stew", ingredients: [line("x", 1)] }, known, "r2"),
+      invalid("Unknown ingredient: x"),
+    );
+  });
+
+  test("doesn't change its arguments", () => {
+    const all = [soup];
+    const fields = { name: "Stew", ingredients: [line("onion", 2)] };
+    const before = structuredClone({ all, fields, known });
+
+    withNewRecipe(all, fields, known, "r2");
+
+    assert.deepEqual({ all, fields, known }, before);
+  });
+});
+
+describe("withRecipeChanges", () => {
+  const known = new Map([["onion", new Set(["medium"])]]);
+  const soup = { id: "r1", name: "Soup", archived: false, ingredients: [line("gone", 1)] };
+  const stew = { id: "r2", name: "Stew", archived: false, ingredients: [] };
+
+  test("applies the changes and returns the recipe as stored", () => {
+    const next = withRecipeChanges([soup, stew], "r1", { name: "Onion soup" }, known);
+
+    const renamed = { ...soup, name: "Onion soup" };
+    assert.deepEqual(next, { all: [renamed, stew], recipe: renamed });
+  });
+
+  test("rejects changes that PATCH /api/recipes/:id rejects", () => {
+    assert.throws(
+      () => withRecipeChanges([soup], "r1", { archived: "yes" }, known),
+      invalid('"archived" must be true or false.'),
+    );
+  });
+
+  test("rejects an unknown ID", () => {
+    assert.throws(() => withRecipeChanges([soup], "x", { archived: true }, known), {
+      name: "NotFoundError",
+      message: "Unknown recipe: x",
+    });
+  });
+
+  test("rejects a name whose name key another recipe has", () => {
+    assert.throws(() => withRecipeChanges([soup, stew], "r2", { name: "soup" }, known), {
+      name: "NameConflictError",
+      message: 'A recipe named "Soup" already exists.',
+      kind: "recipe",
+      entity: soup,
+    });
+  });
+
+  test("rejects an ingredient that isn't in the catalog", () => {
+    assert.throws(
+      () => withRecipeChanges([soup], "r1", { ingredients: [line("x", 1)] }, known),
+      invalid("Unknown ingredient: x"),
+    );
+  });
+
+  test("doesn't change its arguments", () => {
+    const all = [soup, stew];
+    const changes = { name: "Onion soup", ingredients: [line("onion", 2)] };
+    const before = structuredClone({ all, changes, known });
+
+    withRecipeChanges(all, "r1", changes, known);
+
+    assert.deepEqual({ all, changes, known }, before);
   });
 });

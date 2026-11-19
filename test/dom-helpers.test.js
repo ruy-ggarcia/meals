@@ -12,8 +12,11 @@ import {
   openMarkup,
   openPage,
   respondTo,
+  useQuietConsole,
   waitFor,
 } from "./dom-helpers.js";
+
+const quiet = useQuietConsole();
 
 const GLOBALS = ["document", "fetch", "history", "location", "window"];
 
@@ -21,8 +24,8 @@ function snapshotOfGlobals() {
   return Object.fromEntries(GLOBALS.map((key) => [key, globalThis[key]]));
 }
 
-// Compares one global at a time: handing a happy-dom window to
-// `assert.deepEqual` makes a failure hang while it diffs the whole window.
+// Compares one global at a time, so a failure names the global that was
+// left behind.
 function assertGlobalsRestored(before) {
   for (const key of GLOBALS) {
     assert.ok(globalThis[key] === before[key], `${key} was left behind`);
@@ -125,6 +128,7 @@ describe("cleanup", () => {
     const { page, server } = await openRecipesPage();
     server.requestFor("GET", "/api/recipes").respond(200, { recipes: [] });
     server.requestFor("GET", "/api/ingredients").fail();
+    quiet.expect(1); // The page logs the failed load.
 
     await page.cleanup();
   });
@@ -202,6 +206,26 @@ describe("waitFor", () => {
         message: "waitFor: condition not met after 2 ticks: now 1 reload",
       },
     );
+  });
+});
+
+describe("fakeFetch", () => {
+  test("answers GET /api/assistant with the assistant off and records nothing", async () => {
+    const server = fakeFetch();
+
+    const response = await server.fetch("/api/assistant");
+
+    assert.deepEqual(await response.json(), { enabled: false });
+    assert.equal(server.requests.length, 0);
+  });
+
+  test("leaves GET /api/assistant to the test with assistant manual", async () => {
+    const server = fakeFetch({ assistant: "manual" });
+    const sent = server.fetch("/api/assistant");
+
+    await respondTo(server, "GET", "/api/assistant", 200, { enabled: true });
+
+    assert.deepEqual(await (await sent).json(), { enabled: true });
   });
 });
 

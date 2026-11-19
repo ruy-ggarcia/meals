@@ -1,13 +1,33 @@
 // Checks of the test harness itself: the errors that the fixtures collect,
-// the failure of a test on such an error, and the server that each test
-// starts. The tests that call `test.fail()` prove only that the fixture wires
-// `watchErrors` to the page.
+// the failure of a test on such an error, the server that each test starts,
+// its fake model lists, and the scripted provider of the assistant. The tests
+// that call `test.fail()` prove only that the fixture wires `watchErrors` to
+// the page, or that it checks the calls beyond the script of the assistant.
 
 import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
+import { scriptedProvider } from "./assistant.js";
 import { CURRENT_WEEK, NOW } from "./catalog.js";
 import { expect, settleRequests, test, trackRequests, watchErrors } from "./fixtures.js";
+
+/** A request to a provider, with nothing in it. */
+const REQUEST = { system: "", messages: [], tools: [] };
+
+/**
+ * Asks the server of `app` for the models of `provider` with a key, and
+ * resolves to the status and the body of the answer.
+ * @param {{ url: string }} app
+ * @param {"anthropic" | "openai"} provider
+ */
+async function listModels(app, provider) {
+  const response = await fetch(`${app.url}/api/assistant/models`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, apiKey: "sk-test" }),
+  });
+  return { status: response.status, body: await response.json() };
+}
 
 /** Throws `message` from a timer. The fake clock catches it, and logs it as a console error. */
 function throwFromTimer(page, message) {
@@ -241,6 +261,52 @@ test.describe("e2e/fixtures.js", () => {
         "the data directory must be directly in the temp directory",
       ).toBe(tmpdir());
       expect((await stat(app.dataDir)).isDirectory(), "the data directory exists").toBe(true);
+    });
+
+    test("answers one model for each provider", async ({ app }) => {
+      expect(await listModels(app, "anthropic")).toEqual({
+        status: 200,
+        body: { models: [{ id: "claude-test", name: "Claude Test" }] },
+      });
+      expect(await listModels(app, "openai")).toEqual({
+        status: 200,
+        body: { models: [{ id: "gpt-test", name: "gpt-test" }] },
+      });
+    });
+
+    test.describe(() => {
+      test.use({ assistant: { script: [] } });
+
+      // Expected to fail, as the tests of the page fixture above.
+      test("fails a test whose assistant runs past its script", async ({ app }) => {
+        test.fail();
+
+        await app.assistant?.complete(REQUEST).catch(() => {});
+      });
+    });
+  });
+});
+
+test.describe("e2e/assistant.js", () => {
+  test.describe("scriptedProvider", () => {
+    // These tests run in Node.js alone, with no browser: one project is enough.
+    test.skip(({ browserName }) => browserName !== "chromium", "Runs only in Chromium.");
+
+    test("rejects a call beyond its script", async () => {
+      const provider = scriptedProvider([{ text: "Hello." }], () => null);
+      await provider.complete(REQUEST);
+
+      await expect(provider.complete(REQUEST)).rejects.toThrow(
+        "The assistant made call 2, past the end of its script.",
+      );
+    });
+
+    test("records a call beyond its script in overruns", async () => {
+      const provider = scriptedProvider([], () => null);
+
+      await provider.complete(REQUEST).catch(() => {});
+
+      expect(provider.overruns).toEqual(["The assistant made call 1, past the end of its script."]);
     });
   });
 });

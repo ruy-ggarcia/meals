@@ -144,9 +144,8 @@ async function hasLockWaiter(file) {
  * Polls until CONDITION holds. It has no time limit of its own, so a slow
  * machine doesn't fail it. A hang ends in one of two ways, and both call
  * STOP and fail with the message that FAILURE returns. The signal of the
- * test aborts, or the test runner ends the whole file with SIGTERM, which it
- * does when the file times out before the test does, as the runner's
- * timeout applies to both.
+ * test aborts when the test times out, or the test runner ends the whole
+ * file with SIGTERM, as when it's stopped.
  *
  * @param {() => boolean | Promise<boolean>} condition
  * @param {AbortSignal} signal
@@ -490,6 +489,11 @@ class Host {
 
   exists(relPath) {
     return exists(path.join(this.root, relPath));
+  }
+
+  /** The permission bits of the file at RELPATH in octal, such as "640". */
+  async mode(relPath) {
+    return ((await stat(path.join(this.root, relPath))).mode & 0o777).toString(8);
   }
 
   /** The file names in backups/, sorted. */

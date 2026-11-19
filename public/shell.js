@@ -1,6 +1,10 @@
 // The shell that every page shares: the section links, which wide screens
-// show as a sidebar and phones as a tab bar, and the choice to hide or show
-// the sidebar. Each page calls setUpShell() when it starts.
+// show as a sidebar and phones as a tab bar, the choice to hide or show the
+// sidebar, the Settings button at the end of the toolbar, and the assistant's
+// button. Each page calls setUpShell() when it starts.
+
+import { setUpAssistant } from "./assistant.js";
+import { setUpSettings } from "./settings.js";
 
 const SIDEBAR_KEY = "meals.sidebar";
 
@@ -24,12 +28,17 @@ function setSidebar(choice) {
   }
 }
 
-/** Applies the remembered sidebar choice and wires Hide sidebar and Show sidebar. */
+/**
+ * Applies the remembered sidebar choice, wires Hide sidebar and Show sidebar,
+ * and sets up Settings and the assistant.
+ */
 export function setUpShell() {
   const choice = readChoice();
   if (choice === "shown" || choice === "hidden") document.documentElement.dataset.sidebar = choice;
   document.querySelector(".hide-sidebar").addEventListener("click", () => setSidebar("hidden"));
   document.querySelector(".show-sidebar").addEventListener("click", () => setSidebar("shown"));
+  setUpSettings();
+  setUpAssistant();
 }
 
 /**

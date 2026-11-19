@@ -7,6 +7,7 @@ import { beforeEach, describe, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import request from "supertest";
 import { createApp } from "../server/app.js";
+import { createConversations } from "../server/assistant/conversations.js";
 import {
   ConflictError,
   NameConflictError,
@@ -14,6 +15,7 @@ import {
   ValidationError,
 } from "../server/errors.js";
 import { createStores } from "../server/stores.js";
+import { scriptedProvider } from "./assistant-helpers.js";
 import {
   blankWeek,
   collectingLogger,
@@ -329,6 +331,16 @@ describe("createApp", () => {
     assert.deepEqual(res.body, { error: "Gone" });
   });
 
+  test("answers malformed JSON with 400 and a fixed message", async () => {
+    const res = await request(app)
+      .post("/api/recipes")
+      .set("Content-Type", "application/json")
+      .send('{"name": Soup}');
+
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: "The body isn't valid JSON." });
+  });
+
   test("returns 404 JSON for an unknown /api route", async () => {
     assertJsonError(await request(app).get("/api/nope"), 404, "GET /api/nope");
     assertJsonError(await request(app).delete("/api/recipes/x"), 404, "DELETE a recipe");
@@ -552,6 +564,78 @@ describe("PATCH /api/recipes/:id", () => {
       });
     assert.equal(updated.status, 200);
     assert.deepEqual((await request(app).get("/api/recipes")).body, { recipes: [updated.body] });
+  });
+});
+
+describe("GET /api/preferences", () => {
+  test("returns an empty text at first", async () => {
+    const res = await request(app).get("/api/preferences");
+
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /application\/json/);
+    assert.deepEqual(res.body, { text: "" });
+  });
+
+  test("returns 500 when the file is corrupt", async () => {
+    await writeDataFile(dataDir(), "v2/preferences.json", "{ not json");
+
+    const res = await request(app).get("/api/preferences");
+
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { error: "Internal server error" });
+  });
+});
+
+describe("PUT /api/preferences", () => {
+  test("saves a text and returns it on the next read", async () => {
+    const text = "No pork.\nCafé con leche.";
+
+    const saved = await request(app).put("/api/preferences").send({ text });
+    const read = await request(app).get("/api/preferences");
+
+    assert.equal(saved.status, 200);
+    assert.deepEqual(saved.body, { text });
+    assert.deepEqual(read.body, { text });
+  });
+
+  test("rejects a body of 12 MB with 413 while the assistant is on", async (t) => {
+    const stores = createStores({ dataDir: dataDir() });
+    const assistant = createConversations({ getProvider: () => scriptedProvider([]), stores });
+    t.after(() => assistant.stop());
+
+    const res = await request(createApp(stores, { assistant }))
+      .put("/api/preferences")
+      .send({ text: "a".repeat(12 * 1024 * 1024) });
+
+    assertJsonError(res, 413, "12 MB of preferences");
+  });
+
+  const INVALID_BODIES = [
+    ["an empty object", {}],
+    ["a text that isn't a string", { text: 1 }],
+    ["another field", { text: "a", other: 1 }],
+    ["a text of 10001 characters", { text: "a".repeat(10001) }],
+  ];
+  for (const [label, body] of INVALID_BODIES) {
+    test(`rejects ${label} with 400`, async () => {
+      const res = await request(app).put("/api/preferences").send(body);
+
+      assertJsonError(res, 400, label);
+      assert.equal(res.body.error, '"text" must be a string of at most 10000 characters.');
+    });
+  }
+
+  test("rejects a request without a body with 400", async () => {
+    assertJsonError(await request(app).put("/api/preferences"), 400, "no body");
+  });
+
+  test("returns 500 when the file is corrupt", async () => {
+    await writeDataFile(dataDir(), "v2/preferences.json", "{ not json");
+
+    const res = await request(app).put("/api/preferences").send({ text: "No pork." });
+
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { error: "Internal server error" });
   });
 });
 
