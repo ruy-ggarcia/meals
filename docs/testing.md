@@ -79,6 +79,18 @@ file from ending, a watchdog ends the file 2 seconds later and names the
 test or hook that hung. `test/hooks/test-timeout.js` describes how the
 limits and the watchdog work.
 
+### Short failures of DOM objects
+
+A failed comparison of a happy-dom node or another DOM object, such as an
+event or a style, would block the process: Node.js formats the whole
+document for the message, and the limit of the test can't end it. So
+`npm test` also preloads `test/hooks/short-node-failures.js`, which puts a
+short text in place of each DOM object in the message of a failed
+comparison of `node:assert/strict`. The hook looks in arrays and plain
+objects, three levels deep: a DOM object inside a `Map`, or deeper than
+three levels, still blocks the process. The hook file describes how it
+works.
+
 ## Test pyramid
 
 The tests form a pyramid: many fast and isolated tests at the bottom, and few

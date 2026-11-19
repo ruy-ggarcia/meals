@@ -129,8 +129,7 @@ function accessibleName(element) {
 
 // A short, readable description of `element` for a failed focus assertion:
 // its tag, ID, classes, and accessible name, such as `<button#save.primary
-// "Save">`. Never handed to node:assert, which would try to diff the whole
-// DOM element and hang.
+// "Save">`. Gives `assertFocus` a readable message.
 function describeElement(element) {
   if (!element) return "nothing";
   const tag = element.tagName ? element.tagName.toLowerCase() : String(element);
@@ -144,9 +143,8 @@ function describeElement(element) {
 
 /**
  * Asserts that `element` has focus in `document`, failing with a short,
- * readable message (tag, ID, classes, and accessible name of the element
- * that's actually focused, and of the one expected) instead of handing DOM
- * elements to `assert.equal`, which hangs trying to diff them.
+ * readable message: the tag, ID, classes, and accessible name of the element
+ * that's actually focused, and of the one expected.
  */
 export function assertFocus(document, element, message) {
   const actual = document.activeElement;

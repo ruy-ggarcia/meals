@@ -24,8 +24,8 @@ function snapshotOfGlobals() {
   return Object.fromEntries(GLOBALS.map((key) => [key, globalThis[key]]));
 }
 
-// Compares one global at a time: handing a happy-dom window to
-// `assert.deepEqual` makes a failure hang while it diffs the whole window.
+// Compares one global at a time, so a failure names the global that was
+// left behind.
 function assertGlobalsRestored(before) {
   for (const key of GLOBALS) {
     assert.ok(globalThis[key] === before[key], `${key} was left behind`);
