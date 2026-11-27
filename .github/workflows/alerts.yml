@@ -15,7 +15,7 @@ permissions:
 jobs:
   alerts:
     name: alerts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - name: Check that main has no open code scanning alert
