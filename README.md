@@ -796,18 +796,19 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   styles.css
 scripts/
   lib/
-    common.sh           # Functions shared by the meals-* scripts.
-  check-conventional.sh # Checks subjects against Conventional Commits.
-  host-acceptance.sh    # Installs the host tools for real on a runner and checks them.
-  host-smoke.sh         # Runs the meals-* scripts on an image and checks them.
-  image-smoke.sh        # Runs an image as the host does and checks it.
-  install-lint-tools.sh # Downloads actionlint and hadolint, and checks their checksums.
-  install.sh            # Installs the host tools.
-  meals-backup          # Backs up the data.
-  meals-deploy          # Deploys a release, with a rollback.
-  meals-restore         # Restores a backup.
-  meals-restore-check   # Checks that the latest backup restores.
-  units-check.sh        # Verifies the systemd units with systemd-analyze.
+    common.sh            # Functions shared by the meals-* scripts.
+  check-conventional.sh  # Checks subjects against Conventional Commits.
+  clean-release-notes.js # Removes the entries of merge commits from release notes.
+  host-acceptance.sh     # Installs the host tools for real on a runner and checks them.
+  host-smoke.sh          # Runs the meals-* scripts on an image and checks them.
+  image-smoke.sh         # Runs an image as the host does and checks it.
+  install-lint-tools.sh  # Downloads actionlint and hadolint, and checks their checksums.
+  install.sh             # Installs the host tools.
+  meals-backup           # Backs up the data.
+  meals-deploy           # Deploys a release, with a rollback.
+  meals-restore          # Restores a backup.
+  meals-restore-check    # Checks that the latest backup restores.
+  units-check.sh         # Verifies the systemd units with systemd-analyze.
 server/
   assistant/
     providers/
