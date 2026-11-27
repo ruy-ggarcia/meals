@@ -706,7 +706,11 @@ Changes reach `main` only through pull requests that pass `ci`, `CodeQL`,
 Each pull request merges with a merge commit.
 
 On every push to `main`, `.github/workflows/release.yml` keeps a release
-pull request up to date, and publishes a release when you merge it. See
+pull request up to date, and publishes a release when you merge it. After
+each update, `scripts/clean-release-notes.js` removes the entries of merge
+commits from the changelog and the body of the release pull request. The
+body of a merge commit repeats the pull request title, so release-please
+lists the change twice. See
 [Release a version](docs/deployment.md#release-a-version).
 
 Every week, Dependabot opens pull requests that update the npm
