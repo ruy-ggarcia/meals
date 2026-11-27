@@ -4,8 +4,9 @@
 # Runs the meals-* scripts against real Docker, with IMAGE deployed in a
 # temporary MEALS_ROOT laid out as install.sh lays out the host. It backs up
 # some data, changes it, restores the backup, and checks the latest backup
-# with meals-restore-check. It never touches /opt/server/meals, but don't run
-# it on the host: it uses the Compose project of the weekly check,
+# with meals-restore-check. The backup, and assistant.json after the
+# restore, must have mode 0640. It never touches /opt/server/meals, but
+# don't run it on the host: it uses the Compose project of the weekly check,
 # meals-restore-check, and removes that project when it exits.
 set -euo pipefail
 
@@ -75,6 +76,15 @@ install -m 0775 "$repo"/scripts/meals-* "$root/scripts/"
 printf 'MEALS_GID=%s\nMEALS_IMAGE=%s\nMEALS_PORT=127.0.0.1:0\nMEALS_UID=%s\nMEALS_VERSION=%s\n' \
   "$(id -g)" "$image" "$(id -u)" "$version" >"$root/.env"
 
+# A saved key, so the backup holds the key file as on a host that set up the
+# assistant in Settings. The test writes it, since saving it in Settings asks
+# the provider to check the key; the unit tests check the mode the app gives
+# it.
+key_file=$root/data/v2/assistant.json
+install -d -m 2775 "$root/data/v2"
+printf '{"provider":"openai","model":"smoke-model","apiKey":"sk-smoke"}\n' >"$key_file"
+chmod 0640 "$key_file"
+
 compose up --detach --wait --wait-timeout 60 || fail "the app didn't become healthy"
 recipe=$(api POST /api/recipes '{"name":"Smoke soup"}' | jq -r .id) || fail "couldn't add a recipe"
 api PUT "/api/weeks/$week/mon/dinner" "{\"items\":[{\"recipeId\":\"$recipe\",\"servings\":2}]}" \
@@ -87,6 +97,8 @@ chmod 0755 "$root/data"
 "$root/scripts/meals-backup" daily || fail "meals-backup daily failed"
 backup=$(find "$root/backups" -name "*-daily-v$version.tar.gz" -printf '%f\n')
 [[ -n $backup ]] || fail "meals-backup didn't create a daily backup"
+[[ $(stat -c %a "$root/backups/$backup") == 640 ]] ||
+  fail "the backup has mode $(stat -c %a "$root/backups/$backup"), not 640"
 cp -a "$root/data" "$work/expected"
 
 api PATCH "/api/recipes/$recipe" '{"name":"Smoke stew"}' >/dev/null ||
@@ -100,6 +112,8 @@ api PUT "/api/weeks/$week/mon/dinner" "{\"items\":[{\"recipeId\":\"$recipe\",\"s
 [[ $(servings) == 2 ]] || fail "the API doesn't show the restored servings"
 diff -r "$work/expected" "$root/data" || fail "data/ differs from the backup"
 [[ $(stat -c %a "$root/data") == 2775 ]] || fail "data/ has mode $(stat -c %a "$root/data"), not 2775"
+[[ $(stat -c %a "$key_file") == 640 ]] ||
+  fail "the restored assistant.json has mode $(stat -c %a "$key_file"), not 640"
 [[ -n $(find "$root/backups" -name "*-pre-restore-v$version.tar.gz") ]] ||
   fail "meals-restore didn't create a pre-restore backup"
 api GET /api/health | jq -e --arg version "$version" '.version == $version' >/dev/null ||

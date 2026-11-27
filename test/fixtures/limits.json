@@ -1,4 +1,10 @@
 {
+  "attachment": {
+    "MAX_ATTACHMENTS": 5,
+    "MAX_CONVERSATION_BYTES": 20971520,
+    "MAX_FILE_BYTES": 10485760,
+    "MAX_IMAGE_BYTES": 7340032
+  },
   "measure": {
     "MAX_MEASURES": 20
   },
@@ -7,9 +13,16 @@
     "MAX_SERVINGS": 99,
     "MIN_SERVINGS": 0.5
   },
+  "preferences": {
+    "MAX_PREFERENCES": 10000
+  },
   "recipe": {
     "MAX_INGREDIENTS": 50,
     "MAX_QUANTITY": 10000,
     "MIN_QUANTITY": 0.01
+  },
+  "settings": {
+    "MAX_KEY": 500,
+    "MAX_MODEL": 200
   }
 }

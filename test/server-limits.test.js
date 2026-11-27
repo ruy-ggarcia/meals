@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
+import * as conversations from "../server/assistant/conversations.js";
+import * as assistantSettings from "../server/assistant/settings.js";
 import * as ingredients from "../server/ingredients.js";
+import * as preferences from "../server/preferences.js";
 import * as quantities from "../server/quantities.js";
 import * as recipes from "../server/recipes.js";
 import * as weeks from "../server/weeks.js";
@@ -42,5 +45,23 @@ describe("server/quantities.js", () => {
 describe("server/ingredients.js", () => {
   test("has the measure limit of the shared table", () => {
     assertLimits(ingredients, "measure");
+  });
+});
+
+describe("server/preferences.js", () => {
+  test("has the preferences limit of the shared table", () => {
+    assertLimits(preferences, "preferences");
+  });
+});
+
+describe("server/assistant/conversations.js", () => {
+  test("has the attachment limits of the shared table", () => {
+    assertLimits(conversations, "attachment");
+  });
+});
+
+describe("server/assistant/settings.js", () => {
+  test("has the settings limits of the shared table", () => {
+    assertLimits(assistantSettings, "settings");
   });
 });

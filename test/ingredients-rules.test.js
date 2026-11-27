@@ -18,6 +18,8 @@ import {
   validMeasures,
   validNewIngredient,
   validUnit,
+  withIngredientChanges,
+  withNewIngredient,
 } from "../server/ingredients.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -949,5 +951,136 @@ describe("removedMeasureInUse", () => {
   test("returns nothing when no recipe uses a removed measure", () => {
     assert.equal(removedMeasureInUse([medium], new Set(["m2"])), undefined);
     assert.equal(removedMeasureInUse([], new Set(["m1"])), undefined);
+  });
+});
+
+describe("withNewIngredient", () => {
+  const onion = ingredient({ measures: [medium] });
+
+  test("adds the ingredient with the ID and returns it", () => {
+    const next = withNewIngredient([onion], { name: " Leek ", unit: "pcs" }, "i2");
+
+    const leek = { id: "i2", name: "Leek", unit: "pcs", measures: [], archived: false };
+    assert.deepEqual(next, { all: [onion, leek], ingredient: leek });
+  });
+
+  test("rejects fields that POST /api/ingredients rejects", () => {
+    assert.throws(
+      () => withNewIngredient([onion], { name: "Leek" }, "i2"),
+      invalid('Send "name" and "unit", and optionally "measures".'),
+    );
+  });
+
+  test("rejects a name whose name key another ingredient has", () => {
+    assert.throws(() => withNewIngredient([onion], { name: "ONION", unit: "g" }, "i2"), {
+      name: "NameConflictError",
+      message: 'An ingredient named "Onion" already exists.',
+      kind: "ingredient",
+      entity: onion,
+    });
+  });
+
+  test("doesn't change its arguments", () => {
+    const all = [onion];
+    const fields = { name: "Leek", unit: "pcs", measures: [{ name: "stalk", amount: 1 }] };
+    const before = structuredClone({ all, fields });
+
+    withNewIngredient(all, fields, "i2");
+
+    assert.deepEqual({ all, fields }, before);
+  });
+});
+
+describe("withIngredientChanges", () => {
+  const small = { id: "m2", name: "small", amount: 80 };
+  const onion = ingredient({ measures: [medium, small] });
+  const leek = ingredient({ id: "i2", name: "Leek", unit: "pcs" });
+  const unused = { inUnit: false, measureIds: new Set() };
+  const unitInEditor = invalid("The unit of an ingredient changes in the ingredient editor.");
+
+  test("applies the changes and returns the ingredient", () => {
+    const next = withIngredientChanges([onion, leek], "i1", { name: "Red onion" }, unused);
+
+    const renamed = { ...onion, name: "Red onion" };
+    assert.deepEqual(next, { all: [renamed, leek], ingredient: renamed });
+  });
+
+  test("accepts the stored unit as no change", () => {
+    const next = withIngredientChanges([onion], "i1", { name: "Onion", unit: "g" }, unused);
+
+    assert.deepEqual(next.ingredient, onion);
+  });
+
+  test("rejects another unit", () => {
+    assert.throws(() => withIngredientChanges([onion], "i1", { unit: "ml" }, unused), unitInEditor);
+  });
+
+  test("rejects a conversion, even with the stored unit", () => {
+    for (const unit of ["g", "ml"]) {
+      assert.throws(
+        () =>
+          withIngredientChanges(
+            [onion],
+            "i1",
+            { unit, conversion: { from: 1, to: 1, measureName: "piece" } },
+            unused,
+          ),
+        unitInEditor,
+        unit,
+      );
+    }
+  });
+
+  test("rejects changes that PATCH /api/ingredients/:id rejects", () => {
+    assert.throws(
+      () => withIngredientChanges([onion], "i1", { color: "red" }, unused),
+      invalid(
+        'Send "name", "unit", "measures", "conversion", or any combination, or "archived" alone.',
+      ),
+    );
+  });
+
+  test("rejects an unknown ID", () => {
+    assert.throws(() => withIngredientChanges([onion], "x", { archived: true }, unused), {
+      name: "NotFoundError",
+      message: "Unknown ingredient: x",
+    });
+  });
+
+  test("rejects a name whose name key another ingredient has", () => {
+    assert.throws(() => withIngredientChanges([onion, leek], "i2", { name: "onion" }, unused), {
+      name: "NameConflictError",
+      message: 'An ingredient named "Onion" already exists.',
+      kind: "ingredient",
+      entity: onion,
+    });
+  });
+
+  test("removes a measure that no recipe uses", () => {
+    const usage = { inUnit: true, measureIds: new Set(["m1"]) };
+
+    const next = withIngredientChanges([onion], "i1", { measures: [medium] }, usage);
+
+    assert.deepEqual(next.ingredient.measures, [medium]);
+  });
+
+  test("rejects removing a measure that a recipe uses", () => {
+    const usage = { inUnit: false, measureIds: new Set(["m2"]) };
+
+    assert.throws(() => withIngredientChanges([onion], "i1", { measures: [medium] }, usage), {
+      name: "ConflictError",
+      message: '"small" is used in recipes. To remove it, change those recipes first.',
+    });
+  });
+
+  test("doesn't change its arguments", () => {
+    const all = [onion, leek];
+    const changes = { name: "Red onion", measures: [medium, { name: "big", amount: 300 }] };
+    const usage = { inUnit: false, measureIds: new Set(["m1"]) };
+    const before = structuredClone({ all, changes, usage });
+
+    withIngredientChanges(all, "i1", changes, usage);
+
+    assert.deepEqual({ all, changes, usage }, before);
   });
 });

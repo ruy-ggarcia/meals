@@ -52,7 +52,7 @@ Meals in production, see [Deploy Meals](docs/deployment.md).
    the following:
 
    ```json
-   {"time":"2026-10-04T10:00:00.000Z","level":"info","msg":"server started","version":"0.1.0","port":3000,"dataDir":"/path/to/meals/data"}
+   {"time":"2026-10-04T10:00:00.000Z","level":"info","msg":"server started","version":"0.1.0","port":3000,"dataDir":"/path/to/meals/data","assistant":"off"}
    ```
 
 To stop the server, press `Control+C`.
@@ -325,14 +325,178 @@ converted amounts. To change both the unit and the measures, save each change
 separately. If any converted amount falls outside `0.01` to `10000`, the app
 rejects the change and changes nothing.
 
+## Change the settings
+
+**Settings** has two sections: **Assistant** holds the family preferences,
+and **BYOK**, for bring your own key, sets up the assistant with your key of
+a provider.
+
+The family preferences are a text of up to 10,000 characters, such as
+dietary rules and who eats away from home. The assistant reads this text in
+every conversation, and a change applies from the next message. You can
+edit the text while the assistant is off. While it's off, the **Assistant**
+section says "Needs a valid API key to turn on."
+
+To change the family preferences, do the following:
+
+1. Click the gear button at the end of the toolbar of any page, in the
+   upper right corner. On the meal plan, it's after **Shopping list**.
+1. Under **Assistant**, edit the text under **Family preferences**. When
+   fewer than 1,000 characters remain, a count under the text shows how
+   many are left.
+1. Click **Done**.
+
+The **BYOK** section holds the assistant's provider, API key, and model. To
+set up the assistant, do the following:
+
+1. Click the gear button of **Settings**.
+1. Under **BYOK**, choose **Anthropic** or **OpenAI** under **Provider**.
+1. Paste the key from the provider's console under **API key**. The app
+   asks the provider for its models with the key, without saving the key.
+1. Under **Model**, choose a model from the list that the provider sends,
+   newest first.
+1. Click **Done**.
+
+**Model** lists the models of the provider that can chat. A list that
+arrives proves that the provider accepts the key, and until it arrives, you
+can't choose a model. When **Settings** opens with a saved key, the app asks
+for the list again with the saved key. The section says what went wrong
+under **Model**:
+
+- "The provider didn't accept this key." when the provider rejects the key.
+- "This key has no models that can chat." when the list is empty.
+- "Couldn't check the key." when the app can't reach the provider. Click
+  **Check Again** to ask again.
+
+A saved model that the list no longer holds shows as "(not available)",
+selected, so you see what's saved. If you change the provider, enter a key
+for it: the app never sends the saved key to another provider.
+
+**Done** saves the family preferences and the **BYOK** section, each only
+when it changed. If the **BYOK** section has a problem, such as a model that
+isn't from the list, **Done** saves nothing and says what to fix. A saved
+key that the app couldn't check doesn't keep you from saving the family
+preferences. If a save fails, **Settings** stays open and shows why under
+its section. When a save turns the assistant on or off, the page shows or
+hides the assistant's round button at once, without a reload.
+
+**Settings** never shows the key again. Once a key is saved, the **BYOK**
+section says "A key is saved." instead of the key field, with two buttons:
+
+- **Replace Key** shows an empty key field for a new key. If you leave it
+  empty, the saved key stays.
+- **Remove Key** removes the key when you click **Done**, which turns off
+  the assistant. Until then, **Keep Key** undoes it.
+
+When the server sets up the assistant with its environment variables, the
+**BYOK** section shows the provider and the model, says "Set on the
+server.", and can't change them. See
+[Configure the server](#configure-the-server).
+
+To close **Settings** without saving, click **Cancel** or press `Escape`.
+
+## Ask the assistant
+
+The assistant is a chat that plans menus and proposes changes to recipes and
+ingredients. It saves nothing until you apply its changes. When the
+assistant is set up, a round button in the lower right corner of every page
+opens it. On a phone, the button sits on the line of the tab bar, to its
+right. With a keyboard, press `Tab` once at the start of any page to reach
+**Ask the assistant**, which opens it too. To set up the assistant, see
+[Change the settings](#change-the-settings).
+
+To ask the assistant, do the following:
+
+1. Click the round button.
+1. On a touch screen, the window opens without the on-screen keyboard: tap
+   the message field. Type your message, such as `Plan next week`. On the
+   meal plan, the assistant knows which week you see. An empty conversation
+   shows a few examples: click one to put it in the message field, and then
+   edit it or send it.
+1. Optional: to attach files, such as a school menu, click the paper clip
+   button. You can attach up to 5 PDF, JPEG, or PNG files, and up to 20 MB
+   in one conversation. Each PDF can have up to 10 MB, and each JPEG or PNG
+   image up to 7 MB. To remove a file before you send it, click the button
+   next to its name.
+1. Press `Enter`, or click the send button with the up arrow. To add a line
+   without sending, press `Shift+Enter`.
+
+The round button is hidden while the window is open. On a wide screen, the
+window opens in the lower right corner, and the page behind it stays usable.
+When the meal plan keeps room for all seven days beside the window, such as
+on a laptop with the sidebar hidden, the page makes room for the window,
+which can narrow a little to fit. On a phone, and on a screen 500 px tall
+or less, such as a phone in landscape, the window opens as a sheet over the
+dimmed page, and the page behind it takes no taps until you collapse the
+window.
+
+While the assistant answers, the window shows "Thinking…", and you can type
+but not send. If the answer fails, click **Retry** to ask again. When the
+conversation is too long for the assistant, the window offers **New
+conversation** instead of **Retry**.
+
+The changes that the assistant proposes are pending changes. A card above the
+message field summarizes them: how many slots of each week change, and each
+recipe and ingredient to create, change, archive, or restore. On a screen
+500 px tall or less, the card shows these counts in one line. To see each
+change, click **View details**, which lists the changes under the lines of
+the summary. Then do one of the following:
+
+- To save every pending change, click **Apply**. The conversation shows what
+  the app saved, such as "Applied: 35 slots, 4 recipes, and 6 ingredients.",
+  with a link to each week of the menus that the meal plan doesn't show. On
+  a phone, the link shows the first day of that week whose menu changed.
+  When the window is a sheet, the link also collapses it, so you see the
+  week. The page shows the new data without a reload. On the meal plan, if a
+  slot isn't saved yet, or the slot editor or the shopping list is open, the
+  new data shows when you change the week. If someone changed a slot, a
+  recipe, or an ingredient by hand after the assistant proposed a change to
+  it, the app saves nothing, and **View details** shows the problem on that
+  change. Tell the assistant about it in your next message. If **Apply**
+  fails after it saved part of the changes, the card says so: check the meal
+  plan before you apply again, or click **Discard**.
+- To drop every pending change, click **Discard**. If there are more than
+  three pending changes, the app asks first. The conversation shows that you
+  discarded them.
+
+To collapse the window, click the button with the down arrow or press
+`Escape`. On a phone in landscape, you can also tap the dimmed page above
+the sheet. The round button shows again. The conversation stays, also when
+you open another page. The window stays open on the other pages that you
+open in the same tab, and a new visit, such as opening the app from the Home
+Screen again, starts with the window collapsed. While the window is
+collapsed, a red mark on the round button shows a reply that you haven't
+seen or pending changes.
+
+To start over, click **New conversation**, the button with the pencil. If
+the conversation has pending changes, the app asks first, because a new
+conversation loses them. A conversation also ends after 24 hours without a
+message, **Apply**, or **Discard**, and when the server restarts.
+
 ## Configure the server
 
 The server reads the following environment variables:
 
-| Variable   | Default  | Description                           |
-|------------|----------|---------------------------------------|
-| `DATA_DIR` | `./data` | The data directory. See [Data files](#data-files). |
-| `PORT`     | `3000`   | The port that the server listens on.  |
+| Variable             | Default  | Description                                             |
+|----------------------|----------|---------------------------------------------------------|
+| `ASSISTANT_API_KEY`  | None     | The API key of the assistant's provider.                |
+| `ASSISTANT_MODEL`    | None     | The identifier of the model at the provider.            |
+| `ASSISTANT_PROVIDER` | None     | The provider of the assistant: `anthropic` or `openai`. |
+| `DATA_DIR`           | `./data` | The data directory. See [Data files](#data-files).      |
+| `PORT`               | `3000`   | The port that the server listens on.                    |
+
+You can set up the assistant in **Settings** instead of with the three
+`ASSISTANT_` variables. When all three are set, they take precedence over
+**Settings**. If only some of them are set, `ASSISTANT_PROVIDER` isn't
+`anthropic` or `openai`, or `ASSISTANT_MODEL` looks like an API key, the
+server logs `assistant not configured` with the problem, and uses the
+settings saved in **Settings** instead. The assistant is off until the
+variables or the settings have a provider, a model, and a key. No response
+or log of the server holds the API key.
+
+The `server started` log line has `assistant`, which is `anthropic`,
+`openai`, or `off`, and, when the assistant is on, `source`, which is
+`environment` or `settings`.
 
 For example, to store data in `/srv/meals` and listen on port 8080, run the
 following command:
@@ -346,11 +510,15 @@ The image sets `DATA_DIR` to `/data` and `PORT` to `3000`. See
 
 ## Data files
 
-The meal plan, the recipe book, and the ingredient catalog live in the
-`v2/` directory inside the data directory, which is `data/` unless you set
-`DATA_DIR`:
+The meal plan, the recipe book, the ingredient catalog, the family
+preferences, and the assistant's settings live in the `v2/` directory inside
+the data directory, which is `data/` unless you set `DATA_DIR`:
 
+- `v2/assistant.json` holds the assistant's settings from **Settings**, as
+  `{ "provider", "model", "apiKey" }`, where `apiKey` is `null` when no key
+  is saved. The file holds the key in plain text, so backups include it.
 - `v2/ingredients.json` holds the ingredient catalog.
+- `v2/preferences.json` holds the family preferences, as `{ "text": "..." }`.
 - `v2/recipes.json` holds the recipe book.
 - `v2/weeks/` holds one file per week, named after the week's Monday, for
   example `v2/weeks/2026-09-21.json`. The server creates a week's file on
@@ -361,12 +529,23 @@ Git ignores the `data/` directory.
 On the host, backups are automatic. See
 [Backups](docs/deployment.md#backups).
 
-If a week file, `recipes.json`, or `ingredients.json` contains invalid JSON,
-the app shows an error, such as `Couldn't load the meal plan.`, and doesn't
-overwrite the file. To recover, do the following:
+If a week file, `preferences.json`, `recipes.json`, or `ingredients.json`
+contains invalid JSON, the app shows an error, such as
+`Couldn't load the meal plan.`, and doesn't overwrite the file. For an
+invalid `preferences.json`, a click on the gear button of **Settings**
+shows `Couldn't load the settings. Try again.` at the top of the page, and
+the assistant can't answer. To recover, do the following:
 
 1. Restore a backup copy of the file, or fix the JSON by hand.
-1. In the app, click **Retry**.
+1. In the app, click **Retry**. For the family preferences, click the gear
+   button again.
+
+If `assistant.json` isn't valid, and the `ASSISTANT_` variables don't set up
+the assistant, the server logs `assistant settings unreadable` when it
+starts, without the file's content, and starts with the assistant off.
+**Settings** shows `Couldn't load the settings. Try again.` until you fix
+the file. The server doesn't overwrite the file. To recover, restore a
+backup copy of the file or fix it by hand, and then restart the server.
 
 If you restore an older `recipes.json` or `ingredients.json`, the app hides
 what the restored file doesn't have: menu items whose recipe is missing, and
@@ -413,33 +592,24 @@ Before you commit, check your changes:
    npm test
    ```
 
-[Biome](https://biomejs.dev) checks the style of JavaScript, CSS, and JSON
-files. The settings are in `biome.json`.
-[ShellCheck](https://www.shellcheck.net) checks the shell scripts. The
-settings are in `.shellcheckrc`.
-[actionlint](https://github.com/rhysd/actionlint) checks the workflows in
-`.github/workflows/`, and [hadolint](https://github.com/hadolint/hadolint)
-checks the `Dockerfile`. `npm run lint` runs `scripts/install-lint-tools.sh`
-first. The script downloads the pinned version of each tool from its GitHub
-release into `.tools/bin`, which Git ignores, and checks the SHA-256
-checksum of the download. It skips a tool that's already installed. To
-ignore a hadolint rule, add a comment next to the instruction that explains
-why.
+For what `npm run lint` and `npm run typecheck` check, see
+[Static](docs/testing.md#static). The settings of Biome are in `biome.json`,
+and those of ShellCheck in `.shellcheckrc`. `npm run lint` runs
+`scripts/install-lint-tools.sh` first. The script downloads the pinned
+versions of actionlint and hadolint from their GitHub releases into
+`.tools/bin`, which Git ignores, and checks the SHA-256 checksum of each
+download. It skips a tool that's already installed. To ignore a hadolint
+rule, add a comment next to the instruction that explains why.
 
-[TypeScript](https://www.typescriptlang.org) checks the types of the
-JavaScript without compiling it: the app stays plain JavaScript. It reads
-the JSDoc comments in the `.js` files of `e2e/`, `public/`, `server/`, and
-`test/`, and in `playwright.config.js`. A
-`@param`, `@returns`, `@typedef`, or `@type` comment gives a function or a
+A `@param`, `@returns`, `@typedef`, or `@type` comment gives a function or a
 value the type that TypeScript can't infer. The settings are in
 `tsconfig.json`, and `tsconfig.browser.json` and `tsconfig.tests.json`
 extend it. `npm run typecheck` checks three sets of files, so that the
 globals of one environment don't hide a mistake in another: `server/` and
 `playwright.config.js` see only the Node.js types, `public/` sees only the
-browser types, and `e2e/` and `test/` see both. The check isn't `strict`.
-To fix an error, give the code the right type. Use `// @ts-expect-error`
-only with a comment that explains why the code is right and the type can't
-say so.
+browser types, and `e2e/` and `test/` see both. To fix an error, give the
+code the right type. Use `// @ts-expect-error` only with a comment that
+explains why the code is right and the type can't say so.
 
 If you change `e2e/`, `public/`, `server/`, or `playwright.config.js`, also
 run the browser tests:
@@ -458,11 +628,10 @@ run the browser tests:
    npm run test:e2e
    ```
 
-[Playwright](https://playwright.dev) runs the tests in `e2e/`. Each test
-starts its own server on a free port, with a new temporary data directory,
-so the tests never touch your data. The settings are in
-`playwright.config.js`, which defines five projects: three desktop browsers
-and two emulated phones.
+[Playwright](https://playwright.dev) runs the tests in `e2e/`, as
+[End to end](docs/testing.md#end-to-end) describes. The tests never touch
+your data. The settings are in `playwright.config.js`, which defines five
+projects: three desktop browsers and two emulated phones.
 
 To run the tests of one project, or of one file, pass it after `--`:
 
@@ -492,9 +661,7 @@ GitHub Actions runs three checks on every pull request and on every push to
 `main`. The workflow is in `.github/workflows/ci.yml`:
 
 - `ci` runs `npm run lint`, `npm run typecheck`, `npm test`, and
-  `npm run test:units` with Node.js 22. `npm run lint` checks the code, the
-  shell scripts, the workflows, and the `Dockerfile`. `npm run typecheck`
-  checks the types of the JavaScript.
+  `npm run test:units` with Node.js 22.
 - `e2e` runs `npm run test:e2e` with Node.js 22 in the
   [Playwright image](https://playwright.dev/docs/docker), which holds the
   browsers and the system packages that they need. A test that fails runs
@@ -505,17 +672,15 @@ GitHub Actions runs three checks on every pull request and on every push to
 
 `.github/workflows/host.yml` runs `host` on pull requests that change that
 file, `deploy/`, or `scripts/`, every Monday at 05:17 UTC, and when you run
-it by hand. `host` runs
-`scripts/host-acceptance.sh` on a GitHub-hosted runner, a new virtual
-machine for each job. The script installs the host tools for real, and
-checks them with the published releases from GitHub and GHCR: the
-installation and the timers, a second installation, moving the data of an
-earlier installation in, a deployment by hand and the resume, a backup and a
-restore, the restore check, a deployment that can't pull its image, and the
-app after the Docker daemon restarts. The weekly run catches changes outside
-the repository, such as a new runner image or a change in GitHub or GHCR.
-`host` isn't a required check, because its path filter skips most pull
-requests.
+it by hand. `host` runs `scripts/host-acceptance.sh` on a GitHub-hosted
+runner, a new virtual machine for each job, as
+[End to end](docs/testing.md#end-to-end) describes. The script installs the
+host tools for real, and checks them with the published releases from
+GitHub and GHCR: the installation and the timers, a second installation,
+moving the data of an earlier installation in, a deployment by hand and the
+resume, a backup and a restore, the restore check, a deployment that can't
+pull its image, and the app after the Docker daemon restarts. `host` isn't a
+required check, because its path filter skips most pull requests.
 
 You can't run `scripts/host-acceptance.sh` on your own machine, because it
 installs Meals for real. It refuses to run unless `GITHUB_ACTIONS` is
@@ -599,7 +764,11 @@ docs/
   testing.md            # Testing strategy: the levels of tests and their rules.
 e2e/               # Browser tests: Playwright, with a server per test.
 public/            # User interface: HTML, CSS, and JavaScript, with no framework or build step.
+  icons/               # The app's icons, for the browser tab and the Home Screen.
+  alert.js             # The alert that asks before an action that loses changes.
   app.js               # Meal plan page: grid, week changes, and saves.
+  assistant-view.js    # What the assistant's window shows: pending changes, the mark, and attachment checks.*
+  assistant.js         # The assistant's button and window: messages, pending changes, and polling.
   catalog-list.js      # List logic shared by the Recipes and Ingredients pages.
   combobox.js          # The filter-and-pick field of the editors.
   dates.js             # Date helpers.*
@@ -610,6 +779,7 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   ingredient-editor.js # The ingredient editor dialog.
   ingredients.html     # Ingredients page.
   ingredients.js       # Ingredients page logic.
+  manifest.webmanifest # The name and icons of the app on the Home Screen.
   menus.js             # Menu functions.*
   messages.js          # Message text shared by the recipe and ingredient pages.*
   name-search.js       # Name matching and sorting.*
@@ -618,6 +788,8 @@ public/            # User interface: HTML, CSS, and JavaScript, with no framewor
   recipes.html         # Recipe book page.
   recipes.js           # Recipe book page logic.
   saves.js             # Save logic.*
+  settings.js          # The Settings dialog: the family preferences and the assistant's settings.
+  shell.js             # The parts that every page shares, such as the sidebar and the tab bar.
   shopping-dialog.js   # The shopping list dialog.
   shopping-list.js     # Computes the shopping list.*
   slot-editor.js       # The slot editor dialog.
@@ -637,14 +809,32 @@ scripts/
   meals-restore-check   # Checks that the latest backup restores.
   units-check.sh        # Verifies the systemd units with systemd-analyze.
 server/
-  app.js         # HTTP API (Express), static files, and the health check.
+  assistant/
+    providers/
+      anthropic.js    # The adapter of the Anthropic Messages API.
+      errors.js       # The error of a call to a provider.
+      http.js         # The HTTP request of the adapters.
+      index.js        # The providers: the adapter and the model list of each.
+      openai.js       # The adapter of the OpenAI Responses API.
+      types.js        # The common shape of a provider and of a conversation.
+    config.js         # Reads the assistant's environment variables.
+    conversations.js  # Conversations in memory, their turns, and Apply.
+    instructions.js   # The system instructions of the model.
+    limits.js         # The limits of the data, as the model reads them.
+    pending.js        # Pending changes and the data that they would save.
+    settings.js       # The assistant's settings from Settings, with the API key.
+    setup.js          # The provider, from the environment or the settings.
+    tools.js          # The tools that the model calls.
+    turn.js           # A turn: model calls and tool calls until an answer.
+  app.js         # HTTP API (Express), the pages, static files, and the health check.
   errors.js      # Errors for bad input, which app.js maps to HTTP statuses.
   files.js       # JSON files and the write queue. The only module that touches disk.
   healthcheck.js # The image's health check.
-  index.js       # Startup: reads DATA_DIR and PORT, and stops on SIGINT and SIGTERM.
+  index.js       # Startup: reads the environment variables, and stops on SIGINT and SIGTERM.
   ingredients.js # The ingredient catalog: unique names, units, measures, and archiving.
   logger.js      # Logs one JSON object per line.
   names.js       # Name rules shared by recipes and ingredients.
+  preferences.js # The family preferences: one free text.
   quantities.js  # Quantity limits shared by recipes and measures.
   recipes.js     # The recipe book: unique names, ingredients, and archiving.
   shapes.js      # Shape checks shared by the stores.
@@ -653,6 +843,8 @@ server/
   stores.js      # Wires the stores to one write queue and to each other.
   weeks.js       # Weeks and the menu of each slot.
 test/              # Tests: node:test, with supertest for the API and happy-dom for the pages.
+  fixtures/        # Data files that the server and the page tests share, such as the limits.
+  hooks/           # Code that tests preload with node --import, such as the time limits.
   stubs/           # Stub docker and curl for the host script tests.
 .dockerignore      # What the image build can read.
 .release-please-manifest.json # The current version, for release-please.
@@ -672,9 +864,10 @@ tsconfig.tests.json # Type check settings of e2e/ and test/.
 ## API reference
 
 The user interface depends only on this API. All responses are JSON. Errors
-have the shape `{ "error": "MESSAGE" }`. Any other path under `/api` returns
-`404`. If a data file contains invalid JSON, the requests that read it return
-`500`.
+have the shape `{ "error": "MESSAGE" }`. A body that isn't valid JSON returns
+`400` with a message that doesn't quote the body. Any other path under `/api`
+returns `404`. If a data file contains invalid JSON, the requests that read
+it return `500`.
 
 The server cleans every name that it receives, of a recipe, an ingredient,
 or a measure: it trims the name and collapses runs of whitespace. A valid
@@ -836,6 +1029,25 @@ The server returns `400`, and changes nothing, in the following cases:
   ingredient already has 20 measures.
 - Any converted amount, before rounding, falls outside 0.01 to 10000.
 
+### Get the family preferences
+
+`GET /api/preferences`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "text": "TEXT" }`. `TEXT` is empty until the first save. |
+
+### Save the family preferences
+
+`PUT /api/preferences`
+
+Request body: `{ "text": "TEXT" }`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The text was saved. The body is `{ "text": "TEXT" }`. |
+| `400`  | The body isn't exactly `{ "text": string }`, or the text has more than 10,000 characters. |
+
 ### Get a week
 
 `GET /api/weeks/WEEK`
@@ -861,3 +1073,204 @@ Request body: `{ "items": [{ "recipeId": "RECIPE_ID", "servings": 1.5 }] }`
 - Each menu item has exactly the keys `recipeId` and `servings`.
 - Each `recipeId` is an existing recipe, archived or not, and appears once.
 - Each `servings` is a multiple of 0.5 from 0.5 to 99.
+
+### Check the assistant
+
+`GET /api/assistant`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "enabled": true }` when the assistant is on, and `{ "enabled": false }` when it's off. |
+
+The routes of the conversations work while the assistant is off, except that
+a message or a retry returns `409`.
+
+### Get the assistant's settings
+
+`GET /api/assistant/settings`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "provider", "model", "keySaved", "source" }`. |
+
+- `provider` is `anthropic` or `openai`, and `model` is the model's
+  identifier. Both are `null` until the first save.
+- `keySaved` is `true` when a key is saved.
+- `source` is `environment` when the three `ASSISTANT_` variables set up the
+  assistant, and `settings` otherwise. See
+  [Configure the server](#configure-the-server).
+
+### List the models of a key
+
+`POST /api/assistant/models`
+
+Request body: `{ "provider": "PROVIDER", "apiKey": "API_KEY" }`, where
+`apiKey` is optional. Without `apiKey`, the server uses the saved key, but
+only for the provider that it was saved for. The server asks the provider
+for its models with the key, so a list that arrives proves that the
+provider accepts the key. The key travels in the body, never in the URL.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is `{ "models": [{ "id", "name" }] }`, newest first. The list is empty when the key has no models that can chat. |
+| `400`  | The body breaks one of the following rules, no key of this provider is saved, or the provider didn't accept the key. |
+| `409`  | The three `ASSISTANT_` variables set up the assistant, so the settings can't change. |
+| `502`  | The provider failed or didn't answer within 4 seconds. The body is `{ "error": "Couldn't check the key." }`. |
+
+- The body has exactly `provider`, or `provider` and `apiKey`.
+- `provider` is `anthropic` or `openai`.
+- `apiKey` has 1 to 500 printable ASCII characters, with no spaces.
+
+`id` is the model's identifier at the provider. For Anthropic, `name` is
+the model's display name. OpenAI's list has no display names, so `name` is
+the identifier, and the list holds only the models that start with `gpt-`
+or with `o` and a digit, without the models for audio, realtime, speech,
+transcription, images, embeddings, search, and moderation.
+
+### Save the assistant's settings
+
+`PUT /api/assistant/settings`
+
+Request body: `{ "provider": "PROVIDER", "model": "MODEL", "apiKey": "API_KEY" }`,
+where `apiKey` is optional. Without `apiKey`, the saved key stays. With
+`"apiKey": null`, the server removes the key, keeps the provider and the
+model, and turns off the assistant. The next message uses the new settings,
+and an answer in progress finishes with the old ones. The server logs
+`assistant settings changed` with the provider and the model.
+
+Unless the body removes the key, the server first asks the provider for its
+models with the key, as `POST /api/assistant/models` does, and saves only
+when the list holds the model. Without `apiKey`, it asks with the saved key,
+which must be a key of the same provider. So the saved settings always have
+a key that the provider accepted.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The settings were saved. The body is what `GET /api/assistant/settings` returns. |
+| `400`  | The server saved nothing: the body breaks one of the following rules, no key of this provider is saved, the provider didn't accept the key, or the provider's list doesn't hold the model. |
+| `409`  | The three `ASSISTANT_` variables set up the assistant, so the settings can't change. |
+| `502`  | The server saved nothing: the provider failed or didn't answer within 4 seconds. The body is `{ "error": "Couldn't check the key." }`. |
+
+- The body has exactly `provider` and `model`, or `provider`, `model`, and
+  `apiKey`.
+- `provider` is `anthropic` or `openai`.
+- `model` has 1 to 200 characters, with no control characters.
+- `apiKey` is `null`, or 1 to 500 printable ASCII characters with no spaces.
+
+### Start a conversation
+
+`POST /api/assistant/conversations`
+
+| Status | Meaning |
+|--------|---------|
+| `201`  | The body is `{ "id": "ID" }`. When the server already keeps 20 conversations, the one with the oldest activity ends. |
+
+### Get a conversation
+
+`GET /api/assistant/conversations/ID`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The body is the conversation. The server doesn't log a successful request. |
+| `404`  | No conversation has that ID, for example because it expired after 24 hours without activity, or because the server restarted. |
+
+The server keeps each conversation in memory. A conversation has the shape
+`{ "id", "status", "error", "messages", "pending", "revision" }`:
+
+- `status` is `idle`, `working` while the assistant answers, or `failed`
+  when the last message failed.
+- `error` is only present when `status` is `failed`: `limit` when the turn
+  ran for 30 tool rounds or 3 minutes, `too_long` when the conversation is
+  too long for the model, or `provider` for any other failure, such as a
+  rejected API key or no network.
+- `messages` is a list of the messages and the events of the conversation,
+  in order. A message is `{ "role", "text" }`, where `role` is `user` or
+  `assistant`. A user message can also have `"attachments"`, the names of its
+  files, and `"failed": true`. An event is `{ "role": "event", "kind" }`,
+  where `kind` is `discarded` after a discard, or `applied` after an apply.
+  A discard or an apply without pending changes adds no event. An `applied`
+  event also has `"counts"`, `{ "slots", "recipes", "ingredients" }`, how
+  many of each the apply saved, and `"weeks"`, the weeks of its menus, from
+  the earliest, as `[{ "week", "day" }]`, where `day` is the first day of the
+  week whose menu changed. The assistant never reads the events.
+- `pending` is the list of pending changes, each with a `target`, a `kind`
+  of `menu`, `recipe`, or `ingredient`, the names of the recipes and
+  ingredients that it uses, and a `problem` after a rejected apply.
+- `revision` is `0` in a new conversation, and grows each time the list of
+  pending changes changes, such as when the assistant proposes a change, or
+  when you apply or discard the pending changes.
+
+### Send a message
+
+`POST /api/assistant/conversations/ID/messages`
+
+Request body:
+`{ "text": "TEXT", "attachments": [{ "name": "NAME", "data": "BASE64" }], "week": "WEEK", "today": "DATE" }`,
+where `attachments` is optional and defaults to `[]`, `week` is the week
+that the page shows, also optional, and `today` is the browser's local date
+as `YYYY-MM-DD`, also optional. The assistant reads `today` as the current
+date when it's at most one day from the server's date, and the server's date
+otherwise. This route accepts a body of up to 30 MB; every other route
+accepts up to 100 KB.
+
+| Status | Meaning |
+|--------|---------|
+| `202`  | The assistant answers the message in the background. The body is `{}`. Get the conversation until its `status` isn't `working`. |
+| `400`  | The message breaks one of the following rules. |
+| `404`  | No conversation has that ID. |
+| `409`  | The assistant isn't set up, the assistant is still answering, or the pending changes are being applied. |
+
+- The message has text or at least one attachment.
+- Its text has at most 20,000 characters, without the spaces around it.
+- It has at most 5 attachments, each with a name of at most 255 characters,
+  and with `data` in standard base64.
+- Each file is a PDF, a JPEG, or a PNG, as its first bytes show. A PDF has
+  at most 10 MB, and a JPEG or a PNG at most 7 MB.
+- The attachments of the conversation total at most 20 MB. A new
+  conversation frees the space.
+- `week` is a valid week identifier.
+- `today` is a valid date as `YYYY-MM-DD`.
+
+### Retry a message
+
+`POST /api/assistant/conversations/ID/retry`
+
+| Status | Meaning |
+|--------|---------|
+| `202`  | The assistant answers the failed message again in the background. The body is `{}`. |
+| `404`  | No conversation has that ID. |
+| `409`  | The last message didn't fail, the assistant isn't set up, the assistant is still answering, or the pending changes are being applied. |
+
+### Apply the pending changes
+
+`POST /api/assistant/conversations/ID/apply`
+
+Request body: `{ "revision": N }`, where `N` is the `revision` of the
+conversation whose pending changes you reviewed.
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The server saved every pending change. If there were any, the conversation shows an `applied` event. The body is `{ "applied": true }`. |
+| `400`  | `revision` is missing or isn't an integer. |
+| `404`  | No conversation has that ID. |
+| `409`  | The server saved nothing. If `revision` isn't the current one, because the pending changes changed after you got the conversation, the body is `{ "error": "The pending changes changed. Review them again." }`. If a pending change is invalid against the data as it is now, for example because someone edited its target by hand, the body is `{ "error", "problems" }`, where `problems` is a list of `{ "target", "message" }`, and the conversation keeps its pending changes. Otherwise, the assistant is still answering, or the pending changes are already being applied. |
+| `500`  | A write to a data file failed, and the conversation keeps its pending changes. If the server saved part of the changes before the failure, the body also has `"code": "partly_saved"`. |
+
+### Discard the pending changes
+
+`POST /api/assistant/conversations/ID/discard`
+
+| Status | Meaning |
+|--------|---------|
+| `200`  | The server removed every pending change. If there were any, the conversation shows a `discarded` event. The body is `{}`. |
+| `404`  | No conversation has that ID. |
+| `409`  | The assistant is still answering, or the pending changes are being applied. |
+
+### End a conversation
+
+`DELETE /api/assistant/conversations/ID`
+
+| Status | Meaning |
+|--------|---------|
+| `204`  | The conversation ended, and the server canceled its answer in progress. |
+| `404`  | No conversation has that ID. |

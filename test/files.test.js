@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, open, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { describe, test } from "node:test";
 import { createQueue, dataPath, readJson, writeJson } from "../server/files.js";
+import { modeOf, useUmask } from "./backend-helpers.js";
 
 /** A new empty directory that the test removes when it ends. */
 async function tempDir(t) {
@@ -84,6 +86,79 @@ describe("writeJson", () => {
     await writeJson(path.join(dir, "value.json"), { version: 2 });
 
     assert.deepEqual(await readdir(dir), ["value.json"]);
+  });
+
+  test("gives a new file the mode of the umask without a mode", async (t) => {
+    useUmask(t, 0o002);
+    const file = path.join(await tempDir(t), "value.json");
+
+    await writeJson(file, { version: 1 });
+
+    assert.equal(await modeOf(file), "664");
+  });
+
+  test("gives the file the mode it gets, whatever the umask", async (t) => {
+    // A umask that takes bits from 0o640, so only a chmod gives them back.
+    useUmask(t, 0o077);
+    const file = path.join(await tempDir(t), "value.json");
+
+    await writeJson(file, { version: 1 }, { mode: 0o640 });
+
+    assert.equal(await modeOf(file), "640");
+  });
+
+  test("gives the mode it gets to a file that replaces another", async (t) => {
+    useUmask(t, 0o002);
+    const file = path.join(await tempDir(t), "value.json");
+    await writeJson(file, { version: 1 });
+
+    await writeJson(file, { version: 2 }, { mode: 0o640 });
+
+    assert.equal(await modeOf(file), "640");
+  });
+
+  test("gives the mode it gets over a temporary file that a crash left", async (t) => {
+    const file = path.join(await tempDir(t), "value.json");
+    await writeFile(`${file}.tmp`, "{ half");
+    await chmod(`${file}.tmp`, 0o666);
+
+    await writeJson(file, { version: 1 }, { mode: 0o640 });
+
+    assert.equal(await modeOf(file), "640");
+  });
+
+  test("hides the value from a reader of a temporary file that a crash left", async (t) => {
+    const file = path.join(await tempDir(t), "value.json");
+    await writeFile(`${file}.tmp`, "{ half");
+    // A reader that opened the leftover file before the write.
+    const reader = await open(`${file}.tmp`, "r");
+    t.after(() => reader.close());
+
+    await writeJson(file, { secret: "value" }, { mode: 0o640 });
+
+    assert.equal(await reader.readFile("utf8"), "{ half");
+  });
+
+  test("rejects a temporary file that appears after it removes the leftover", async (t) => {
+    const file = path.join(await tempDir(t), "value.json");
+    // Another writer creates the temporary file between the removal and the
+    // open, through the unlink that files.js imports.
+    const fsPromises = createRequire(import.meta.url)("node:fs/promises");
+    const { unlink } = fsPromises;
+    fsPromises.unlink = async (/** @type {string} */ target) => {
+      await unlink(target).catch(() => {});
+      await writeFile(target, "{ other }");
+    };
+    syncBuiltinESMExports();
+    t.after(() => {
+      fsPromises.unlink = unlink;
+      syncBuiltinESMExports();
+    });
+
+    await assert.rejects(writeJson(file, { secret: "value" }, { mode: 0o640 }), {
+      code: "EEXIST",
+    });
+    assert.equal(await readFile(`${file}.tmp`, "utf8"), "{ other }");
   });
 
   test("rejects undefined without touching the disk", async (t) => {

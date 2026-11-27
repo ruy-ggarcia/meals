@@ -3,15 +3,14 @@
 
 import { CURRENT_RANGE, CURRENT_WEEK, NEXT_WEEK } from "./catalog.js";
 import { expect, test } from "./fixtures.js";
-import { expectAbove, expectInsideViewport, expectNoSidewaysScroll } from "./layout.js";
-import { sectionsOf } from "./navigation.js";
+import { expectAbove, expectCenteredOnScreen, expectInsideViewport } from "./layout.js";
+import { sectionsOf, TAB_BAR_SCREENS } from "./navigation.js";
 import { expectNoDoubleTapZoom } from "./phone.js";
 
 const MEALS = ["Breakfast", "Morning snack", "Lunch", "Afternoon snack", "Dinner"];
 
 const CURRENT = {
   week: CURRENT_WEEK,
-  range: "Sep 21 – 27",
   longRange: CURRENT_RANGE,
   monday: "Monday, September 21",
 };
@@ -37,13 +36,11 @@ function weeksAfter(week, count) {
 // what the page shows for them.
 const LAST = {
   week: weeksAfter(CURRENT_WEEK, TAPS),
-  range: "Oct 26 – Nov 1",
   longRange: "Oct 26 – Nov 1, 2026",
   monday: "Monday, October 26",
 };
 const BEFORE_LAST = {
   week: weeksAfter(CURRENT_WEEK, TAPS - 1),
-  range: "Oct 19 – 25",
   longRange: "Oct 19 – 25, 2026",
   monday: "Monday, October 19",
 };
@@ -56,11 +53,6 @@ function toolbar(page) {
   return page.getByRole("banner");
 }
 
-/** The short range between the week buttons, which only a phone shows. */
-function shortRange(page, text) {
-  return page.getByRole("navigation", { name: "Week" }).getByText(text, { exact: true });
-}
-
 /** The distance from the bottom of `locator` to the bottom of the viewport. */
 async function gapBelow(locator) {
   const box = await locator.boundingBox();
@@ -68,10 +60,9 @@ async function gapBelow(locator) {
   return locator.page().viewportSize().height - (box.y + box.height);
 }
 
-/** Checks that the address, the ranges, and the day bar all show one week. */
-async function expectPhoneWeek(page, { week, range, longRange, monday }) {
+/** Checks that the address, the range, and the day bar all show one week. */
+async function expectPhoneWeek(page, { week, longRange, monday }) {
   await expect(page).toHaveURL(new RegExp(`#${week}$`));
-  await expect(shortRange(page, range)).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(longRange);
   await expect(dayBar(page).getByRole("button", { name: monday })).toBeVisible();
 }
@@ -153,27 +144,6 @@ test.describe("week navigation", () => {
     await expect(page.getByText("September 23, 2026 · Today", { exact: true })).toBeVisible();
   });
 
-  test("fits the range of a week that spans two years", async ({ page }) => {
-    await page.goto("/#2026-12-28");
-
-    const range = shortRange(page, "Dec 28 – Jan 3");
-    await expect(range).toBeVisible();
-    const previous = await page.getByRole("button", { name: "Previous week" }).boundingBox();
-    const next = await page.getByRole("button", { name: "Next week" }).boundingBox();
-    const box = await range.boundingBox();
-    expect(
-      box.x,
-      `the left edge of the range must be at least ${previous.x + previous.width}px, the right edge of Previous week`,
-    ).toBeGreaterThanOrEqual(previous.x + previous.width);
-    expect(
-      box.x + box.width,
-      `the right edge of the range must be at most ${next.x}px, the left edge of Next week`,
-    ).toBeLessThanOrEqual(next.x);
-    await expectInsideViewport(page.getByRole("button", { name: "Next week" }));
-    await expectInsideViewport(page.getByRole("button", { name: "Today" }));
-    await expectNoSidewaysScroll(page);
-  });
-
   test("changes weeks on fast taps", async ({ page }) => {
     await page.goto("/");
     await expectPhoneWeek(page, CURRENT);
@@ -206,6 +176,28 @@ test.describe("tab bar", () => {
     }
     await expectInsideViewport(sectionsOf(page));
   });
+
+  // Without the assistant, the tab bar is up to 360 px wide, 20 px from each
+  // edge of a narrower screen, and centered.
+  for (const viewport of TAB_BAR_SCREENS) {
+    const size = ` at ${viewport.width}×${viewport.height}`;
+
+    test.describe(() => {
+      test.use({ viewport });
+
+      test(`centers the tab bar, 20 px from each edge up to 360 px wide${size}`, async ({
+        page,
+      }) => {
+        await page.goto("/");
+        await expect(sectionsOf(page)).toBeVisible();
+
+        const box = await sectionsOf(page).boundingBox();
+        const width = Math.min(360, viewport.width - 40);
+        expect(box.width, `the width of the tab bar must be ${width}px`).toBeCloseTo(width, 0);
+        expectCenteredOnScreen(page, box);
+      });
+    });
+  }
 
   test("keeps the toolbar and the tab bar in place while the page scrolls", async ({
     app,

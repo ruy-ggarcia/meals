@@ -3,8 +3,9 @@
 #
 # Installs or updates the Meals host tools from this checkout: the deployer
 # user, /opt/server/meals, the scripts, the Compose file, and the systemd
-# timers. An update keeps .env, hold, the data, and the backups. The first
-# run puts the host on hold, so nothing deploys before you move your data in.
+# timers. An update keeps .env, assistant.env, hold, the data, and the
+# backups. The first run puts the host on hold, so nothing deploys before you
+# move your data in.
 set -euo pipefail
 
 readonly ROOT=/opt/server/meals

@@ -169,6 +169,13 @@ async function leaveForNextWeek() {
   return alert;
 }
 
+// Records the week of each meals:week-shown event of the page, in order.
+function recordShownWeeks() {
+  const weeks = [];
+  page.window.addEventListener("meals:week-shown", (event) => weeks.push(event.detail.week));
+  return weeks;
+}
+
 // Selects Recipes in the sidebar, and returns the click event.
 function clickRecipesLink(init = {}) {
   const link = page.document.querySelector('.page-link[href="/recipes.html"]');
@@ -206,14 +213,13 @@ describe("meal plan", () => {
     ]);
   });
 
-  test("shows the week range in the toolbar and a short range on phones", async (t) => {
+  test("shows the week range in the toolbar", async (t) => {
     await openWeek(t, { week: "2026-09-28" });
 
     assert.equal(
       plain(page.document.getElementById("week-range").textContent),
       "Sep 28 – Oct 4, 2026",
     );
-    assert.equal(page.document.getElementById("week-short").textContent, "Sep 28 – Oct 4");
   });
 
   test("names the selected day and its date in the day heading", async (t) => {
@@ -309,6 +315,55 @@ describe("meal plan", () => {
 
     assert.equal(page.document.getElementById("grid").dataset.week, nextWeek);
     assert.equal(page.window.location.hash, `#${nextWeek}`);
+  });
+
+  test("opens on the week and the day that the hash names", async (t) => {
+    server = fakeFetch();
+    page = await openPage(t, {
+      html: "index.html",
+      script: "app.js",
+      fetch: server.fetch,
+      url: `http://localhost/#${WEEK}/thu`,
+    });
+    await tick();
+    await answerWeekLoad(server, WEEK);
+
+    assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
+    assert.equal(page.document.getElementById("grid").dataset.selectedDay, "thu");
+    assert.equal(page.window.location.hash, `#${WEEK}`);
+  });
+
+  test("selects the day that a new hash names after the week", async (t) => {
+    await openWeek(t);
+
+    page.window.location.hash = "#2026-09-28/wed";
+    await waitFor(() => server.requestFor("GET", "/api/weeks/2026-09-28") !== undefined);
+    await answerWeekLoad(server, "2026-09-28");
+
+    assert.equal(page.document.getElementById("grid").dataset.week, "2026-09-28");
+    assert.equal(page.document.getElementById("grid").dataset.selectedDay, "wed");
+    assert.equal(page.window.location.hash, "#2026-09-28");
+  });
+
+  test("keeps the shown week when a new hash names no day after the week", async (t) => {
+    await openWeek(t);
+
+    page.window.location.hash = "#2026-09-28/someday";
+    await waitFor(() => page.window.location.hash === `#${WEEK}`); // undone
+
+    assert.equal(server.requestFor("GET", "/api/weeks/2026-09-28"), undefined);
+    assert.equal(page.document.getElementById("grid").dataset.week, WEEK);
+  });
+
+  test("announces the week that it shows after Next week", async (t) => {
+    await openWeek(t);
+    const shown = recordShownWeeks();
+
+    page.document.getElementById("next-week").click();
+    await waitFor(() => server.requestFor("GET", "/api/weeks/2026-09-28") !== undefined);
+    await answerWeekLoad(server, "2026-09-28");
+
+    assert.equal(shown.at(-1), "2026-09-28");
   });
 
   test("ends on the last week after five changes with answers in any order", async (t) => {
@@ -615,6 +670,18 @@ describe("meal plan", () => {
       server.requestFor("GET", (url) => url.includes("2026-09-28")),
       undefined,
     );
+  });
+
+  test("announces the week that it still shows after Stay", async (t) => {
+    quiet.expect(1);
+    await openWeekWithUnsavedLunch(t);
+    const shown = recordShownWeeks();
+    const alert = await leaveForNextWeek();
+
+    alert.querySelector(".stay").click();
+    await tick();
+
+    assert.equal(shown.at(-1), WEEK);
   });
 
   test("stays in the week with Escape in the alert", async (t) => {

@@ -1,7 +1,7 @@
 // The only module that touches disk: JSON files, atomic writes, and the queue
 // that keeps writes from interleaving.
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 
 /** Every file of the current storage format lives under DATA_DIR/v2/. */
@@ -25,13 +25,34 @@ export async function readJson(file) {
   return JSON.parse(text);
 }
 
-/** Writes `value` to `file` atomically, creating its directory if needed. */
-export async function writeJson(file, value) {
+/**
+ * Writes `value` to `file` atomically, creating its directory if needed. With
+ * `mode`, such as 0o640, the file gets exactly that mode, whatever the umask;
+ * without it, a new file gets 0o666 minus the umask.
+ * @param {string} file
+ * @param {unknown} value
+ * @param {{ mode?: number }} [options]
+ */
+export async function writeJson(file, value, { mode } = {}) {
   if (value === undefined) throw new TypeError("writeJson: value must not be undefined.");
   await mkdir(path.dirname(file), { recursive: true });
   const tmpFile = `${file}.tmp`;
-  await writeFile(tmpFile, `${JSON.stringify(value, null, 2)}\n`);
-  await rename(tmpFile, file); // atomic replace
+  // A temporary file that a crash left goes first, so the value lands in a new
+  // file: a reader of the old one never sees it, whatever its owner or mode.
+  // "wx" fails if another file appears at its path in between.
+  await unlink(tmpFile).catch((error) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+  const handle = await open(tmpFile, "wx", mode);
+  try {
+    // open applies the umask, so chmod sets the exact mode before the content
+    // arrives.
+    if (mode !== undefined) await handle.chmod(mode);
+    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`);
+  } finally {
+    await handle.close();
+  }
+  await rename(tmpFile, file); // atomic replace, which keeps the mode
 }
 
 /**

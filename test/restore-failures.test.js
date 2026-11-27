@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, rename, symlink } from "node:fs/promises";
+import { chmod, mkdir, rename, symlink } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import {
@@ -11,6 +11,7 @@ import {
   createHost,
   DATA,
   replaceHost,
+  skipAsRoot,
 } from "./host-helpers.js";
 
 let host;
@@ -282,6 +283,25 @@ describe("meals-restore", () => {
 
     assertExit(result, 1);
     assert.match(result.stderr, /No backup named no-such-backup\.tar\.gz/);
+    assert.deepEqual(await host.calls(), []);
+  });
+
+  test("names the cause without changing anything on a backup it can't read", {
+    skip: skipAsRoot("root can read any file"),
+  }, async () => {
+    await host.makeBackup(BACKUP);
+    const archive = path.join(host.root, "backups", BACKUP);
+    await chmod(archive, 0o200);
+
+    const result = await host.run("meals-restore", BACKUP);
+
+    assertExit(result, 1);
+    assert.ok(
+      result.stderr.includes(
+        `Error: deployer can't read the backup ${BACKUP}, so nothing changed. To give it to deployer, run sudo chown deployer:docker ${archive} && sudo chmod 0640 ${archive}.`,
+      ),
+      result.stderr,
+    );
     assert.deepEqual(await host.calls(), []);
   });
 
