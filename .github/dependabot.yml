@@ -53,3 +53,8 @@ updates:
       npm-production:
         dependency-type: production
         update-types: [minor, patch]
+    ignore:
+      # The major version of @types/node follows Node.js, which changes with
+      # the image and the CI workflow together, by hand.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
