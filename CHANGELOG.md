@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.5.0](https://github.com/ruy-ggarcia/meals/compare/v0.4.0...v0.5.0) (2026-11-28)
+
+
+### Features
+
+* **assistant:** add the tools that read data and propose changes ([902109b](https://github.com/ruy-ggarcia/meals/commit/902109ba03a481500b749b91d8027b51572d7692))
+* **assistant:** call the Anthropic and OpenAI APIs ([e9a0636](https://github.com/ruy-ggarcia/meals/commit/e9a0636e93341d9be9f85bbacc944fd357a364ba))
+* **assistant:** keep conversations and their pending changes in memory ([f48179c](https://github.com/ruy-ggarcia/meals/commit/f48179c29987929bca1af17a01f25d7c61c2f909))
+* **assistant:** run a turn with tools and instructions ([1b7c1fd](https://github.com/ruy-ggarcia/meals/commit/1b7c1fd096a31271d69f317ce45c929cd66c712a))
+* **assistant:** serve conversations over the API ([5ce3680](https://github.com/ruy-ggarcia/meals/commit/5ce3680ae7ec82d5726a90fec72dce6d98834f17))
+* **assistant:** stage pending changes and compute what they save ([1a83967](https://github.com/ruy-ggarcia/meals/commit/1a83967a693a92a1e4ee47b611c9218c0ba21ba0))
+* **server:** store the family preferences ([26e2fda](https://github.com/ruy-ggarcia/meals/commit/26e2fdaa34e03eb78d27658c43af61f095a51702))
+* **ui:** chat with the assistant in a floating window ([c47a4d4](https://github.com/ruy-ggarcia/meals/commit/c47a4d4278cede54ecb2ceef0b1a188d1733d342))
+* **ui:** set up the assistant and the family preferences in Settings ([233d63f](https://github.com/ruy-ggarcia/meals/commit/233d63f36e6cba98ecd762e5ad23463891a11458))
+
+
+### Bug Fixes
+
+* **deps:** bump node from `0e17547` to `1314fb3` ([3ce3e00](https://github.com/ruy-ggarcia/meals/commit/3ce3e0040b33a79da643573a54e0f23b603667d3))
+* **server:** log every aborted API request ([efb603c](https://github.com/ruy-ggarcia/meals/commit/efb603c08f6c60fef61c1abe8b381c1aade96f96))
+* **ui:** log values as arguments of the console messages ([6c1e203](https://github.com/ruy-ggarcia/meals/commit/6c1e203faca9fe867ad76bd9cab50548e8602bfc))
+
 ## [0.4.0](https://github.com/ruy-ggarcia/meals/compare/v0.3.0...v0.4.0) (2026-11-09)
 
 
