@@ -29,3 +29,44 @@ describe(".github/workflows/ci.yml", () => {
     );
   });
 });
+
+describe(".github/workflows/release.yml", () => {
+  // GitHub evaluates the env of a step before its if, so fromJSON of an empty
+  // output fails the job even when the step would be skipped.
+  // A release must publish even when the cleanup of the release pull request
+  // fails, so publish can't need the job that runs the cleanup.
+  test("publishes without the job that cleans the release notes", async () => {
+    const workflow = await readFile(path.join(REPO, ".github", "workflows", "release.yml"), "utf8");
+
+    // Each job runs from its key to the next line with less indentation.
+    const jobs = Object.fromEntries(
+      [...workflow.matchAll(/^ {2}([a-z-]+):\n((?:(?: {4}.*)?\n)*)/gm)].map((match) => [
+        match[1],
+        match[2],
+      ]),
+    );
+    const cleaner = Object.keys(jobs).find((name) => jobs[name].includes("clean-release-notes.js"));
+    const needs = jobs.publish?.match(/^ {4}needs: (.+)$/m)?.[1] ?? "";
+
+    assert.ok(cleaner, "no job of release.yml runs scripts/clean-release-notes.js");
+    assert.ok(
+      !needs.includes(cleaner),
+      `publish needs ${cleaner}, so a failed cleanup skips the release: run the cleanup in a job of its own`,
+    );
+  });
+
+  test("calls fromJSON in no env of a step", async () => {
+    const workflow = await readFile(path.join(REPO, ".github", "workflows", "release.yml"), "utf8");
+
+    // Each env block runs from its key to the next line with less indentation.
+    const envs = [...workflow.matchAll(/^( +)env:\n(?:\1 {2}.*\n)*/gm)].map((match) => match[0]);
+    const offending = envs.filter((env) => env.includes("fromJSON("));
+
+    assert.ok(envs.length > 0, "release.yml has no env block");
+    assert.deepEqual(
+      offending,
+      [],
+      "an env block of release.yml calls fromJSON: read the JSON with jq in the step instead",
+    );
+  });
+});
